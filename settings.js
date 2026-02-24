@@ -54,7 +54,13 @@ const settings = {
 
 if (process.env.SETTINGS_JSON) {
     try {
-        Object.assign(settings, JSON.parse(process.env.SETTINGS_JSON));
+        const parsed = JSON.parse(process.env.SETTINGS_JSON);
+        // Strip prototype-polluting keys before merging
+        const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+        const safe = Object.fromEntries(
+            Object.entries(parsed).filter(([k]) => !BLOCKED_KEYS.has(k))
+        );
+        Object.assign(settings, safe);
     } catch (err) {
         console.error("Failed to parse SETTINGS_JSON:", err);
     }

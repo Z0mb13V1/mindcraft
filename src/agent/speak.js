@@ -1,4 +1,4 @@
-import { exec, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import os from 'os';
 import path from 'path';
@@ -83,20 +83,27 @@ async function processQueue() {
     }
 
     if (model === 'system') {
-        // system TTS
-        const cmd = isWin
-            ? `powershell -NoProfile -Command "Add-Type -AssemblyName System.Speech; \
-            $s=New-Object System.Speech.Synthesis.SpeechSynthesizer; $s.Rate=2; \
-            $s.Speak('${txt.replace(/'/g,"''")}'); $s.Dispose()"`
-            : isMac
-            ? `say "${txt.replace(/"/g,'\\"')}"`
-            : `espeak "${txt.replace(/"/g,'\\"')}"`;
-
-        exec(cmd, err => {
-            if (err) console.error('TTS error', err);
-            isSpeaking = false;
-            processQueue();
-        });
+        // system TTS — use spawn with argument arrays to prevent command injection
+        let proc;
+        if (isWin) {
+            // Pass text via stdin so it never touches the shell command line
+            const psScript = `Add-Type -AssemblyName System.Speech
+$s = New-Object System.Speech.Synthesis.SpeechSynthesizer
+$s.Rate = 2
+$txt = [System.Console]::In.ReadToEnd()
+$s.Speak($txt)
+$s.Dispose()`;
+            proc = spawn('powershell', ['-NoProfile', '-Command', psScript],
+                { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true });
+            proc.stdin.write(txt, 'utf8');
+            proc.stdin.end();
+        } else if (isMac) {
+            proc = spawn('say', [txt], { stdio: 'ignore' });
+        } else {
+            proc = spawn('espeak', [txt], { stdio: 'ignore' });
+        }
+        proc.on('error', err => console.error('TTS error', err));
+        proc.on('exit', () => { isSpeaking = false; processQueue(); });
 
     } 
     else {

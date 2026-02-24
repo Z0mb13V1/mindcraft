@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'fs';
+import path from 'path';
 import { NPCData } from './data.js';
 import { ItemGoal } from './item_goal.js';
 import { BuildGoal } from './build_goal.js';
@@ -40,9 +41,12 @@ export class NPCContoller {
 
     init() {
         try {
-            for (let file of readdirSync('src/agent/npc/construction')) {
+            const constructionDir = path.resolve('src/agent/npc/construction');
+            for (let file of readdirSync(constructionDir)) {
                 if (file.endsWith('.json')) {
-                    this.constructions[file.slice(0, -5)] = JSON.parse(readFileSync('src/agent/npc/construction/' + file, 'utf8'));
+                    const filePath = path.resolve(constructionDir, file);
+                    if (!filePath.startsWith(constructionDir + path.sep)) continue;
+                    this.constructions[file.slice(0, -5)] = JSON.parse(readFileSync(filePath, 'utf8'));
                 }
             }
         } catch (e) {
