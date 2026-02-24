@@ -1,0 +1,7 @@
+{
+    "name": "ollama-primary",
+    "model": "ollama/deepseek-r1:7b",
+    "fallback_model": "gemini-2.5-flash",
+    "speak_model": "google/gemini-2.5-flash-preview-tts/Kore",
+    "cooldown": 2000
+}

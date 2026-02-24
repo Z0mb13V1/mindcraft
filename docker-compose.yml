@@ -1,0 +1,68 @@
+services:
+  minecraft:
+    image: itzg/minecraft-server
+    container_name: minecraft-pc
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      MEMORY: "4G"
+      VERSION: "1.20.1"
+      DIFFICULTY: "normal"
+      MODE: "survival"
+      ENABLE_COMMAND_BLOCK: "true"
+      VIEW_DISTANCE: "10"
+    volumes:
+      - ./minecraft-data:/data
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  mindcraft:
+    build: .
+    environment:
+      SETTINGS_JSON: |
+        {"auto_open_ui": false}
+    volumes:
+      - ./settings.js:/app/settings.js
+      - ./keys.json:/app/keys.json
+      - ./profiles:/app/profiles
+      - ./bots:/app/bots
+    ports:
+      - "3000-3003:3000-3003" # see the view from the camera mounted on your bot head: http://localhost:3000/
+      - 8080 # Mindserver port
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - minecraft
+
+  discord-bot:
+    image: node:22
+    container_name: discord-bot
+    working_dir: /app
+    volumes:
+      - ./discord-bot.js:/app/discord-bot.js
+      - ./package.json:/app/package.json
+    environment:
+      DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
+      BOT_DM_CHANNEL: "${BOT_DM_CHANNEL}"
+      BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
+      MINDSERVER_HOST: "${MINDSERVER_HOST}"
+      MINDSERVER_PORT: "${MINDSERVER_PORT}"
+    command: sh -c "npm install --ignore-scripts && node discord-bot.js"
+    depends_on:
+      - mindcraft
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  viaproxy: #use this service to connect to an unsupported minecraft server versions. more info: ./services/viaproxy/README.md
+    image: ghcr.io/viaversion/viaproxy:latest
+    volumes:
+      - ./services/viaproxy:/app/run
+    ports:
+      - "25568:25568"
+    profiles:
+      - viaproxy
+    stdin_open: true
+    tty: true

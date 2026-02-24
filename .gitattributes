@@ -1,0 +1,4 @@
+tasks/construction_tasks/*.json filter=lfs diff=lfs merge=lfs -text
+test/construction_tasks/*.json filter=lfs diff=lfs merge=lfs -text
+tasks/construction_tasks/train_multiagent_construction_tasks.json filter=lfs diff=lfs merge=lfs -text
+test/construction_tasks/example_multiagent_construction_tasks.json filter=lfs diff=lfs merge=lfs -text
