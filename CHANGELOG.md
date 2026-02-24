@@ -6,6 +6,15 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+> **Workflow:** Add entries here as changes are made. When committing, move entries to a new
+> versioned section `[0.1.3-local.N] - YYYY-MM-DD` and bump the patch number.
+
+### Fixed
+- `grok.js`: null guard on `res` before `.replace()` — API can return null content, causing TypeError crash
+- `gemini.js` `sendVisionRequest`: used `generationConfig:` (old v0.x SDK field) instead of `config:` (v1.x SDK) — now consistent with `sendRequest`
+- `discord-bot.js` HELP_TEXT: hardcoded old agent name `gemini:` updated to `Gemini_1:`
+- `AVAILABLE-MODELS.md`: Current Configuration section had stale profile names and wrong Grok model (`grok-beta` → `grok-code-fast-1`)
+
 ---
 
 ## [0.1.3-local.3] - 2026-02-24

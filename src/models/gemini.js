@@ -90,10 +90,10 @@ export class Gemini {
                 model: this.model_name,
                 contents: contents,
                 safetySettings: this.safetySettings,
-                generationConfig: {
+                config: {
+                    systemInstruction: systemMessage,
                     ...(this.params || {})
-                },
-                systemInstruction: systemMessage
+                }
             });
             res = await result.text;
             console.log('Received.');

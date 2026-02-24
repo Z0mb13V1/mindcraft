@@ -32,7 +32,7 @@ const HELP_TEXT = `🤖 **MindcraftBot — Command Center**
 
 **Talk to agents:**
 Just type a message and I'll send it to the first in-game agent.
-Prefix with agent name to target: \`gemini: go mine diamonds\`
+Prefix with agent name to target: \`Gemini_1: go mine diamonds\`
 
 **Commands:**
 \`!help\` — Show this message

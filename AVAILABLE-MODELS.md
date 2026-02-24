@@ -164,23 +164,29 @@ High context window models with various reasoning capabilities.
 
 ## Current Configuration
 
-### Profile: gemini
+### Profile: Gemini_1
 
 - Model: `gemini-2.5-pro`
+- Embedding: `gemini-embedding-001` (Google Cloud)
 - API Key: `GEMINI_API_KEY`
+- Compute: Cloud-based
 - Status: Active
 
-### Profile: gemini2
+### Profile: Gemini_2
 
 - Model: `gemini-2.5-pro`
+- Embedding: `gemini-embedding-001` (Google Cloud)
 - API Key: `GEMINI_API_KEY`
+- Compute: Cloud-based
 - Status: Active
 
-### Profile: grok
+### Profile: Grok_1
 
-- Model: `grok-beta`
+- Model: `grok-code-fast-1`
+- Embedding: `gemini-embedding-001` (Google Cloud, via GEMINI_API_KEY)
 - API Key: `XAI_API_KEY`
-- Status: Configured, ready to use
+- Compute: Cloud-based
+- Status: Active
 
 ---
 
@@ -189,7 +195,7 @@ High context window models with various reasoning capabilities.
 ### For Best Reasoning (Current Setup)
 
 - **Gemini**: `gemini-2.5-pro` - Most stable, best reasoning
-- **Grok**: `grok-beta` or `grok-4-1-fast-reasoning` - Latest features
+- **Grok**: `grok-code-fast-1` (code specialist) or `grok-4-1-fast-reasoning` for large context
 
 ### For Fastest Responses
 
