@@ -15,7 +15,7 @@
         "local": {
             "model": {
                 "api": "vllm",
-                "model": "google/gemma-3-12b-it",
+                "model": "Qwen/Qwen2.5-7B-Instruct",
                 "url": "http://host.docker.internal:8000/v1"
             },
             "compute_type": "Local (vLLM)",
@@ -28,7 +28,7 @@
             "model": "gemini-2.5-flash",
             "code_model": {
                 "api": "vllm",
-                "model": "google/gemma-3-12b-it",
+                "model": "Qwen/Qwen2.5-7B-Instruct",
                 "url": "http://host.docker.internal:8000/v1"
             },
             "compute_type": "Hybrid (Cloud chat + vLLM code)",

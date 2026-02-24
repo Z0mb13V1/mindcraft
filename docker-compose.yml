@@ -44,6 +44,7 @@ services:
     volumes:
       - ./discord-bot.js:/app/discord-bot.js
       - ./package.json:/app/package.json
+      - ./src:/app/src
       - ./profiles:/app/profiles
     environment:
       DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
@@ -57,6 +58,36 @@ services:
     restart: unless-stopped
     stdin_open: true
     tty: true
+
+  # ── vLLM (deferred — using WSL2 instead, see setup-wsl-vllm.ps1) ────────────
+  # Start vLLM:  wsl -d Ubuntu-22.04 -- bash services/vllm/start.sh --background
+  # Endpoint:    http://host.docker.internal:8000/v1  (used by all bot profiles)
+  # Uncomment below only if you want to run vLLM in Docker instead of WSL2.
+  # vllm:
+  #   image: vllm/vllm-openai:latest
+  #   container_name: vllm-server
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+  #   volumes:
+  #     - vllm-models:/root/.cache/huggingface
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   command: >
+  #     --model google/gemma-3-12b-it
+  #     --max-model-len 4096
+  #     --gpu-memory-utilization 0.90
+  #     --enforce-eager
+  #     --dtype half
+  #   restart: unless-stopped
+  #   profiles:
+  #     - vllm
 
   viaproxy: #use this service to connect to an unsupported minecraft server versions. more info: ./services/viaproxy/README.md
     image: ghcr.io/viaversion/viaproxy:latest
@@ -80,3 +111,6 @@ services:
   #     - ./litellm-config.yaml:/app/config.yaml
   #   command: --config /app/config.yaml
   #   restart: unless-stopped
+
+volumes:
+  vllm-models:

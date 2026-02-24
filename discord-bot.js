@@ -1,29 +1,36 @@
 /* eslint-env node */
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { io } from 'socket.io-client';
+import { readFile, writeFile } from 'fs/promises';
 import { readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { validateDiscordMessage } from './src/utils/message_validator.js';
+import { RateLimiter } from './src/utils/rate_limiter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
-const ACTIVE_PROFILES = ['gemini', 'gemini2', 'grok'];
+const ACTIVE_PROFILES = ['gemini', 'grok'];
 
 // ── Bot Groups (name → agent names) ─────────────────────────
 // Profile filename → in-game agent name mapping
 const PROFILE_AGENT_MAP = {
     gemini: 'Gemini_1',
-    gemini2: 'Gemini_2',
     grok: 'Grok_1'
 };
 const BOT_GROUPS = {
-    all:    ['Gemini_1', 'Gemini_2', 'Grok_1'],
-    gemini: ['Gemini_1', 'Gemini_2'],
+    all:    ['Gemini_1', 'Grok_1'],
+    gemini: ['Gemini_1'],
     grok:   ['Grok_1'],
-    cloud:  ['Gemini_1', 'Gemini_2', 'Grok_1'],  // all cloud bots
-    '1':    ['Gemini_1', 'Grok_1'],               // slot 1 bots
-    '2':    ['Gemini_2'],                          // slot 2 bots
+    cloud:  ['Gemini_1', 'Grok_1'],
+};
+
+// ── Aliases (shorthand → canonical agent name) ──────────────
+const AGENT_ALIASES = {
+    'gemini': 'Gemini_1',
+    'gi':     'Gemini_1',
+    'grok':   'Grok_1',
+    'gk':     'Grok_1',
 };
 
 /**
@@ -46,6 +53,13 @@ function resolveAgents(arg) {
         if (BOT_GROUPS[lower]) {
             resolved.push(...BOT_GROUPS[lower]);
             labels.push(`group:${lower}`);
+            continue;
+        }
+
+        // Alias match
+        if (AGENT_ALIASES[lower]) {
+            resolved.push(AGENT_ALIASES[lower]);
+            labels.push(AGENT_ALIASES[lower]);
             continue;
         }
 
@@ -99,39 +113,42 @@ let mindServerSocket = null;
 let mindServerConnected = false;
 let knownAgents = [];      // [{name, in_game, socket_connected, viewerPort}]
 let replyChannel = null;   // cached Discord channel for fast replies
+const messageLimiter = new RateLimiter(5, 60000);  // 5 messages per 60 seconds per user
 
 // ── Help Text ───────────────────────────────────────────────
-const HELP_TEXT = `🤖 **MindcraftBot — Command Center**
+const HELP_TEXT = `**MindcraftBot -- Command Center**
 
 **Talk to agents:**
-Just type a message and I'll send it to the first in-game agent.
-Prefix with agent name to target: \`Gemini_1: go mine diamonds\`
+Just type a message and it goes to ALL active bots.
+Prefix with a name/alias to target one: \`gi: go mine diamonds\`
+
+**Aliases:**
+\`gemini\` / \`gi\` = Gemini_1  |  \`grok\` / \`gk\` = Grok_1
 
 **Commands:**
-\`!help\` — Show this message
-\`!status\` — MindServer connection + agent overview
-\`!agents\` — List all agents with status
-\`!mode [cloud|local|hybrid] [profile]\` — View or switch compute mode
-\`!usage [agent|all]\` — Show API usage stats and costs
-\`!ping\` — Pong
-\`!reconnect\` — Reconnect to MindServer
-\`!start <name|group>\` — Start agent(s)
-\`!stop <name|group>\` — Stop agent(s)
-\`!restart <name|group>\` — Restart agent(s)
-\`!startall\` — Start all agents
-\`!stopall\` — Stop all agents
+\`!help\` -- Show this message
+\`!status\` -- MindServer connection + agent overview
+\`!agents\` -- List all agents with status
+\`!mode [cloud|local|hybrid] [profile]\` -- View or switch compute mode
+\`!usage [agent|all]\` -- Show API usage stats and costs
+\`!ping\` -- Pong
+\`!reconnect\` -- Reconnect to MindServer
+\`!start <name|alias|group>\` -- Start agent(s)
+\`!stop <name|alias|group>\` -- Stop agent(s)
+\`!restart <name|alias|group>\` -- Restart agent(s)
+\`!startall\` -- Start all agents
+\`!stopall\` -- Stop all agents
 
-**Groups:** \`all\`, \`gemini\` (both), \`grok\`, \`cloud\`, \`1\` (slot 1), \`2\` (slot 2)
+**Groups:** \`all\`, \`gemini\`, \`grok\`, \`cloud\`
 You can also comma-separate: \`!stop Gemini_1, Grok_1\`
 
 **What can I do?**
-• Check on your Minecraft AI bots anytime
-• Send chat messages to agents in-game
-• Command agents (mine, build, explore, etc.)
-• Monitor agent output and responses live
-• Start/stop/restart agents by name or group
-• Switch between cloud/local/hybrid compute modes
-• Track which agents are online`;
+- Send chat messages to one or all agents
+- Use aliases: \`gi: mine\` or \`gk: come here\`
+- Command agents (mine, build, explore, etc.)
+- Monitor agent output and responses live
+- Start/stop/restart agents by name, alias, or group
+- Switch between cloud/local/hybrid compute modes`;
 
 // ── MindServer Connection ───────────────────────────────────
 function connectToMindServer() {
@@ -227,6 +244,18 @@ function sendToAgent(agentName, message, fromUser = 'Discord') {
     }
 }
 
+function sendToAllAgents(message, fromUser = 'Discord') {
+    const inGameAgents = knownAgents.filter(a => a.in_game);
+    if (inGameAgents.length === 0) return { sent: false, agents: [], reason: 'No agents in-game' };
+
+    const results = [];
+    for (const agent of inGameAgents) {
+        const result = sendToAgent(agent.name, message, fromUser);
+        results.push(result);
+    }
+    return { sent: true, agents: inGameAgents.map(a => a.name), results };
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 
 // ── Mode Switching ──────────────────────────────────────────
@@ -243,6 +272,17 @@ function writeProfile(name, data) {
     writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
 }
 
+async function readProfileAsync(name) {
+    const filePath = join(PROFILES_DIR, `${name}.json`);
+    const data = await readFile(filePath, 'utf8');
+    return JSON.parse(data);
+}
+
+async function writeProfileAsync(name, data) {
+    const filePath = join(PROFILES_DIR, `${name}.json`);
+    await writeFile(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
+}
+
 function getActiveMode(name) {
     try {
         const p = readProfile(name);
@@ -250,34 +290,45 @@ function getActiveMode(name) {
     } catch { return 'unreadable'; }
 }
 
-function switchProfileMode(name, mode) {
-    const profile = readProfile(name);
-    if (!profile._modes) return { ok: false, reason: `No _modes config in ${name}.json` };
-    const modeConfig = profile._modes[mode];
-    if (!modeConfig) return { ok: false, reason: `Mode "${mode}" not defined for ${name}` };
+async function getActiveModeAsync(name) {
+    try {
+        const p = await readProfileAsync(name);
+        return p._active_mode || 'unknown';
+    } catch { return 'unreadable'; }
+}
 
-    // Apply mode fields to top-level
-    for (const [key, value] of Object.entries(modeConfig)) {
-        if (key === 'compute_type') continue;
-        profile[key] = value;
+async function switchProfileMode(name, mode) {
+    try {
+        const profile = await readProfileAsync(name);
+        if (!profile._modes) return { ok: false, reason: `No _modes config in ${name}.json` };
+        const modeConfig = profile._modes[mode];
+        if (!modeConfig) return { ok: false, reason: `Mode "${mode}" not defined for ${name}` };
+
+        // Apply mode fields to top-level
+        for (const [key, value] of Object.entries(modeConfig)) {
+            if (key === 'compute_type') continue;
+            profile[key] = value;
+        }
+
+        // Remove code_model if not in this mode
+        if (profile.code_model && !modeConfig.code_model) {
+            delete profile.code_model;
+        }
+
+        // Update compute type in conversing prompt
+        if (profile.conversing && modeConfig.compute_type) {
+            profile.conversing = profile.conversing.replace(
+                /(?<=- Compute: )[^\n\\]+/,
+                modeConfig.compute_type
+            );
+        }
+
+        profile._active_mode = mode;
+        await writeProfileAsync(name, profile);
+        return { ok: true, compute: modeConfig.compute_type || mode };
+    } catch (err) {
+        return { ok: false, reason: err.message };
     }
-
-    // Remove code_model if not in this mode
-    if (profile.code_model && !modeConfig.code_model) {
-        delete profile.code_model;
-    }
-
-    // Update compute type in conversing prompt
-    if (profile.conversing && modeConfig.compute_type) {
-        profile.conversing = profile.conversing.replace(
-            /(?<=- Compute: )[^\n\\]+/,
-            modeConfig.compute_type
-        );
-    }
-
-    profile._active_mode = mode;
-    writeProfile(name, profile);
-    return { ok: true, compute: modeConfig.compute_type || mode };
 }
 
 async function handleModeCommand(arg, message) {
@@ -285,11 +336,12 @@ async function handleModeCommand(arg, message) {
 
     // No args → show current modes
     if (parts.length === 0) {
-        const lines = ACTIVE_PROFILES.map(name => {
-            const mode = getActiveMode(name);
+        const lines = [];
+        for (const name of ACTIVE_PROFILES) {
+            const mode = await getActiveModeAsync(name);
             const emoji = MODE_EMOJI[mode] || '❓';
-            return `• **${name}** — ${emoji} ${mode}`;
-        });
+            lines.push(`• **${name}** — ${emoji} ${mode}`);
+        }
         return `**Current Compute Modes:**\n${lines.join('\n')}\n\nUsage: \`!mode <cloud|local|hybrid> [profile]\``;
     }
 
@@ -307,15 +359,11 @@ async function handleModeCommand(arg, message) {
 
     const results = [];
     for (const name of targets) {
-        try {
-            const result = switchProfileMode(name, mode);
-            if (result.ok) {
-                results.push(`✅ **${name}** → ${MODE_EMOJI[mode]} ${mode} (${result.compute})`);
-            } else {
-                results.push(`⚠️ **${name}** — ${result.reason}`);
-            }
-        } catch (err) {
-            results.push(`❌ **${name}** — ${err.message}`);
+        const result = await switchProfileMode(name, mode);  // Now async
+        if (result.ok) {
+            results.push(`✅ **${name}** → ${MODE_EMOJI[mode]} ${mode} (${result.compute})`);
+        } else {
+            results.push(`⚠️ **${name}** — ${result.reason}`);
         }
     }
 
@@ -327,7 +375,7 @@ async function handleModeCommand(arg, message) {
         for (const name of targets) {
             // Find the agent's in-game name from the profile
             try {
-                const profile = readProfile(name);
+                const profile = await readProfileAsync(name);
                 const agentName = profile.name || name;
                 mindServerSocket.emit('restart-agent', agentName);
             } catch { /* skip */ }
@@ -353,13 +401,21 @@ function findBestAgent() {
 }
 
 function parseAgentPrefix(content) {
-    // Check for "agentName: message" pattern
+    // Check for "agentName: message" or "alias: message" pattern
     const colonIdx = content.indexOf(':');
     if (colonIdx > 0 && colonIdx < 30) {
         const possibleName = content.substring(0, colonIdx).trim().toLowerCase();
+        const msg = content.substring(colonIdx + 1).trim();
+
+        // Exact agent name match
         const agent = knownAgents.find(a => a.name.toLowerCase() === possibleName);
         if (agent) {
-            return { agent: agent.name, message: content.substring(colonIdx + 1).trim() };
+            return { agent: agent.name, message: msg };
+        }
+
+        // Alias match
+        if (AGENT_ALIASES[possibleName]) {
+            return { agent: AGENT_ALIASES[possibleName], message: msg };
         }
     }
     return null;
@@ -402,6 +458,13 @@ client.on('messageCreate', async (message) => {
     const content = message.content.trim();
     const lower = content.toLowerCase();
     console.log(`[Discord] ${message.author.username}: ${content}`);
+
+    // ── Rate Limiting ──
+    const rateCheck = messageLimiter.checkLimit(message.author.id);
+    if (!rateCheck.allowed) {
+        await message.reply(`⏱️ Rate limited. Please wait ${rateCheck.retryAfterSeconds}s before sending another message.`);
+        return;
+    }
 
     try {
         // ── Natural language triggers ──
@@ -529,31 +592,35 @@ client.on('messageCreate', async (message) => {
             return;
         }
 
+        // Validate message
+        const validation = validateDiscordMessage(content);
+        if (!validation.valid) {
+            await message.reply(`⚠️ Invalid message: ${validation.error}`);
+            return;
+        }
+        const cleanContent = validation.sanitized;
+
         await message.channel.sendTyping();
 
-        // Check for "agentName: message" prefix
-        const parsed = parseAgentPrefix(content);
-        let targetAgent, msgToSend;
+        // Check for "agentName: message" or "alias: message" prefix
+        const parsed = parseAgentPrefix(cleanContent);
 
         if (parsed) {
-            targetAgent = parsed.agent;
-            msgToSend = parsed.message;
-        } else {
-            const best = findBestAgent();
-            if (!best) {
-                await message.reply('⚠️ No agents available. Check `!agents` or `!start <name>`.');
-                return;
+            // Targeted: send to one specific agent
+            const result = sendToAgent(parsed.agent, parsed.message, message.author.username);
+            if (result.sent) {
+                await message.reply(`📨 **${result.agent}** received your message. Waiting for response...`);
+            } else {
+                await message.reply(`⚠️ ${result.reason}`);
             }
-            targetAgent = best.name;
-            msgToSend = content;
-        }
-
-        const result = sendToAgent(targetAgent, msgToSend, message.author.username);
-
-        if (result.sent) {
-            await message.reply(`📨 **${result.agent}** received your message. Waiting for response...`);
         } else {
-            await message.reply(`⚠️ ${result.reason}`);
+            // No prefix: broadcast to ALL in-game agents
+            const result = sendToAllAgents(cleanContent, message.author.username);
+            if (result.sent) {
+                await message.reply(`📨 Sent to **${result.agents.join(', ')}**. Waiting for responses...`);
+            } else {
+                await message.reply(`⚠️ ${result.reason || 'No agents available. Check `!agents` or `!start <name>`.'}`);
+            }
         }
 
     } catch (error) {

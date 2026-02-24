@@ -18,6 +18,15 @@ import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
 import { Learnings } from './learnings.js';
+import { validateMinecraftMessage, validateUsername } from '../utils/message_validator.js';
+
+// ── In-game aliases (shorthand → canonical agent name) ──────
+const INGAME_ALIASES = {
+    'gemini': 'Gemini_1',
+    'gi':     'Gemini_1',
+    'grok':   'Grok_1',
+    'gk':     'Grok_1',
+};
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -160,19 +169,34 @@ export class Agent {
         const respondFunc = async (username, message) => {
             if (message === "") return;
             if (username === this.name) return;
+
+            // Validate username and message
+            const userValidation = validateUsername(username);
+            if (!userValidation.valid) {
+                console.warn(`[MessageValidator] Rejected message from invalid username: "${username}" (${userValidation.error})`);
+                return;
+            }
+
+            const msgValidation = validateMinecraftMessage(message);
+            if (!msgValidation.valid) {
+                console.warn(`[MessageValidator] Rejected message: ${msgValidation.error}`);
+                return;
+            }
+            const cleanMessage = msgValidation.sanitized;
+
             if (settings.only_chat_with.length > 0 && !settings.only_chat_with.includes(username)) return;
             try {
-                if (ignore_messages.some((m) => message.startsWith(m))) return;
+                if (ignore_messages.some((m) => cleanMessage.startsWith(m))) return;
 
                 this.shut_up = false;
 
-                console.log(this.name, 'received message from', username, ':', message);
+                console.log(this.name, 'received message from', username, ':', cleanMessage);
 
                 if (convoManager.isOtherAgent(username)) {
                     console.warn('received whisper from other bot??')
                 }
                 else {
-                    let translation = await handleEnglishTranslation(message);
+                    let translation = await handleEnglishTranslation(cleanMessage);
                     this.handleMessage(username, translation);
                 }
             } catch (error) {
@@ -183,11 +207,13 @@ export class Agent {
 		this.respondFunc = respondFunc;
 
         this.bot.on('whisper', respondFunc);
-        
+
         this.bot.on('chat', (username, message) => {
-            if (serverProxy.getNumOtherAgents() > 0) return;
-            // only respond to open chat messages when there are no other agents
-            respondFunc(username, message);
+            // Parse prefix/alias to determine if this message targets a specific bot
+            const parsed = this.parseInGamePrefix(message);
+            if (parsed.targeted && !parsed.isForMe) return; // targeted at another bot, skip
+            const msgToProcess = parsed.targeted ? parsed.message : message;
+            respondFunc(username, msgToProcess);
         });
 
         // Set up auto-eat
@@ -219,6 +245,35 @@ export class Agent {
         else {
             this.openChat("Hello world! I am "+this.name);
         }
+    }
+
+    parseInGamePrefix(message) {
+        const colonIdx = message.indexOf(':');
+        if (colonIdx <= 0 || colonIdx >= 30) return { targeted: false, isForMe: true, message };
+
+        const prefix = message.substring(0, colonIdx).trim().toLowerCase();
+        const body = message.substring(colonIdx + 1).trim();
+
+        // Check if prefix matches this agent's name
+        if (prefix === this.name.toLowerCase()) {
+            return { targeted: true, isForMe: true, targetName: this.name, message: body };
+        }
+
+        // Check aliases
+        const aliasTarget = INGAME_ALIASES[prefix];
+        if (aliasTarget) {
+            const isForMe = aliasTarget === this.name;
+            return { targeted: true, isForMe, targetName: aliasTarget, message: body };
+        }
+
+        // Check if prefix matches any other known agent name (case-insensitive)
+        if (convoManager.isOtherAgent(prefix) ||
+            convoManager.isOtherAgent(prefix.charAt(0).toUpperCase() + prefix.slice(1))) {
+            return { targeted: true, isForMe: false, targetName: prefix, message: body };
+        }
+
+        // Not a recognized prefix — treat as normal message
+        return { targeted: false, isForMe: true, message };
     }
 
     checkAllPlayersPresent() {
