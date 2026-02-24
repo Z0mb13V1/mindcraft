@@ -40,11 +40,6 @@
         }
     },
     "model": "gemini-2.5-pro",
-    "code_model": {
-        "api": "vllm",
-        "model": "Qwen/Qwen2.5-7B-Instruct",
-        "url": "http://host.docker.internal:8000/v1"
-    },
     "embedding": {
         "api": "google",
         "model": "gemini-embedding-001"
