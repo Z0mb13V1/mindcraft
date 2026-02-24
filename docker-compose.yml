@@ -44,6 +44,7 @@ services:
     volumes:
       - ./discord-bot.js:/app/discord-bot.js
       - ./package.json:/app/package.json
+      - ./profiles:/app/profiles
     environment:
       DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
       BOT_DM_CHANNEL: "${BOT_DM_CHANNEL}"

@@ -1,6 +1,14 @@
 /* eslint-env node */
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { io } from 'socket.io-client';
+import { readFileSync, writeFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PROFILES_DIR = join(__dirname, 'profiles');
+const ACTIVE_PROFILES = ['gemini', 'gemini2', 'grok'];
 
 // ── Config ──────────────────────────────────────────────────
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
@@ -38,6 +46,7 @@ Prefix with agent name to target: \`Gemini_1: go mine diamonds\`
 \`!help\` — Show this message
 \`!status\` — MindServer connection + agent overview
 \`!agents\` — List all agents with status
+\`!mode [cloud|local|hybrid] [profile]\` — View or switch compute mode
 \`!ping\` — Pong
 \`!reconnect\` — Reconnect to MindServer
 \`!start <name>\` — Start an agent
@@ -51,6 +60,7 @@ Prefix with agent name to target: \`Gemini_1: go mine diamonds\`
 • Command agents (mine, build, explore, etc.)
 • Monitor agent output and responses live
 • Start/stop/restart agents remotely
+• Switch between cloud/local/hybrid compute modes
 • Track which agents are online`;
 
 // ── MindServer Connection ───────────────────────────────────
@@ -148,6 +158,118 @@ function sendToAgent(agentName, message, fromUser = 'Discord') {
 }
 
 // ── Helpers ─────────────────────────────────────────────────
+
+// ── Mode Switching ──────────────────────────────────────────
+const VALID_MODES = ['cloud', 'local', 'hybrid'];
+const MODE_EMOJI = { cloud: '☁️', local: '🖥️', hybrid: '🔀' };
+
+function readProfile(name) {
+    const filePath = join(PROFILES_DIR, `${name}.json`);
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+}
+
+function writeProfile(name, data) {
+    const filePath = join(PROFILES_DIR, `${name}.json`);
+    writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
+}
+
+function getActiveMode(name) {
+    try {
+        const p = readProfile(name);
+        return p._active_mode || 'unknown';
+    } catch { return 'unreadable'; }
+}
+
+function switchProfileMode(name, mode) {
+    const profile = readProfile(name);
+    if (!profile._modes) return { ok: false, reason: `No _modes config in ${name}.json` };
+    const modeConfig = profile._modes[mode];
+    if (!modeConfig) return { ok: false, reason: `Mode "${mode}" not defined for ${name}` };
+
+    // Apply mode fields to top-level
+    for (const [key, value] of Object.entries(modeConfig)) {
+        if (key === 'compute_type') continue;
+        profile[key] = value;
+    }
+
+    // Remove code_model if not in this mode
+    if (profile.code_model && !modeConfig.code_model) {
+        delete profile.code_model;
+    }
+
+    // Update compute type in conversing prompt
+    if (profile.conversing && modeConfig.compute_type) {
+        profile.conversing = profile.conversing.replace(
+            /(?<=- Compute: )[^\n\\]+/,
+            modeConfig.compute_type
+        );
+    }
+
+    profile._active_mode = mode;
+    writeProfile(name, profile);
+    return { ok: true, compute: modeConfig.compute_type || mode };
+}
+
+async function handleModeCommand(arg, message) {
+    const parts = arg.trim().split(/\s+/).filter(Boolean);
+
+    // No args → show current modes
+    if (parts.length === 0) {
+        const lines = ACTIVE_PROFILES.map(name => {
+            const mode = getActiveMode(name);
+            const emoji = MODE_EMOJI[mode] || '❓';
+            return `• **${name}** — ${emoji} ${mode}`;
+        });
+        return `**Current Compute Modes:**\n${lines.join('\n')}\n\nUsage: \`!mode <cloud|local|hybrid> [profile]\``;
+    }
+
+    const mode = parts[0].toLowerCase();
+    if (!VALID_MODES.includes(mode)) {
+        return `❌ Invalid mode: \`${mode}\`. Valid: \`cloud\`, \`local\`, \`hybrid\``;
+    }
+
+    // Determine which profiles to switch
+    const targets = parts.length > 1
+        ? parts.slice(1).map(p => p.toLowerCase().replace('.json', ''))
+        : [...ACTIVE_PROFILES];
+
+    await message.channel.sendTyping();
+
+    const results = [];
+    for (const name of targets) {
+        try {
+            const result = switchProfileMode(name, mode);
+            if (result.ok) {
+                results.push(`✅ **${name}** → ${MODE_EMOJI[mode]} ${mode} (${result.compute})`);
+            } else {
+                results.push(`⚠️ **${name}** — ${result.reason}`);
+            }
+        } catch (err) {
+            results.push(`❌ **${name}** — ${err.message}`);
+        }
+    }
+
+    let reply = `**Mode Switch → ${mode.toUpperCase()}**\n${results.join('\n')}`;
+
+    // Restart agents via MindServer if connected
+    if (mindServerConnected) {
+        reply += '\n\n🔄 Restarting agents...';
+        for (const name of targets) {
+            // Find the agent's in-game name from the profile
+            try {
+                const profile = readProfile(name);
+                const agentName = profile.name || name;
+                mindServerSocket.emit('restart-agent', agentName);
+            } catch { /* skip */ }
+        }
+    } else {
+        reply += '\n\n⚠️ MindServer not connected — restart agents manually or use `!reconnect` then `!restart <name>`.';
+    }
+
+    return reply;
+}
+
+// ── Agent Helpers ───────────────────────────────────────────
 function getAgentStatusText() {
     if (knownAgents.length === 0) return 'No agents registered.';
     return knownAgents.map(a => {
@@ -250,6 +372,12 @@ client.on('messageCreate', async (message) => {
                     mindServerSocket.emit('stop-all-agents');
                     await message.reply('⏹️ Stopping all agents...');
                     return;
+
+                case '!mode': {
+                    const modeResult = await handleModeCommand(arg, message);
+                    await message.reply(modeResult);
+                    return;
+                }
 
                 default:
                     await message.reply(`Unknown command: \`${cmd}\`. Type \`!help\` for commands.`);
