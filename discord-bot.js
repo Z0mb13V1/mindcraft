@@ -10,6 +10,71 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
 const ACTIVE_PROFILES = ['gemini', 'gemini2', 'grok'];
 
+// ── Bot Groups (name → agent names) ─────────────────────────
+// Profile filename → in-game agent name mapping
+const PROFILE_AGENT_MAP = {
+    gemini: 'Gemini_1',
+    gemini2: 'Gemini_2',
+    grok: 'Grok_1'
+};
+const BOT_GROUPS = {
+    all:    ['Gemini_1', 'Gemini_2', 'Grok_1'],
+    gemini: ['Gemini_1', 'Gemini_2'],
+    grok:   ['Grok_1'],
+    cloud:  ['Gemini_1', 'Gemini_2', 'Grok_1'],  // all cloud bots
+    '1':    ['Gemini_1', 'Grok_1'],               // slot 1 bots
+    '2':    ['Gemini_2'],                          // slot 2 bots
+};
+
+/**
+ * Resolve a user argument to a list of agent names.
+ * Supports: exact agent names, group names, or comma-separated.
+ * Returns: { agents: string[], label: string }
+ */
+function resolveAgents(arg) {
+    if (!arg) return { agents: [], label: 'none' };
+
+    // Check for comma-separated list
+    const parts = arg.split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    const resolved = [];
+    const labels = [];
+
+    for (const part of parts) {
+        const lower = part.toLowerCase();
+
+        // Group match
+        if (BOT_GROUPS[lower]) {
+            resolved.push(...BOT_GROUPS[lower]);
+            labels.push(`group:${lower}`);
+            continue;
+        }
+
+        // Exact agent name match (case-insensitive)
+        const agent = knownAgents.find(a => a.name.toLowerCase() === lower);
+        if (agent) {
+            resolved.push(agent.name);
+            labels.push(agent.name);
+            continue;
+        }
+
+        // Partial match (prefix)
+        const partial = knownAgents.filter(a => a.name.toLowerCase().startsWith(lower));
+        if (partial.length > 0) {
+            resolved.push(...partial.map(a => a.name));
+            labels.push(...partial.map(a => a.name));
+            continue;
+        }
+
+        // Unknown — pass through as-is (MindServer may know it)
+        resolved.push(part);
+        labels.push(part);
+    }
+
+    // Deduplicate
+    const unique = [...new Set(resolved)];
+    return { agents: unique, label: labels.join(', ') };
+}
+
 // ── Config ──────────────────────────────────────────────────
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
 const BOT_DM_CHANNEL = process.env.BOT_DM_CHANNEL || '';
@@ -49,17 +114,21 @@ Prefix with agent name to target: \`Gemini_1: go mine diamonds\`
 \`!mode [cloud|local|hybrid] [profile]\` — View or switch compute mode
 \`!ping\` — Pong
 \`!reconnect\` — Reconnect to MindServer
-\`!start <name>\` — Start an agent
-\`!stop <name>\` — Stop an agent
-\`!restart <name>\` — Restart an agent
+\`!start <name|group>\` — Start agent(s)
+\`!stop <name|group>\` — Stop agent(s)
+\`!restart <name|group>\` — Restart agent(s)
+\`!startall\` — Start all agents
 \`!stopall\` — Stop all agents
+
+**Groups:** \`all\`, \`gemini\` (both), \`grok\`, \`cloud\`, \`1\` (slot 1), \`2\` (slot 2)
+You can also comma-separate: \`!stop Gemini_1, Grok_1\`
 
 **What can I do?**
 • Check on your Minecraft AI bots anytime
 • Send chat messages to agents in-game
 • Command agents (mine, build, explore, etc.)
 • Monitor agent output and responses live
-• Start/stop/restart agents remotely
+• Start/stop/restart agents by name or group
 • Switch between cloud/local/hybrid compute modes
 • Track which agents are online`;
 
@@ -346,25 +415,37 @@ client.on('messageCreate', async (message) => {
                     connectToMindServer();
                     return;
 
-                case '!start':
-                    if (!arg) { await message.reply('Usage: `!start <agent_name>`'); return; }
+                case '!start': {
+                    if (!arg) { await message.reply('Usage: `!start <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
-                    mindServerSocket.emit('start-agent', arg);
-                    await message.reply(`▶️ Starting agent **${arg}**...`);
+                    const { agents: startTargets } = resolveAgents(arg);
+                    for (const name of startTargets) mindServerSocket.emit('start-agent', name);
+                    await message.reply(`▶️ Starting **${startTargets.join(', ')}**...`);
                     return;
+                }
 
-                case '!stop':
-                    if (!arg) { await message.reply('Usage: `!stop <agent_name>`'); return; }
+                case '!stop': {
+                    if (!arg) { await message.reply('Usage: `!stop <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
-                    mindServerSocket.emit('stop-agent', arg);
-                    await message.reply(`⏹️ Stopping agent **${arg}**...`);
+                    const { agents: stopTargets } = resolveAgents(arg);
+                    for (const name of stopTargets) mindServerSocket.emit('stop-agent', name);
+                    await message.reply(`⏹️ Stopping **${stopTargets.join(', ')}**...`);
                     return;
+                }
 
-                case '!restart':
-                    if (!arg) { await message.reply('Usage: `!restart <agent_name>`'); return; }
+                case '!restart': {
+                    if (!arg) { await message.reply('Usage: `!restart <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
-                    mindServerSocket.emit('restart-agent', arg);
-                    await message.reply(`🔄 Restarting agent **${arg}**...`);
+                    const { agents: restartTargets } = resolveAgents(arg);
+                    for (const name of restartTargets) mindServerSocket.emit('restart-agent', name);
+                    await message.reply(`🔄 Restarting **${restartTargets.join(', ')}**...`);
+                    return;
+                }
+
+                case '!startall':
+                    if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
+                    for (const name of BOT_GROUPS.all) mindServerSocket.emit('start-agent', name);
+                    await message.reply(`▶️ Starting all agents: **${BOT_GROUPS.all.join(', ')}**...`);
                     return;
 
                 case '!stopall':
