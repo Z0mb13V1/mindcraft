@@ -3,5 +3,41 @@
     "model": "ollama/deepseek-r1:7b",
     "fallback_model": "gemini-2.5-flash",
     "speak_model": "google/gemini-2.5-flash-preview-tts/Kore",
-    "cooldown": 2000
+    "cooldown": 2000,
+    "_active_mode": "local",
+    "_modes": {
+        "cloud": {
+            "model": "gemini-2.5-flash",
+            "compute_type": "Cloud-based",
+            "embedding": {
+                "api": "google",
+                "model": "gemini-embedding-001"
+            }
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": "gemini-2.5-flash",
+            "code_model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "embedding": {
+                "api": "google",
+                "model": "gemini-embedding-001"
+            }
+        }
+    }
 }

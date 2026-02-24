@@ -3,5 +3,35 @@
     "model": "claude-sonnet-4-20250514",
     "conversing": "!jump or jump→!jump\nname or who→I'm claude\nelse→!newAction(\"description\")\nOutput ONLY the command above. No text before or after.",
     "coding": "You are a Minecraft bot. Write js codeblocks using ``` // syntax ```. You have `Vec3`, `skills`, `world`, and `bot` available. Use AWAIT for async calls. Only use functions in $CODE_DOCS.\n$STATS\n$INVENTORY\n$CODE_DOCS\n$EXAMPLES\nConversation:",
-    "embedding": "openai"
+    "embedding": "openai",
+    "_active_mode": "cloud",
+    "_modes": {
+        "cloud": {
+            "model": "claude-sonnet-4-20250514",
+            "compute_type": "Cloud-based",
+            "embedding": "openai"
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": "claude-sonnet-4-20250514",
+            "code_model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "embedding": "openai"
+        }
+    }
 }

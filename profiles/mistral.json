@@ -1,5 +1,32 @@
 {
     "name": "Mistral",
-
-    "model": "mistral/mistral-large-latest"
+    "model": "mistral/mistral-large-latest",
+    "_active_mode": "cloud",
+    "_modes": {
+        "cloud": {
+            "model": "mistral/mistral-large-latest",
+            "compute_type": "Cloud-based"
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "mistral:latest",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": "mistral/mistral-large-latest",
+            "code_model": {
+                "api": "ollama",
+                "model": "mistral:latest",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)"
+        }
+    }
 }

@@ -4,16 +4,74 @@
         "api": "azure",
         "url": "https://<your-resource>.openai.azure.com",
         "model": "<chat-deployment-name>",
-        "params": { 
-            "apiVersion": "2024-08-01-preview" 
+        "params": {
+            "apiVersion": "2024-08-01-preview"
         }
     },
     "embedding": {
         "api": "azure",
         "url": "https://<your-resource>.openai.azure.com",
         "model": "<embedding-deployment-name>",
-        "params": { 
-            "apiVersion": "2024-08-01-preview" 
+        "params": {
+            "apiVersion": "2024-08-01-preview"
+        }
+    },
+    "_active_mode": "cloud",
+    "_modes": {
+        "cloud": {
+            "model": {
+                "api": "azure",
+                "url": "https://<your-resource>.openai.azure.com",
+                "model": "<chat-deployment-name>",
+                "params": {
+                    "apiVersion": "2024-08-01-preview"
+                }
+            },
+            "compute_type": "Cloud-based",
+            "embedding": {
+                "api": "azure",
+                "url": "https://<your-resource>.openai.azure.com",
+                "model": "<embedding-deployment-name>",
+                "params": {
+                    "apiVersion": "2024-08-01-preview"
+                }
+            }
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": {
+                "api": "azure",
+                "url": "https://<your-resource>.openai.azure.com",
+                "model": "<chat-deployment-name>",
+                "params": {
+                    "apiVersion": "2024-08-01-preview"
+                }
+            },
+            "code_model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "embedding": {
+                "api": "azure",
+                "url": "https://<your-resource>.openai.azure.com",
+                "model": "<embedding-deployment-name>",
+                "params": {
+                    "apiVersion": "2024-08-01-preview"
+                }
+            }
         }
     }
-  }
+}

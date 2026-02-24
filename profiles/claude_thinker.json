@@ -1,6 +1,5 @@
 {
     "name": "claude_thinker",
-
     "model": {
         "model": "claude-sonnet-4-20250514",
         "params": {
@@ -10,6 +9,51 @@
             }
         }
     },
-    
-    "embedding": "openai"
+    "embedding": "openai",
+    "_active_mode": "cloud",
+    "_modes": {
+        "cloud": {
+            "model": {
+                "model": "claude-sonnet-4-20250514",
+                "params": {
+                    "thinking": {
+                        "type": "enabled",
+                        "budget_tokens": 4000
+                    }
+                }
+            },
+            "compute_type": "Cloud-based",
+            "embedding": "openai"
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": {
+                "model": "claude-sonnet-4-20250514",
+                "params": {
+                    "thinking": {
+                        "type": "enabled",
+                        "budget_tokens": 4000
+                    }
+                }
+            },
+            "code_model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "embedding": "openai"
+        }
+    }
 }

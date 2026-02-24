@@ -1,7 +1,35 @@
 {
     "name": "deepseek",
-
     "model": "deepseek-chat",
-
-    "embedding": "openai"
+    "embedding": "openai",
+    "_active_mode": "cloud",
+    "_modes": {
+        "cloud": {
+            "model": "deepseek-chat",
+            "compute_type": "Cloud-based",
+            "embedding": "openai"
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": "deepseek-chat",
+            "code_model": {
+                "api": "ollama",
+                "model": "deepseek-r1:7b",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "embedding": "openai"
+        }
+    }
 }

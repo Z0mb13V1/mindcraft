@@ -1,17 +1,60 @@
 {
     "name": "qwen",
-
     "cooldown": 5000,
-
     "model": {
         "api": "qwen",
         "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         "model": "qwen-max"
     },
-
     "embedding": {
         "api": "qwen",
         "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
         "model": "text-embedding-v3"
+    },
+    "_active_mode": "cloud",
+    "_modes": {
+        "cloud": {
+            "model": {
+                "api": "qwen",
+                "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                "model": "qwen-max"
+            },
+            "compute_type": "Cloud-based",
+            "embedding": {
+                "api": "qwen",
+                "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                "model": "text-embedding-v3"
+            }
+        },
+        "local": {
+            "model": {
+                "api": "ollama",
+                "model": "qwen2.5:latest",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Local (Ollama)",
+            "embedding": {
+                "api": "ollama",
+                "url": "http://host.docker.internal:11434"
+            }
+        },
+        "hybrid": {
+            "model": {
+                "api": "qwen",
+                "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                "model": "qwen-max"
+            },
+            "code_model": {
+                "api": "ollama",
+                "model": "qwen2.5:latest",
+                "url": "http://host.docker.internal:11434"
+            },
+            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "embedding": {
+                "api": "qwen",
+                "url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                "model": "text-embedding-v3"
+            }
+        }
     }
 }
