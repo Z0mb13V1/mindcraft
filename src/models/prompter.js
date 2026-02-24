@@ -9,6 +9,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { selectAPI, createModel } from './_model_map.js';
+import { UsageTracker } from '../utils/usage_tracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +99,8 @@ export class Prompter {
             }
             console.log("Copy profile saved.");
         });
+
+        this.usageTracker = new UsageTracker(name);
     }
 
     getName() {
@@ -109,6 +112,8 @@ export class Prompter {
     }
 
     async initExamples() {
+        this.usageTracker.load();
+
         try {
             this.convo_examples = new Examples(this.embedding_model, settings.num_examples);
             this.coding_examples = new Examples(this.embedding_model, settings.num_examples);
@@ -165,6 +170,10 @@ export class Prompter {
             prompt = prompt.replaceAll('$EXAMPLES', await examples.createExampleMessage(messages));
         if (prompt.includes('$MEMORY'))
             prompt = prompt.replaceAll('$MEMORY', this.agent.history.memory);
+        if (prompt.includes('$LEARNINGS')) {
+            const summary = this.agent.learnings?.getRecentSummary(10) || '';
+            prompt = prompt.replaceAll('$LEARNINGS', summary ? 'Recent action outcomes:\n' + summary : '');
+        }
         if (prompt.includes('$TO_SUMMARIZE'))
             prompt = prompt.replaceAll('$TO_SUMMARIZE', stringifyTurns(to_summarize));
         if (prompt.includes('$CONVO'))
@@ -226,6 +235,7 @@ export class Prompter {
 
             try {
                 generation = await this.chat_model.sendRequest(messages, prompt);
+                this._recordUsage(this.chat_model, 'chat');
                 if (typeof generation !== 'string') {
                     console.error('Error: Generated response is not a string', generation);
                     throw new Error('Generated response is not a string');
@@ -271,6 +281,7 @@ export class Prompter {
         prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
 
         let resp = await this.code_model.sendRequest(messages, prompt);
+        this._recordUsage(this.code_model, 'code');
         this.awaiting_coding = false;
         await this._saveLog(prompt, messages, resp, 'coding');
         return resp;
@@ -281,6 +292,7 @@ export class Prompter {
         let prompt = this.profile.saving_memory;
         prompt = await this.replaceStrings(prompt, null, null, to_summarize);
         let resp = await this.chat_model.sendRequest([], prompt);
+        this._recordUsage(this.chat_model, 'memory');
         await this._saveLog(prompt, to_summarize, resp, 'memSaving');
         if (resp?.includes('</think>')) {
             const [_, afterThink] = resp.split('</think>')
@@ -296,6 +308,7 @@ export class Prompter {
         messages.push({role: 'user', content: new_message});
         prompt = await this.replaceStrings(prompt, null, null, messages);
         let res = await this.chat_model.sendRequest([], prompt);
+        this._recordUsage(this.chat_model, 'chat');
         return res.trim().toLowerCase() === 'respond';
     }
 
@@ -303,7 +316,9 @@ export class Prompter {
         await this.checkCooldown();
         let prompt = this.profile.image_analysis;
         prompt = await this.replaceStrings(prompt, messages, null, null, null);
-        return await this.vision_model.sendVisionRequest(messages, prompt, imageBuffer);
+        let res = await this.vision_model.sendVisionRequest(messages, prompt, imageBuffer);
+        this._recordUsage(this.vision_model, 'vision');
+        return res;
     }
 
     async promptGoalSetting(messages, last_goals) {
@@ -317,6 +332,7 @@ export class Prompter {
         let user_messages = [{role: 'user', content: user_message}];
 
         let res = await this.chat_model.sendRequest(user_messages, system_message);
+        this._recordUsage(this.chat_model, 'chat');
 
         let goal = null;
         try {
@@ -331,6 +347,13 @@ export class Prompter {
         }
         goal.quantity = parseInt(goal.quantity);
         return goal;
+    }
+
+    _recordUsage(model, callType) {
+        const usage = model._lastUsage || null;
+        const modelName = model.model_name || 'unknown';
+        const provider = model.constructor?.prefix || 'unknown';
+        this.usageTracker.record(modelName, provider, callType, usage);
     }
 
     async _saveLog(prompt, messages, generation, tag) {

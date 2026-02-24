@@ -1,3 +1,4 @@
+[CmdletBinding()]
 param(
     [string]$SSHUser = "Zombie",
     [string]$SSHHost = "192.168.0.30",

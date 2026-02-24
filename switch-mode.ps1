@@ -8,13 +8,13 @@
 
     Modes:
       cloud  - Cloud API model only (Gemini, Grok, GPT, Claude, etc.)
-      local  - Local Ollama model only (runs on host machine)
-      hybrid - Cloud model for chat, local Ollama model for code generation
+      local  - Local vLLM model only (runs on host machine via vLLM)
+      hybrid - Cloud model for chat, local vLLM model for code generation
 
 .PARAMETER Mode
     Compute mode: cloud, local, or hybrid.
 
-.PARAMETER Profile
+.PARAMETER ProfileName
     Profile name(s) without .json extension. Defaults to active bots.
 
 .PARAMETER All
@@ -25,7 +25,7 @@
 
 .EXAMPLE
     .\switch-mode.ps1 -Mode local
-    .\switch-mode.ps1 -Mode hybrid -Profile gemini,grok -Restart
+    .\switch-mode.ps1 -Mode hybrid -ProfileName gemini,grok -Restart
     .\switch-mode.ps1 -Mode cloud -All
 #>
 param(
@@ -33,7 +33,7 @@ param(
     [ValidateSet("cloud", "local", "hybrid")]
     [string]$Mode,
 
-    [string[]]$Profile,
+    [string[]]$ProfileName,
     [switch]$All,
     [switch]$Restart
 )
@@ -41,12 +41,12 @@ param(
 $ProfileDir = Join-Path $PSScriptRoot "profiles"
 
 # Default to active profiles if none specified
-if (-not $Profile -and -not $All) {
-    $Profile = @("gemini", "gemini2", "grok")
+if (-not $ProfileName -and -not $All) {
+    $ProfileName = @("gemini", "gemini2", "grok")
 }
 
 if ($All) {
-    $Profile = Get-ChildItem "$ProfileDir\*.json" |
+    $ProfileName = Get-ChildItem "$ProfileDir\*.json" |
         Where-Object { $_.Directory.Name -eq "profiles" } |
         ForEach-Object { $_.BaseName }
 }
@@ -57,7 +57,7 @@ Write-Host ""
 
 $switched = @()
 
-foreach ($name in $Profile) {
+foreach ($name in $ProfileName) {
     $path = Join-Path $ProfileDir "$name.json"
     if (-not (Test-Path $path)) {
         Write-Warning "Profile not found: $name.json"

@@ -56,6 +56,11 @@ export class Gemini {
             }
         });
         const response = await result.text;
+        this._lastUsage = result.usageMetadata ? {
+            prompt_tokens: result.usageMetadata.promptTokenCount || 0,
+            completion_tokens: result.usageMetadata.candidatesTokenCount || 0,
+            total_tokens: result.usageMetadata.totalTokenCount || 0,
+        } : null;
 
         console.log('Received.');
 
@@ -96,6 +101,11 @@ export class Gemini {
                 }
             });
             res = await result.text;
+            this._lastUsage = result.usageMetadata ? {
+                prompt_tokens: result.usageMetadata.promptTokenCount || 0,
+                completion_tokens: result.usageMetadata.candidatesTokenCount || 0,
+                total_tokens: result.usageMetadata.totalTokenCount || 0,
+            } : null;
             console.log('Received.');
         } catch (err) {
             console.log(err);

@@ -112,6 +112,7 @@ Prefix with agent name to target: \`Gemini_1: go mine diamonds\`
 \`!status\` — MindServer connection + agent overview
 \`!agents\` — List all agents with status
 \`!mode [cloud|local|hybrid] [profile]\` — View or switch compute mode
+\`!usage [agent|all]\` — Show API usage stats and costs
 \`!ping\` — Pong
 \`!reconnect\` — Reconnect to MindServer
 \`!start <name|group>\` — Start agent(s)
@@ -364,6 +365,28 @@ function parseAgentPrefix(content) {
     return null;
 }
 
+// ── Usage Formatting ────────────────────────────────────────
+function formatAgentUsage(agentName, data) {
+    if (!data || !data.totals) return `\n**${agentName}** — No data\n`;
+    const t = data.totals;
+    const rpm = data.rpm ?? 0;
+    const tpm = data.tpm ?? 0;
+    let text = `\n**${agentName}**\n`;
+    text += `  Cost: **$${t.estimated_cost_usd.toFixed(4)} USD**\n`;
+    text += `  Requests: **${t.calls.toLocaleString()}** | RPM: **${rpm}**\n`;
+    text += `  Tokens: **${t.total_tokens.toLocaleString()}** `;
+    text += `(${t.prompt_tokens.toLocaleString()} in / ${t.completion_tokens.toLocaleString()} out) | TPM: **${tpm.toLocaleString()}**\n`;
+
+    if (data.models && Object.keys(data.models).length > 0) {
+        for (const [model, m] of Object.entries(data.models)) {
+            const prov = m.provider || '?';
+            text += `  - \`${model}\` (${prov}): ${m.calls} calls, `;
+            text += `${m.total_tokens.toLocaleString()} tokens, $${m.estimated_cost_usd.toFixed(4)}\n`;
+        }
+    }
+    return text;
+}
+
 // ── Discord Events ──────────────────────────────────────────
 client.on('ready', () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
@@ -457,6 +480,40 @@ client.on('messageCreate', async (message) => {
                 case '!mode': {
                     const modeResult = await handleModeCommand(arg, message);
                     await message.reply(modeResult);
+                    return;
+                }
+
+                case '!usage': {
+                    if (!mindServerConnected) { await message.reply('MindServer not connected.'); return; }
+                    await message.channel.sendTyping();
+
+                    if (!arg || arg.toLowerCase() === 'all') {
+                        mindServerSocket.emit('get-all-usage', async (results) => {
+                            if (!results || Object.keys(results).length === 0) {
+                                await message.reply('No usage data available. Are any agents in-game?');
+                                return;
+                            }
+                            let reply = '**API Usage Summary**\n';
+                            let grandTotal = 0;
+                            for (const [name, data] of Object.entries(results)) {
+                                if (!data) continue;
+                                grandTotal += data.totals?.estimated_cost_usd || 0;
+                                reply += formatAgentUsage(name, data);
+                            }
+                            reply += `\n**Grand Total: $${grandTotal.toFixed(4)}**`;
+                            await message.reply(reply);
+                        });
+                    } else {
+                        const { agents: usageTargets } = resolveAgents(arg);
+                        const target = usageTargets[0];
+                        if (!target) { await message.reply(`Agent "${arg}" not found.`); return; }
+                        mindServerSocket.emit('get-agent-usage', target, async (response) => {
+                            if (response.error) { await message.reply(`Error: ${response.error}`); return; }
+                            if (!response.usage) { await message.reply(`No usage data for **${target}**.`); return; }
+                            const reply = '**API Usage Report**\n' + formatAgentUsage(target, response.usage);
+                            await message.reply(reply);
+                        });
+                    }
                     return;
                 }
 

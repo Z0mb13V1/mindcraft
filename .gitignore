@@ -42,6 +42,10 @@ server_data*
 **/.DS_Store
 src/mindcraft-py/__pycache__/
 
+# Claude Code temp files
+tmpclaude-*
+nul
+
 # Minecraft server data (synced with NAS)
 minecraft-data/
 sync-log.txt

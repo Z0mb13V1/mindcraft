@@ -11,24 +11,24 @@
         },
         "local": {
             "model": {
-                "api": "ollama",
-                "model": "deepseek-r1:7b",
-                "url": "http://host.docker.internal:11434"
+                "api": "vllm",
+                "model": "google/gemma-3-12b-it",
+                "url": "http://host.docker.internal:8000/v1"
             },
-            "compute_type": "Local (Ollama)",
+            "compute_type": "Local (vLLM)",
             "embedding": {
-                "api": "ollama",
-                "url": "http://host.docker.internal:11434"
+                "api": "google",
+                "model": "gemini-embedding-001"
             }
         },
         "hybrid": {
             "model": "deepseek-chat",
             "code_model": {
-                "api": "ollama",
-                "model": "deepseek-r1:7b",
-                "url": "http://host.docker.internal:11434"
+                "api": "vllm",
+                "model": "google/gemma-3-12b-it",
+                "url": "http://host.docker.internal:8000/v1"
             },
-            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "compute_type": "Hybrid (Cloud chat + vLLM code)",
             "embedding": "openai"
         }
     }

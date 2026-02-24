@@ -4,7 +4,7 @@ import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import * as mindcraft from './mindcraft.js';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Mindserver is:
@@ -18,6 +18,21 @@ const agent_connections = {};
 const agent_listeners = [];
 
 const settings_spec = JSON.parse(readFileSync(path.join(__dirname, 'public/settings_spec.json'), 'utf8'));
+
+function readUsageFromDisk(agentName) {
+    try {
+        const filePath = path.join(__dirname, `../../bots/${agentName}/usage.json`);
+        if (!existsSync(filePath)) return null;
+        const raw = readFileSync(filePath, 'utf8');
+        const data = JSON.parse(raw);
+        // Disk data won't have live RPM/TPM
+        data.rpm = 0;
+        data.tpm = 0;
+        return data;
+    } catch {
+        return null;
+    }
+}
 
 class AgentConnection {
     constructor(settings, viewer_port) {
@@ -214,6 +229,58 @@ export function createMindServer(host_public = false, port = 8080) {
 
         socket.on('listen-to-agents', () => {
             addListener(socket);
+        });
+
+        socket.on('get-agent-usage', (agentName, callback) => {
+            const conn = agent_connections[agentName];
+            // If agent is in-game, query live data with disk fallback on timeout
+            if (conn && conn.socket && conn.in_game) {
+                const timeout = setTimeout(() => {
+                    const diskData = readUsageFromDisk(agentName);
+                    callback(diskData ? { usage: diskData } : { error: 'Timeout' });
+                }, 5000);
+                conn.socket.emit('get-usage', (data) => {
+                    clearTimeout(timeout);
+                    callback({ usage: data });
+                });
+                return;
+            }
+            // Agent offline or not registered — try reading from disk
+            const diskData = readUsageFromDisk(agentName);
+            if (diskData) {
+                callback({ usage: diskData });
+            } else {
+                callback({ error: `No usage data for '${agentName}'.` });
+            }
+        });
+
+        socket.on('get-all-usage', (callback) => {
+            const results = {};
+            const promises = [];
+            for (const agentName in agent_connections) {
+                const conn = agent_connections[agentName];
+                if (conn.socket && conn.in_game) {
+                    // Live agent — query via socket
+                    promises.push(new Promise((resolve) => {
+                        const timeout = setTimeout(() => {
+                            // Fallback to disk on timeout
+                            const diskData = readUsageFromDisk(agentName);
+                            if (diskData) results[agentName] = diskData;
+                            resolve();
+                        }, 3000);
+                        conn.socket.emit('get-usage', (data) => {
+                            clearTimeout(timeout);
+                            results[agentName] = data;
+                            resolve();
+                        });
+                    }));
+                } else {
+                    // Offline agent — read from disk
+                    const diskData = readUsageFromDisk(agentName);
+                    if (diskData) results[agentName] = diskData;
+                }
+            }
+            Promise.all(promises).then(() => callback(results));
         });
     });
 

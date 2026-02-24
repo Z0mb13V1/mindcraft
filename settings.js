@@ -11,14 +11,14 @@ const settings = {
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
         "./profiles/gemini.json",
-        "./profiles/gemini2.json",
+        // "./profiles/gemini2.json",
         "./profiles/grok.json",
 
         // using more than 1 profile requires you to /msg each bot indivually
         // individual profiles override values from the base profile
     ],
 
-    "load_memory": false, // load memory from previous session
+    "load_memory": true, // load memory from previous session
     "init_message": "Respond with hello world, your name, the AI model you run on, and whether your compute is cloud-based, local, or hybrid.", // sends to all on spawn
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 

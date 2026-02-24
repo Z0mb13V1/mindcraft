@@ -17,6 +17,7 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+import { Learnings } from './learnings.js';
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -44,6 +45,8 @@ export class Agent {
         this.npc = new NPCContoller(this);
         this.memory_bank = new MemoryBank();
         this.self_prompter = new SelfPrompter(this);
+        this.learnings = new Learnings(this.name);
+        this.learnings.load();
         convoManager.initAgent(this);
         await this.prompter.initExamples();
 
@@ -364,6 +367,12 @@ export class Agent {
                 console.log('Agent executed:', command_name, 'and got:', execute_res);
                 used_command = true;
 
+                if (this.learnings && command_name) {
+                    const outcome = (execute_res && !execute_res.includes('Error') && !execute_res.includes('failed'))
+                        ? 'success' : 'fail';
+                    this.learnings.record(command_name, res.substring(0, 100), outcome);
+                }
+
                 if (execute_res)
                     this.history.add('system', execute_res);
                 else
@@ -532,6 +541,13 @@ export class Agent {
         this.history.add('system', msg);
         this.bot.chat(code > 1 ? 'Restarting.': 'Exiting.');
         this.history.save();
+        if (this.learnings) {
+            this.learnings.save();
+        }
+        if (this.prompter?.usageTracker) {
+            this.prompter.usageTracker.saveSync();
+            this.prompter.usageTracker.destroy();
+        }
         process.exit(code);
     }
     async checkTaskDone() {

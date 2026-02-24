@@ -91,6 +91,7 @@ export class History {
             };
             writeFileSync(this.memory_fp, JSON.stringify(data, null, 2));
             console.log('Saved memory to:', this.memory_fp);
+            if (this.agent.learnings?._dirty) this.agent.learnings.save();
         } catch (error) {
             console.error('Failed to save history:', error);
             throw error;

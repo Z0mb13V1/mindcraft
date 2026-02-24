@@ -29,7 +29,7 @@
                 "model": "Qwen/Qwen2.5-1.5B-Instruct",
                 "url": "http://127.0.0.1:8000/v1"
             },
-            "compute_type": "Hybrid (Cloud chat + Local code)",
+            "compute_type": "Hybrid (Cloud chat + vLLM code)",
             "embedding": "openai"
         }
     }

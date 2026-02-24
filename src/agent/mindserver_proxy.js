@@ -79,6 +79,16 @@ class MindServerProxy {
             }
         });
 
+        this.socket.on('get-usage', (callback) => {
+            try {
+                const snapshot = this.agent?.prompter?.usageTracker?.getSnapshot() || null;
+                callback(snapshot);
+            } catch (error) {
+                console.error('Error getting usage:', error);
+                callback(null);
+            }
+        });
+
         // Request settings and wait for response
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {

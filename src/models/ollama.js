@@ -31,8 +31,14 @@ export class Ollama {
                 });
                 if (apiResponse) {
                     res = apiResponse['message']['content'];
+                    this._lastUsage = {
+                        prompt_tokens: apiResponse.prompt_eval_count || 0,
+                        completion_tokens: apiResponse.eval_count || 0,
+                        total_tokens: (apiResponse.prompt_eval_count || 0) + (apiResponse.eval_count || 0),
+                    };
                 } else {
                     res = 'No response data.';
+                    this._lastUsage = null;
                 }
             } catch (err) {
                 if (err.message.toLowerCase().includes('context length') && turns.length > 1) {
