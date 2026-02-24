@@ -1,6 +1,6 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
-    "host": "192.168.0.30", // or "localhost", "your.ip.address.here"
+    "host": "minecraft-server", // Docker service name
     "port": 25565, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
@@ -12,13 +12,14 @@ const settings = {
     "profiles": [
         "./profiles/gemini.json",
         "./profiles/gemini2.json",
+        "./profiles/grok.json",
 
         // using more than 1 profile requires you to /msg each bot indivually
         // individual profiles override values from the base profile
     ],
 
     "load_memory": false, // load memory from previous session
-    "init_message": "Respond with hello world and your name", // sends to all on spawn
+    "init_message": "Respond with hello world, your name, the AI model you run on, and whether your compute is cloud-based, local, or hybrid.", // sends to all on spawn
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
     "speak": false,
@@ -32,7 +33,7 @@ const settings = {
     "render_bot_view": false, // show bot's view in browser at localhost:3000, 3001...
 
     "allow_insecure_coding": true, // allows newAction command and model can write/run code on your computer. enable at own risk
-    "allow_vision": true, // allows vision model to interpret screenshots as inputs
+    "allow_vision": false, // allows vision model to interpret screenshots as inputs (DISABLED: WebGL not supported in Docker)
     "blocked_actions" : ["!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"] , // commands to disable and remove from docs. Ex: ["!setMode"]
     "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
     "relevant_docs_count": -1, // number of relevant code function docs to select for prompting. -1 for all

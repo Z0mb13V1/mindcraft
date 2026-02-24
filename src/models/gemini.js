@@ -112,9 +112,10 @@ export class Gemini {
         const result = await this.genAI.models.embedContent({
             model: this.model_name || "gemini-embedding-001",
             contents: text,
-        })
+        });
 
-        return result.embeddings;
+        // @google/genai v1.x returns result.embedding.values (not result.embeddings)
+        return result?.embedding?.values ?? result?.embeddings;
     }
 }
 

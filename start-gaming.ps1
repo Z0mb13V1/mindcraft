@@ -9,7 +9,7 @@ param(
     [Parameter(Mandatory=$false)]
     [int]$MaxWaitSeconds = 60,
     [Parameter(Mandatory=$false)]
-    [string]$ContainerName = "minecraft-pc",
+    [string]$ContainerName = "minecraft-server",
     [Parameter(Mandatory=$false)]
     [int]$Port = 25565
 )
@@ -74,7 +74,7 @@ while ($elapsedSeconds -lt $maxWaitSeconds) {
 if ($serverReady) {
     Write-Host "✅ Server is running!" -ForegroundColor Green
 } else {
-    Write-Host "⚠️  Server may still be starting. Check with: docker logs minecraft-pc -f" -ForegroundColor Yellow
+    Write-Host "⚠️  Server may still be starting. Check with: docker logs minecraft-server -f" -ForegroundColor Yellow
 }
 
 # Step 3: Start bot

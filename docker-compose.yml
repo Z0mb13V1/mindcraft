@@ -1,7 +1,7 @@
 services:
   minecraft:
     image: itzg/minecraft-server
-    container_name: minecraft-pc
+    container_name: minecraft-server
     ports:
       - "25565:25565"
     environment:
@@ -20,6 +20,7 @@ services:
 
   mindcraft:
     build: .
+    container_name: mindcraft-agents
     environment:
       SETTINGS_JSON: |
         {"auto_open_ui": false}

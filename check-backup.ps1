@@ -1,14 +1,19 @@
 param(
     [string]$SSHUser = "Zombie",
     [string]$SSHHost = "192.168.0.30",
-    [string]$SSHKeyPath = "$($env:USERPROFILE)\.ssh\nas_key",
+    [string]$SSHKeyPath = "",
     [string]$BackupPath = '/volume1/Minecraft-Backups',
     [int]$MaxAgeHours = 24,
-    [string]$DiscordWebhookUrl = $env:BACKUP_WEBHOOK_URL,
-    [string]$LocalLogPath = "$($PSScriptRoot)\backup-alerts.log",
+    [string]$DiscordWebhookUrl = "",
+    [string]$LocalLogPath = "",
     [switch]$NotifyLocal,
     [switch]$NotifyOnSuccess
 )
+
+# Resolve defaults that depend on environment variables
+if (-not $SSHKeyPath) { $SSHKeyPath = "$env:USERPROFILE\.ssh\nas_key" }
+if (-not $DiscordWebhookUrl) { $DiscordWebhookUrl = $env:BACKUP_WEBHOOK_URL }
+if (-not $LocalLogPath) { $LocalLogPath = "$PSScriptRoot\backup-alerts.log" }
 
 function Write-LocalAlert {
     param([string]$Message)

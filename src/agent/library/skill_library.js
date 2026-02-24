@@ -23,7 +23,7 @@ export class SkillLibrary {
                 });
                 await Promise.all(embeddingPromises);
             } catch (error) {
-                console.warn('Error with embedding model, using word-overlap instead.');
+                console.warn('Error with embedding model, using word-overlap instead.', error?.message || error);
                 this.embedding_model = null;
             }
         }
