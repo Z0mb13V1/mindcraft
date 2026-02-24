@@ -10,6 +10,7 @@ All notable changes to this project will be documented here.
 > versioned section `[0.1.3-local.N] - YYYY-MM-DD` and bump the patch number.
 
 ### Fixed
+
 - `grok.js`: null guard on `res` before `.replace()` — API can return null content, causing TypeError crash
 - `gemini.js` `sendVisionRequest`: used `generationConfig:` (old v0.x SDK field) instead of `config:` (v1.x SDK) — now consistent with `sendRequest`
 - `discord-bot.js` HELP_TEXT: hardcoded old agent name `gemini:` updated to `Gemini_1:`
@@ -20,6 +21,7 @@ All notable changes to this project will be documented here.
 ## [0.1.3-local.3] - 2026-02-24
 
 ### Added
+
 - `Grok_1` bot profile (`grok-code-fast-1` via xAI Cloud API)
 - `Grok_1` added to active profiles in `settings.js`
 - `gemini-embedding-001` embedding model on all three profiles (Gemini_1, Gemini_2, Grok_1)
@@ -28,6 +30,7 @@ All notable changes to this project will be documented here.
 - Discord bot now tracks all three agents (Gemini_1, Gemini_2, Grok_1)
 
 ### Changed
+
 - Bot names renamed: `gemini` → `Gemini_1`, `gemini2` → `Gemini_2`, `Grok` → `Grok_1`
   - Underscores used (Minecraft requires alphanumeric + underscore only)
 - Embedding model changed from `text-embedding-004` → `gemini-embedding-001`
@@ -37,6 +40,7 @@ All notable changes to this project will be documented here.
 - All bot conversing prompts updated to reference new names (Gemini_1/Gemini_2/Grok_1)
 
 ### Fixed
+
 - `gemini.js` `embed()` return value: `result.embeddings` → `result?.embedding?.values ?? result?.embeddings`
   - `@google/genai` v1.x SDK returns `result.embedding.values`, not `result.embeddings`
 - `skill_library.js` catch block now logs the actual error message (was silent)
@@ -47,6 +51,7 @@ All notable changes to this project will be documented here.
 ## [0.1.3-local.2] - 2026-02-24
 
 ### Added
+
 - `.env` system for all secrets (DISCORD_BOT_TOKEN, BACKUP_WEBHOOK_URL, channel IDs)
 - `.env.example` template for new environments
 - `AVAILABLE-MODELS.md` — reference for all Gemini and Grok model options
@@ -56,6 +61,7 @@ All notable changes to this project will be documented here.
 - `ACTION-ITEMS.md` — step-by-step remediation guide
 
 ### Changed
+
 - Container renamed: `minecraft-pc` → `minecraft-server`
 - Container named explicitly: `mindcraft-agents` (was auto-named)
 - `settings.js` host: `192.168.0.30` → `minecraft-server` (Docker network name)
@@ -67,11 +73,13 @@ All notable changes to this project will be documented here.
 - Gemini profiles updated: `gemini-2.5-pro` + `text-embedding-004` embedding
 
 ### Fixed
+
 - `bot-test.js`: removed hardcoded Discord bot token
 - `discord-bot.js.bak`: removed hardcoded Discord bot token
 - `server.properties`: `online-mode=false` (required for Mineflayer offline bot auth)
 
 ### Security
+
 - **INCIDENT**: Discord scanner detected exposed credentials in public GitHub repo
 - Discord bot token rotated (old token invalidated by Discord)
 - Discord webhook URL revoked and regenerated
