@@ -9,6 +9,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { selectAPI, createModel } from './_model_map.js';
+import { EnsembleModel } from '../ensemble/controller.js';
 import { UsageTracker } from '../utils/usage_tracker.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,8 +57,12 @@ export class Prompter {
         if (this.profile.max_tokens)
             max_tokens = this.profile.max_tokens;
 
-        let chat_model_profile = selectAPI(this.profile.model);
-        this.chat_model = createModel(chat_model_profile);
+        if (this.profile.ensemble) {
+            this.chat_model = new EnsembleModel(this.profile.ensemble, this.profile);
+        } else {
+            let chat_model_profile = selectAPI(this.profile.model);
+            this.chat_model = createModel(chat_model_profile);
+        }
 
         if (this.profile.code_model) {
             let code_model_profile = selectAPI(this.profile.code_model);
