@@ -50,7 +50,7 @@ const settings = {
   
     "log_all_prompts": true, // log ALL prompts to file
 
-}
+};
 
 if (process.env.SETTINGS_JSON) {
     try {

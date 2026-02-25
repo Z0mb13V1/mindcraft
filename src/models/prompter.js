@@ -100,7 +100,7 @@ export class Prompter {
           this.wikiData = JSON.parse(readFileSync(wikiPath, 'utf8'));
           console.log('Minecraft wiki data loaded.');
         } catch (e) {
-          console.warn(`Minecraft wiki data not found at ${wikiPath}: ${e.message}`);
+          console.warn(`Minecraft wiki data not found: ${e.message}`);
         }
 
         mkdirSync(`./bots/${name}`, { recursive: true });
@@ -206,9 +206,9 @@ export class Prompter {
             let goal_text = '';
             for (let goal in last_goals) {
                 if (last_goals[goal])
-                    goal_text += `You recently successfully completed the goal ${goal}.\n`
+                    goal_text += `You recently successfully completed the goal ${goal}.\n`;
                 else
-                    goal_text += `You recently failed to complete the goal ${goal}.\n`
+                    goal_text += `You recently failed to complete the goal ${goal}.\n`;
             }
             prompt = prompt.replaceAll('$LAST_GOALS', goal_text.trim());
         }
@@ -279,8 +279,8 @@ export class Prompter {
             }
 
             if (generation?.includes('<tool_call>')) {
-                const [_, afterThink] = generation.split('<tool_call>')
-                generation = afterThink
+                const [_, afterThink] = generation.split('<tool_call>');
+                generation = afterThink;
             }
 
             return generation;
@@ -314,7 +314,7 @@ export class Prompter {
         this._recordUsage(this.chat_model, 'memory');
         await this._saveLog(prompt, to_summarize, resp, 'memSaving');
         if (resp?.includes('<tool_call>')) {
-            const [_, afterThink] = resp.split('<tool_call>')
+            const [_, afterThink] = resp.split('<tool_call>');
             resp = afterThink;
         }
         return resp;
@@ -346,7 +346,7 @@ export class Prompter {
         system_message = await this.replaceStrings(system_message, messages);
 
         let user_message = 'Use the below info to determine what goal to target next\n\n';
-        user_message += '$LAST_GOALS\n$STATS\n$INVENTORY\n$CONVO'
+        user_message += '$LAST_GOALS\n$STATS\n$INVENTORY\n$CONVO';
         user_message = await this.replaceStrings(user_message, messages, null, null, last_goals);
         let user_messages = [{role: 'user', content: user_message}];
 
