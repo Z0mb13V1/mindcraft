@@ -10,9 +10,10 @@ const settings = {
     
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
-        "./profiles/gemini.json",
+        "./profiles/ensemble.json",
+        // "./profiles/gemini.json",
         // "./profiles/gemini2.json",
-        "./profiles/grok.json",
+        // "./profiles/grok.json",
 
         // using more than 1 profile requires you to /msg each bot indivually
         // individual profiles override values from the base profile
