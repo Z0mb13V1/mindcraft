@@ -92,6 +92,17 @@ export class Prompter {
         }
 
         this.skill_libary = new SkillLibrary(agent, this.embedding_model);
+
+        // Minecraft wiki knowledge
+        this.wikiData = {};
+        try {
+          const wikiPath = path.join(__dirname, '../../../data/minecraft_wiki.json');
+          this.wikiData = JSON.parse(readFileSync(wikiPath, 'utf8'));
+          console.log('Minecraft wiki data loaded.');
+        } catch (e) {
+          console.warn(`Minecraft wiki data not found at ${wikiPath}: ${e.message}`);
+        }
+
         mkdirSync(`./bots/${name}`, { recursive: true });
         writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4), (err) => {
             if (err) {
@@ -156,6 +167,14 @@ export class Prompter {
         }
         if (prompt.includes('$COMMAND_DOCS'))
             prompt = prompt.replaceAll('$COMMAND_DOCS', getCommandDocs(this.agent));
+
+        if (prompt.includes('$WIKI')) {
+            const wikiStr = this.wikiData && Object.keys(this.wikiData).length > 0
+                ? JSON.stringify(this.wikiData, null, 2)
+                : '{ "error": "Wiki data not loaded" }';
+            prompt = prompt.replaceAll('$WIKI', `Minecraft Wiki Knowledge (Java Edition 1.21+):\n${wikiStr}`);
+        }
+
         if (prompt.includes('$CODE_DOCS')) {
             const code_task_content = messages.slice().reverse().find(msg =>
                 msg.role !== 'system' && msg.content.includes('!newAction(')
@@ -259,8 +278,8 @@ export class Prompter {
                 return '';
             }
 
-            if (generation?.includes('</think>')) {
-                const [_, afterThink] = generation.split('</think>')
+            if (generation?.includes('<tool_call>')) {
+                const [_, afterThink] = generation.split('<tool_call>')
                 generation = afterThink
             }
 
@@ -294,8 +313,8 @@ export class Prompter {
         let resp = await this.chat_model.sendRequest([], prompt);
         this._recordUsage(this.chat_model, 'memory');
         await this._saveLog(prompt, to_summarize, resp, 'memSaving');
-        if (resp?.includes('</think>')) {
-            const [_, afterThink] = resp.split('</think>')
+        if (resp?.includes('<tool_call>')) {
+            const [_, afterThink] = resp.split('<tool_call>')
             resp = afterThink;
         }
         return resp;
