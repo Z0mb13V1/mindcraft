@@ -1,0 +1,158 @@
+services:
+  # ── Minecraft Server ──────────────────────────────────────────────────────
+  minecraft:
+    image: itzg/minecraft-server
+    container_name: minecraft-server
+    ports:
+      - "25565:25565"
+    environment:
+      EULA: "TRUE"
+      MEMORY: "2G"            # Reduced from 4G — fits t3.large comfortably
+      VERSION: "1.21.6"
+      DIFFICULTY: "normal"
+      MODE: "survival"
+      ENABLE_COMMAND_BLOCK: "true"
+      VIEW_DISTANCE: "6"      # Reduced from 10 — major RAM/CPU saver
+      SIMULATION_DISTANCE: "4"
+    volumes:
+      - ./minecraft-data:/data
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2200M
+
+  # ── Mindcraft Agents ──────────────────────────────────────────────────────
+  mindcraft:
+    build: .
+    container_name: mindcraft-agents
+    environment:
+      SETTINGS_JSON: '{"auto_open_ui": false, "host": "minecraft-server"}'
+    volumes:
+      - ./settings.js:/app/settings.js
+      - ./keys.json:/app/keys.json
+      - ./profiles:/app/profiles
+      - ./bots:/app/bots
+    ports:
+      - "3000-3003:3000-3003"
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - minecraft
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # ── Discord Bot ───────────────────────────────────────────────────────────
+  discord-bot:
+    image: node:22
+    container_name: discord-bot
+    working_dir: /app
+    volumes:
+      - ./discord-bot.js:/app/discord-bot.js
+      - ./package.json:/app/package.json
+      - ./src:/app/src
+      - ./profiles:/app/profiles
+    environment:
+      DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
+      BOT_DM_CHANNEL: "${BOT_DM_CHANNEL}"
+      BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus-aws.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3004:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-provisioning/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./grafana-provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana-provisioning/dashboard-json:/etc/grafana/provisioning/dashboards/json
+      - ./grafana-provisioning/alerting:/etc/grafana/provisioning/alerting
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:-admin}"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── Node Exporter ─────────────────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 64M
+
+  # ── cAdvisor ──────────────────────────────────────────────────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── ViaProxy (optional — connect older Minecraft clients) ─────────────────
+  viaproxy:
+    image: ghcr.io/viaversion/viaproxy:latest
+    volumes:
+      - ./services/viaproxy:/app/run
+    ports:
+      - "25568:25568"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+volumes:
+  grafana-data:
