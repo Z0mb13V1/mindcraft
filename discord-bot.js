@@ -597,8 +597,6 @@ client.on('messageCreate', async (message) => {
                     if (!mindServerConnected) { await message.reply('MindServer not connected.'); return; }
                     await message.channel.sendTyping();
 
-                    if (arg && arg.toLowerCase() === '[agent|all]') arg = 'all';
-
                     if (!arg || arg.toLowerCase() === 'all') {
                         mindServerSocket.emit('get-all-usage', async (results) => {
                             if (!results || Object.keys(results).length === 0) {
@@ -630,6 +628,8 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!ui':
+                case '!local':
+                case '!mindserver':
                     await sendToDiscord('🖥️ **MindServer Backup UI**: http://localhost:8080\nOpen in browser for agent dashboard/viewer (docker-compose up mindcraft).');
                     return;
 
