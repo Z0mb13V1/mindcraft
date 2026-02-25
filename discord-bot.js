@@ -139,6 +139,8 @@ Prefix with a name/alias to target one: \`gi: go mine diamonds\`
 \`!startall\` -- Start all agents
 \`!stopall\` -- Stop all agents
 
+!ui | !local | !mindserver -- View MindServer backup UI (http://localhost:8080)
+
 **Groups:** \`all\`, \`gemini\`, \`grok\`, \`cloud\`
 You can also comma-separate: \`!stop Gemini_1, Grok_1\`
 
