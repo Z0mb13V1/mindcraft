@@ -8,7 +8,7 @@ import { TTSConfig as geminiTTSConfig } from '../models/gemini.js';
 let speakingQueue = []; // each item: {text, model, audioData, ready}
 let isSpeaking = false;
 
-export function speak(text, speak_model) {
+export async function speak(text, speak_model) {
     const model = speak_model || 'system';
 
     const item = { text, model, audioData: null, ready: null };
@@ -103,7 +103,7 @@ $s.Dispose()`;
             proc = spawn('espeak', [txt], { stdio: 'ignore' });
         }
         proc.on('error', err => console.error('TTS error', err));
-        proc.on('exit', () => { isSpeaking = false; await processQueue(); });
+        proc.on('exit', async () => { isSpeaking = false; await processQueue(); });
 
     } 
     else {
@@ -143,7 +143,7 @@ $s.Dispose()`;
                 });
                 player.stdin.write(Buffer.from(audioData, 'base64'));
                 player.stdin.end();
-                player.on('exit', () => {
+                player.on('exit', async () => {
                     isSpeaking = false;
                     await processQueue();
                 });

@@ -14,6 +14,7 @@ services:
       ENABLE_COMMAND_BLOCK: "true"
       VIEW_DISTANCE: "6"      # Reduced from 10 — major RAM/CPU saver
       SIMULATION_DISTANCE: "4"
+      ONLINE_MODE: "FALSE"
     volumes:
       - ./minecraft-data:/data
     restart: unless-stopped

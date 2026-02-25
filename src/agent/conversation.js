@@ -224,7 +224,7 @@ class ConversationManager {
         return Object.values(this.convos).some(c => c.active);
     }
     
-    endConversation(sender) {
+    async endConversation(sender) {
         if (this.convos[sender]) {
             this.convos[sender].end();
             if (this.activeConversation.name === sender) {
@@ -237,7 +237,7 @@ class ConversationManager {
         }
     }
     
-    endAllConversations() {
+    async endAllConversations() {
         for (const sender in this.convos) {
             this.endConversation(sender);
         }
