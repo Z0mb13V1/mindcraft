@@ -580,6 +580,10 @@ client.on('messageCreate', async (message) => {
                     return;
                 }
 
+                case '!ui':
+                    await sendToDiscord('🖥️ **MindServer Backup UI**: http://localhost:8080\nOpen in browser for agent dashboard/viewer (docker-compose up mindcraft).');
+                    return;
+
                 default:
                     await message.reply(`Unknown command: \`${cmd}\`. Type \`!help\` for commands.`);
                     return;
