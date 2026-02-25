@@ -97,7 +97,29 @@ export class FeedbackCollector {
             });
             console.log('[Feedback] Decision stored in ChromaDB:', id);
         } catch (err) {
-            if (!err.message?.includes('already exists')) {
+            if (err.message?.includes('already exists')) {
+                // Skip duplicate IDs
+            } else if (err.message?.includes('dimension') || err.message?.includes('shape') || err.message?.includes('mismatch')) {
+                // Dimension mismatch: delete and recreate collection
+                console.warn('[Feedback] Embedding dimension mismatch, recreating collection');
+                try {
+                    await this._client.deleteCollection({ name: COLLECTION_NAME });
+                    this._collection = await this._client.createCollection({
+                        name: COLLECTION_NAME,
+                        metadata: { 'hnsw:space': 'cosine' }
+                    });
+                    // Retry the add
+                    await this._collection.add({
+                        ids: [id],
+                        embeddings: [cleanEmb],
+                        documents: [text.slice(0, 512)],
+                        metadatas: [meta]
+                    });
+                    console.log('[Feedback] Decision stored after collection recreation:', id);
+                } catch (retryErr) {
+                    console.warn('[Feedback] Failed to recreate collection and store decision:', retryErr.message);
+                }
+            } else {
                 console.warn('[Feedback] Failed to record decision:', err.message);
             }
         }

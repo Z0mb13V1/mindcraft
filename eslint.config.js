@@ -1,5 +1,4 @@
 // eslint.config.js
-import globals from "globals";
 import pluginJs from "@eslint/js";
 import noFloatingPromise from "eslint-plugin-no-floating-promise";
 
@@ -14,9 +13,12 @@ export default [
       "no-floating-promise": noFloatingPromise,
     },
     languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
       ecmaVersion: 2021,
       sourceType: "module",
+    },
+    env: {
+      node: true,
+      browser: true,
     },
     rules: {
       "no-undef": "error",              // Disallow the use of undeclared variables or functions.
