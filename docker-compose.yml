@@ -22,8 +22,7 @@ services:
     build: .
     container_name: mindcraft-agents
     environment:
-      SETTINGS_JSON: |
-        {"auto_open_ui": false}
+      SETTINGS_JSON: '{"auto_open_ui": false}'
     volumes:
       - ./settings.js:/app/settings.js
       - ./keys.json:/app/keys.json
@@ -50,14 +49,6 @@ services:
       DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
       BOT_DM_CHANNEL: "${BOT_DM_CHANNEL}"
       BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
-      MINDSERVER_HOST: "${MINDSERVER_HOST}"
-      MINDSERVER_PORT: "${MINDSERVER_PORT}"
-    command: sh -c "npm install --ignore-scripts && node discord-bot.js"
-    depends_on:
-      - mindcraft
-    restart: unless-stopped
-    stdin_open: true
-    tty: true
 
   # ── vLLM (deferred — using WSL2 instead, see setup-wsl-vllm.ps1) ────────────
   # Start vLLM:  wsl -d Ubuntu-22.04 -- bash services/vllm/start.sh --background
@@ -68,14 +59,6 @@ services:
   #   container_name: vllm-server
   #   ports:
   #     - "8000:8000"
-  #   environment:
-  #     HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
-  #   volumes:
-  #     - vllm-models:/root/.cache/huggingface
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
   #           - driver: nvidia
   #             count: 1
   #             capabilities: [gpu]
@@ -95,8 +78,6 @@ services:
       - ./services/viaproxy:/app/run
     ports:
       - "25568:25568"
-    profiles:
-      - viaproxy
     stdin_open: true
     tty: true
 

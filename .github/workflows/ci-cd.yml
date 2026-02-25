@@ -1,0 +1,60 @@
+# GitHub Actions CI/CD Workflow
+# Triggers on push and pull request to main branch
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Set up Node.js environment (change to Python/Java as needed)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # Run automated tests
+      - name: Run tests
+        run: npm test
+
+      # Build Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/OWNER/REPO:latest .
+
+      # Push Docker image to GitHub Container Registry (update OWNER/REPO)
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/OWNER/REPO:latest
+
+      # Placeholder for deployment step
+      - name: Deploy
+        run: echo "Deploy step goes here (update as needed)"
+
+# Best practices:
+# - Use caching for dependencies
+# - Keep secrets in GitHub Secrets
+# - Update OWNER/REPO for Docker image and registry
+# - Adapt language setup and test commands as needed
