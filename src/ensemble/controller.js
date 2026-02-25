@@ -42,6 +42,14 @@ export class EnsembleModel {
     }
 
     /**
+     * Phase 3: inject the shared embedding model into FeedbackCollector.
+     * Called by Prompter after both chat_model and embedding_model are ready.
+     */
+    setEmbeddingModel(embeddingModel) {
+        this.feedback.setEmbeddingModel(embeddingModel);
+    }
+
+    /**
      * Standard model interface — called by Prompter.promptConvo().
      * Queries all panel members, arbitrates, returns winning response.
      *
@@ -52,8 +60,25 @@ export class EnsembleModel {
     async sendRequest(turns, systemMessage) {
         const startTime = Date.now();
 
+        // Phase 3: retrieve similar past experiences to augment context
+        let augmentedSystem = systemMessage;
+        if (this.feedback.isReady) {
+            const situationText = turns.filter(t => t.role === 'user').slice(-2)
+                .map(t => t.content).join(' ');
+            const experiences = await this.feedback.getSimilar(situationText, 3);
+            if (experiences.length > 0) {
+                const memBlock = experiences.map(e => {
+                    const m = e.metadata;
+                    const outcome = m.outcome && m.outcome !== 'pending' ? ` (outcome: ${m.outcome})` : '';
+                    return `- Situation: "${e.document.slice(0, 120)}" → action: ${m.winner_command || 'chat'}${outcome}`;
+                }).join('\n');
+                augmentedSystem = systemMessage + `\n\n[PAST EXPERIENCE - similar situations]\n${memBlock}`;
+                console.log(`[Ensemble] Injected ${experiences.length} past experience(s) into context`);
+            }
+        }
+
         // Query all panel members in parallel
-        const proposals = await this.panel.queryAll(turns, systemMessage);
+        const proposals = await this.panel.queryAll(turns, augmentedSystem);
 
         const successful = proposals.filter(p => p.status === 'success');
         const failed = proposals.filter(p => p.status !== 'success');
@@ -107,11 +132,14 @@ export class EnsembleModel {
             this.logger.logDecision(proposals, winner);
         }
 
-        // Record for feedback (Phase 1 stub)
+        // Phase 3: Record decision in ChromaDB for continuous learning
+        const situationText = turns.filter(t => t.role === 'user').slice(-2)
+            .map(t => t.content).join(' ');
         this.feedback.recordDecision({
             winner,
             proposals,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            situationText
         });
 
         // Aggregate usage from all successful members

@@ -32,6 +32,7 @@ services:
     container_name: mindcraft-agents
     environment:
       SETTINGS_JSON: '{"auto_open_ui": false, "host": "minecraft-server"}'
+      CHROMADB_URL: "http://chromadb:8000"
     volumes:
       - ./settings.js:/app/settings.js
       - ./keys.json:/app/keys.json
@@ -44,6 +45,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - minecraft
+      - chromadb
     restart: unless-stopped
     deploy:
       resources:
@@ -66,6 +68,19 @@ services:
       DISCORD_BOT_TOKEN: "${DISCORD_BOT_TOKEN}"
       BOT_DM_CHANNEL: "${BOT_DM_CHANNEL}"
       BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  # ── ChromaDB (vector memory for ensemble) ────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:0.5.20
+    container_name: chromadb
+    volumes:
+      - ./chromadb-data:/chroma/chroma
     restart: unless-stopped
     deploy:
       resources:

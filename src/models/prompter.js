@@ -92,8 +92,16 @@ export class Prompter {
         if (embedding_model_profile) {
             this.embedding_model = createModel(embedding_model_profile);
         }
-        else {
+        else if (typeof chat_model_profile !== 'undefined') {
             this.embedding_model = createModel({api: chat_model_profile.api});
+        }
+        else {
+            this.embedding_model = createModel({api: 'google'});
+        }
+
+        // Phase 3: give EnsembleModel access to the embedding model for ChromaDB
+        if (this.chat_model?.setEmbeddingModel) {
+            this.chat_model.setEmbeddingModel(this.embedding_model);
         }
 
         this.skill_libary = new SkillLibrary(agent, this.embedding_model);
