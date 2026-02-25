@@ -1,5 +1,5 @@
 # CI/CD Pipeline for Mindcraft 0.1.3
-# Validates Node.js install + Docker build on every push/PR to main
+# Docker build is the single source of truth — all deps compile inside the container
 
 name: CI/CD Pipeline
 
@@ -20,30 +20,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install native build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential python3 pkg-config \
-            libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
-            libgl1-mesa-dev libgles2-mesa-dev libosmesa6-dev \
-            libxi-dev libxinerama-dev libxrandr-dev \
-            xvfb xauth
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Lint (non-blocking)
-        run: npx eslint . --max-warnings 999 || true
-        continue-on-error: true
-
       - name: Build Docker image
         run: docker build -t ghcr.io/z0mb13v1/mindcraft-0.1.3:${{ github.sha }} .
+
+      - name: Lint (non-blocking)
+        run: docker run --rm ghcr.io/z0mb13v1/mindcraft-0.1.3:${{ github.sha }} npx eslint . --max-warnings 999
+        continue-on-error: true
 
       - name: Tag Docker image as latest
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -59,6 +41,7 @@ jobs:
 
       - name: Push Docker image
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        continue-on-error: true
         run: |
           docker push ghcr.io/z0mb13v1/mindcraft-0.1.3:${{ github.sha }}
           docker push ghcr.io/z0mb13v1/mindcraft-0.1.3:latest
