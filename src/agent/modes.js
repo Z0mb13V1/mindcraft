@@ -224,7 +224,7 @@ const modes_list = [
         active: false,
         cooldown: 5,
         last_place: Date.now(),
-        update: function (agent) {
+        update: async function (agent) {
             if (world.shouldPlaceTorch(agent.bot)) {
                 if (Date.now() - this.last_place < this.cooldown * 1000) return;
                 await execute(this, agent, async () => {

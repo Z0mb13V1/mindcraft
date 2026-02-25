@@ -55,6 +55,7 @@ services:
     image: node:22
     container_name: discord-bot
     working_dir: /app
+    command: node discord-bot.js
     volumes:
       - ./discord-bot.js:/app/discord-bot.js
       - ./package.json:/app/package.json
