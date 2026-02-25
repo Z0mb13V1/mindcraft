@@ -1,5 +1,6 @@
 # 🧠mindcraft⛏️
 
+[![CI/CD Pipeline](https://github.com/Z0mb13V1/mindcraft-0.1.3/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Z0mb13V1/mindcraft-0.1.3/actions/workflows/ci-cd.yml)
 [![Trendshift](https://trendshift.io/api/badge/repositories/9163)](https://trendshift.io/repositories/9163)
 
 Crafting minds for Minecraft with LLMs and [Mineflayer](https://prismarinejs.github.io/mineflayer/#/)!
