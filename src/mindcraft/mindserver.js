@@ -170,6 +170,10 @@ export function createMindServer(host_public = false, port = 8080) {
             const agent = agent_connections[agentName];
             if (agent) {
                 agent.setSettings(settings);
+                if (!agent.socket) {
+                    console.warn(`Cannot restart agent ${agentName} after settings update: no socket connection`);
+                    return;
+                }
                 agent.socket.emit('restart-agent');
             }
         });
