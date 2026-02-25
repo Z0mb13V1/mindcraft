@@ -24,9 +24,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential libcairo2-dev libpango1.0-dev \
-            libjpeg-dev libgif-dev librsvg2-dev \
-            libgl1-mesa-dev libxi-dev python3
+            build-essential python3 pkg-config \
+            libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev \
+            libgl1-mesa-dev libgles2-mesa-dev libosmesa6-dev \
+            libxi-dev libxinerama-dev libxrandr-dev \
+            xvfb xauth
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
