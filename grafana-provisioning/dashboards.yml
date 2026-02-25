@@ -6,3 +6,9 @@ dashboard:
     datasource: Prometheus
     type: dashboard
     url: https://grafana.com/grafana/dashboards/1860
+  - id: 179
+    uid: docker-monitoring
+    title: Docker Monitoring
+    datasource: Prometheus
+    type: dashboard
+    url: https://grafana.com/grafana/dashboards/179

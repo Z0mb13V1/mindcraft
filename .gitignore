@@ -49,3 +49,6 @@ nul
 # Minecraft server data (synced with NAS)
 minecraft-data/
 sync-log.txt
+
+# GPU exporter source repo (built image used locally, not committed)
+nvidia_gpu_exporter/

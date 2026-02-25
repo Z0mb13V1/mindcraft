@@ -1,4 +1,13 @@
 services:
+  nvidia-gpu-exporter:
+    image: nvidia-gpu-exporter
+    container_name: nvidia-gpu-exporter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "9835:9835"
+    restart: unless-stopped
   minecraft:
     image: itzg/minecraft-server
     container_name: minecraft-server
