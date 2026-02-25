@@ -52,7 +52,7 @@ services:
 
   # ── Discord Bot ───────────────────────────────────────────────────────────
   discord-bot:
-    image: node:22
+    image: app-mindcraft
     container_name: discord-bot
     working_dir: /app
     command: node discord-bot.js
