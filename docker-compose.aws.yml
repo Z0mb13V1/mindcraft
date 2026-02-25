@@ -33,9 +33,10 @@ services:
     environment:
       SETTINGS_JSON: '{"auto_open_ui": false, "host": "minecraft-server"}'
       CHROMADB_URL: "http://chromadb:8000"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      XAI_API_KEY: "${XAI_API_KEY}"
     volumes:
       - ./settings.js:/app/settings.js
-      - ./keys.json:/app/keys.json
       - ./profiles:/app/profiles
       - ./bots:/app/bots
     ports:

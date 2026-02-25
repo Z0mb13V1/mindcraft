@@ -109,7 +109,7 @@ export class Prompter {
         // Minecraft wiki knowledge
         this.wikiData = {};
         try {
-          const wikiPath = path.join(__dirname, '../../../data/minecraft_wiki.json');
+          const wikiPath = path.join(__dirname, '../../data/minecraft_wiki.json');
           this.wikiData = JSON.parse(readFileSync(wikiPath, 'utf8'));
           console.log('Minecraft wiki data loaded.');
         } catch (e) {
