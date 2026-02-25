@@ -11,10 +11,21 @@ export class Arbiter {
         this.strategy = config.strategy || 'heuristic';
         this.majorityBonus = config.majority_bonus ?? 0.2;
         this.latencyPenalty = config.latency_penalty_per_sec ?? 0.02;
+        this._confidenceThreshold = config.confidence_threshold ?? 0.08;
+        this._lastConfidence = 1.0;  // set after each pick()
+    }
+
+    /**
+     * Confidence threshold for triggering LLM judge.
+     * If top 2 scores are within this margin, it's "low confidence".
+     */
+    get confidenceThreshold() {
+        return this._confidenceThreshold ?? 0.08;
     }
 
     /**
      * Pick the best proposal from the panel's responses.
+     * Also sets `this._lastConfidence` for the controller to check.
      * @param {Proposal[]} proposals - all proposals (may include failures)
      * @returns {Proposal} - the winning proposal with `score` and `winReason` set
      */
@@ -68,7 +79,20 @@ export class Arbiter {
             ? 'majority+highest_score'
             : 'highest_score';
 
+        // Compute confidence: margin between top 2 scores
+        this._lastConfidence = successful.length >= 2
+            ? successful[0].score - successful[1].score
+            : 1.0;
+
         return winner;
+    }
+
+    /**
+     * Returns true if the last pick() result had low confidence
+     * and an LLM judge should be consulted.
+     */
+    isLowConfidence() {
+        return this._lastConfidence < this._confidenceThreshold;
     }
 
     /**

@@ -1,5 +1,6 @@
 import { Panel } from './panel.js';
 import { Arbiter } from './arbiter.js';
+import { LLMJudge } from './judge.js';
 import { EnsembleLogger } from './logger.js';
 import { FeedbackCollector } from './feedback.js';
 
@@ -25,6 +26,9 @@ export class EnsembleModel {
             ensembleConfig.timeout_ms || 15000
         );
         this.arbiter = new Arbiter(ensembleConfig.arbiter || {});
+        this.judge = ensembleConfig.judge !== false
+            ? new LLMJudge(ensembleConfig.judge || {})
+            : null;
         this.logger = new EnsembleLogger(profile.name);
         this.feedback = new FeedbackCollector();
 
@@ -67,14 +71,35 @@ export class EnsembleModel {
             }
         }
 
-        // Arbiter picks the winning proposal
-        const winner = this.arbiter.pick(proposals);
+        // Heuristic arbiter — always runs first
+        let winner = this.arbiter.pick(proposals);
+        let judgeUsed = false;
+
+        // Phase 2: LLM judge fallback when heuristic confidence is low
+        if (this.judge && this.arbiter.isLowConfidence() && successful.length >= 2) {
+            console.log(`[Ensemble] Low confidence (margin=${this.arbiter._lastConfidence.toFixed(3)}), consulting LLM judge...`);
+            try {
+                const judgeId = await this.judge.judge(successful, systemMessage, turns);
+                if (judgeId) {
+                    const judgeWinner = successful.find(p => p.agentId === judgeId);
+                    if (judgeWinner) {
+                        judgeWinner.winReason = 'llm_judge';
+                        winner = judgeWinner;
+                        judgeUsed = true;
+                        console.log(`[Ensemble] Judge overruled heuristic: winner=${judgeId}`);
+                    }
+                }
+            } catch (err) {
+                console.warn(`[Ensemble] Judge error, keeping heuristic winner: ${err.message}`);
+            }
+        }
 
         const totalMs = Date.now() - startTime;
         console.log(
             `[Ensemble] Decision in ${totalMs}ms: ` +
             `${successful.length}/${this.panel.members.length} responded, ` +
-            `winner=${winner.agentId} (${winner.command || 'chat'}, score=${winner.score?.toFixed(2)})`
+            `winner=${winner.agentId} (${winner.command || 'chat'}, score=${winner.score?.toFixed(2)})` +
+            (judgeUsed ? ' [judge]' : '')
         );
 
         // Log decision

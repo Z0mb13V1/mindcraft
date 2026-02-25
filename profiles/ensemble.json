@@ -13,7 +13,12 @@
         "arbiter": {
             "strategy": "heuristic",
             "majority_bonus": 0.2,
-            "latency_penalty_per_sec": 0.02
+            "latency_penalty_per_sec": 0.02,
+            "confidence_threshold": 0.08
+        },
+        "judge": {
+            "model": "gemini-2.5-flash",
+            "timeout_ms": 10000
         },
         "log_decisions": true
     },
