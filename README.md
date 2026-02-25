@@ -15,6 +15,53 @@ Crafting minds for Minecraft with LLMs and [Mineflayer](https://prismarinejs.git
 > [!Caution]
 Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default, you can enable it by setting `allow_insecure_coding` to `true` in `settings.js`. Ye be warned.
 
+---
+
+## This Fork: Ensemble Bot System
+
+This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with an **Ensemble Bot** — a multi-model decision pipeline that queries several LLMs in parallel and selects the best action through a 3-phase arbiter system.
+
+> **Live deployment**: All services run on AWS EC2 via `docker-compose.aws.yml`. See the [Architecture wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Architecture) for full infrastructure diagrams.
+
+### Ensemble Decision Pipeline
+
+| Phase | Name | Description |
+|-------|------|-------------|
+| **1** | Heuristic Arbiter | All 4 panel models queried in parallel; proposals scored on length, completeness, and action quality — highest score wins |
+| **2** | LLM-as-Judge | When top two proposals are within 0.08 margin, Gemini Flash reviews all proposals and picks the winner |
+| **3** | ChromaDB Memory | Before querying the panel, similar past decisions (similarity > 0.6) are retrieved via 3072-dim Gemini embeddings and injected as `[PAST EXPERIENCE]` context |
+
+### Panel Models
+
+| Model | Provider | Role |
+|-------|----------|------|
+| `gemini-2.5-pro` | Google | Panel member |
+| `grok-code-fast-1` | xAI | Panel member (x2) |
+| `gemini-2.5-flash` | Google | Panel member + LLM Judge |
+
+### Infrastructure
+
+| Component | Location |
+|-----------|----------|
+| Minecraft server | AWS EC2 (us-east-1) — `ONLINE_MODE=FALSE` |
+| Ensemble bot (mindcraft) | AWS EC2 (us-east-1) |
+| ChromaDB vector store | AWS EC2 (us-east-1) |
+| Discord bot | AWS EC2 (us-east-1) |
+
+### Running with the Ensemble Profile
+
+```bash
+# AWS deployment
+docker compose -f docker-compose.aws.yml up --build
+
+# Or set in settings.js
+profiles: ["./profiles/ensemble.json"]
+```
+
+See [Ensemble Bot wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Ensemble-Bot) for full configuration reference.
+
+---
+
 ## Getting Started
 
 ## Requirements
