@@ -552,6 +552,8 @@ client.on('messageCreate', async (message) => {
                     if (!mindServerConnected) { await message.reply('MindServer not connected.'); return; }
                     await message.channel.sendTyping();
 
+                    if (arg && arg.toLowerCase() === '[agent|all]') arg = 'all';
+
                     if (!arg || arg.toLowerCase() === 'all') {
                         mindServerSocket.emit('get-all-usage', async (results) => {
                             if (!results || Object.keys(results).length === 0) {
