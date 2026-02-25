@@ -12,3 +12,9 @@ dashboard:
     datasource: Prometheus
     type: dashboard
     url: https://grafana.com/grafana/dashboards/179
+  - id: 14574
+    uid: nvidia-gpu-exporter
+    title: NVIDIA GPU Metrics
+    datasource: Prometheus
+    type: dashboard
+    url: https://grafana.com/grafana/dashboards/14574

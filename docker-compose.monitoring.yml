@@ -18,6 +18,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./grafana-provisioning/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
       - ./grafana-provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana-provisioning/alerting:/etc/grafana/provisioning/alerting
     environment:
       GF_SECURITY_ADMIN_PASSWORD: "admin"
     restart: unless-stopped
