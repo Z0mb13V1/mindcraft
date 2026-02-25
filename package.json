@@ -2,7 +2,7 @@
     "name": "mindcraft",
     "type": "module",
     "dependencies": {
-        "@anthropic-ai/sdk": "^0.17.1",
+        "@anthropic-ai/sdk": "^0.17.2",
         "@cerebras/cerebras_cloud_sdk": "^1.46.0",
         "@google/genai": "^1.15.0",
         "@huggingface/inference": "^2.8.1",
@@ -59,8 +59,8 @@
         "eslint": "^9.13.0",
         "eslint-plugin-no-floating-promise": "^2.0.0",
         "globals": "^15.9.0",
-        "patch-package": "^8.0.0",
         "husky": "^9.0.11",
-        "lint-staged": "^15.2.2"
+        "lint-staged": "^15.2.2",
+        "patch-package": "^8.0.0"
     }
 }
