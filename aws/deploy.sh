@@ -64,7 +64,7 @@ done
 
 # ── Rsync app files ───────────────────────────────────────────────────────────
 info "Syncing application files..."
-rsync -avz --delete \
+rsync -avz --delete --ignore-errors \
   -e "ssh ${SSH_OPTS}" \
   --exclude 'node_modules/' \
   --exclude 'minecraft-data/' \
@@ -77,6 +77,12 @@ rsync -avz --delete \
   --exclude '.env' \
   --exclude '*.pem' \
   --exclude '*.key' \
+  --exclude 'services/viaproxy/logs/' \
+  --exclude 'services/viaproxy/jars/' \
+  --exclude 'services/viaproxy/plugins/' \
+  --exclude 'services/viaproxy/ViaLoader/' \
+  --exclude 'services/viaproxy/saves.json' \
+  --exclude 'services/viaproxy/viaproxy.yml' \
   --filter 'protect minecraft-data/' \
   --filter 'protect bots/' \
   "${PROJECT_ROOT}/" \
