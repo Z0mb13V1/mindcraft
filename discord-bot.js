@@ -1,4 +1,4 @@
-/* eslint-env node */
+
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { io } from 'socket.io-client';
 import { readFile, writeFile } from 'fs/promises';
