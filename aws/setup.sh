@@ -80,9 +80,23 @@ echo "  Press Enter to skip any key you don't use."
 
 collect_secret() {
   local name="$1" prompt="$2"
-  read -r -s -p "  ${prompt}: " val
-  echo ""
-  echo "$val"
+  local input="" char
+  printf "  %s: " "$prompt" > /dev/tty
+  while IFS= read -r -s -n1 char < /dev/tty; do
+    if [[ -z "$char" ]]; then          # Enter
+      break
+    elif [[ "$char" == $'\177' ]] || [[ "$char" == $'\b' ]]; then  # Backspace
+      if [[ -n "$input" ]]; then
+        input="${input%?}"
+        printf '\b \b' > /dev/tty
+      fi
+    else
+      input+="$char"
+      printf '*' > /dev/tty           # Show * per character (not captured by $())
+    fi
+  done
+  printf '\n' > /dev/tty
+  printf '%s' "$input"
 }
 
 GEMINI_API_KEY=$(collect_secret "GEMINI_API_KEY"   "GEMINI_API_KEY")
