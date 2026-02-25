@@ -27,9 +27,18 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-COPY package*.json .
+# Copy package files first for better caching
+COPY package*.json ./
 RUN npm install
 
+# Copy requirements and install Python deps
+COPY requirements.txt ./
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+# Copy source code
 COPY . .
+
+# Run tests during build
+RUN npm test
 
 CMD ["npm", "start"]

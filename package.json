@@ -43,12 +43,23 @@
     },
     "scripts": {
         "postinstall": "patch-package",
-        "start": "node main.js"
+        "prepare": "husky install",
+        "start": "node main.js",
+        "test": "node test-phase2.js",
+        "lint": "eslint . --max-warnings 0"
+    },
+    "lint-staged": {
+        "*.js": [
+            "eslint --fix",
+            "git add"
+        ]
     },
     "devDependencies": {
         "@eslint/js": "^9.13.0",
         "eslint": "^9.13.0",
         "eslint-plugin-no-floating-promise": "^2.0.0",
-        "patch-package": "^8.0.0"
+        "patch-package": "^8.0.0",
+        "husky": "^9.0.11",
+        "lint-staged": "^15.2.2"
     }
 }

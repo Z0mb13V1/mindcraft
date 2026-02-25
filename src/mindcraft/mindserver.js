@@ -284,6 +284,16 @@ export function createMindServer(host_public = false, port = 8080) {
         });
     });
 
+    // Health check endpoint
+    app.get('/health', (req, res) => {
+        res.status(200).json({
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            agents: Object.keys(agent_connections).length
+        });
+    });
+
     let host = host_public ? '0.0.0.0' : 'localhost';
     server.listen(port, host, () => {
         console.log(`MindServer running on port ${port}`);

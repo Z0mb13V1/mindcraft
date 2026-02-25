@@ -3,7 +3,7 @@ import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { io } from 'socket.io-client';
 import { readFile, writeFile } from 'fs/promises';
 import { readFileSync, writeFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { validateDiscordMessage } from './src/utils/message_validator.js';
 import { RateLimiter } from './src/utils/rate_limiter.js';
@@ -11,6 +11,37 @@ import { RateLimiter } from './src/utils/rate_limiter.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
 const ACTIVE_PROFILES = ['gemini', 'grok'];
+
+// ── Admin Authorization ──────────────────────────────────────
+// Comma-separated Discord user IDs allowed to run destructive commands.
+// If empty, all users in the channel can run all commands.
+const ADMIN_USER_IDS = (process.env.DISCORD_ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+
+function isAdmin(userId) {
+    // If no admin list is configured, restrict to nobody (fail-secure)
+    if (ADMIN_USER_IDS.length === 0) return false;
+    return ADMIN_USER_IDS.includes(userId);
+}
+
+// ── Profile Name Validation ──────────────────────────────────
+// Only allow alphanumeric, underscore, and hyphen characters to prevent
+// path traversal attacks when profile names are used in file paths.
+function isValidProfileName(name) {
+    return typeof name === 'string' && /^[a-zA-Z0-9_-]+$/.test(name) && name.length <= 64;
+}
+
+function safeProfilePath(name) {
+    if (!isValidProfileName(name)) {
+        throw new Error(`Invalid profile name: "${name}"`);
+    }
+    const filePath = join(PROFILES_DIR, `${name}.json`);
+    const resolvedDir = resolve(PROFILES_DIR);
+    const resolvedFile = resolve(filePath);
+    if (!resolvedFile.startsWith(resolvedDir + '/')) {
+        throw new Error(`Path traversal detected for profile: "${name}"`);
+    }
+    return filePath;
+}
 
 // ── Bot Groups (name → agent names) ─────────────────────────
 // Profile filename → in-game agent name mapping
@@ -265,23 +296,23 @@ const VALID_MODES = ['cloud', 'local', 'hybrid'];
 const MODE_EMOJI = { cloud: '☁️', local: '🖥️', hybrid: '🔀' };
 
 function readProfile(name) {
-    const filePath = join(PROFILES_DIR, `${name}.json`);
+    const filePath = safeProfilePath(name);
     return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
 function writeProfile(name, data) {
-    const filePath = join(PROFILES_DIR, `${name}.json`);
+    const filePath = safeProfilePath(name);
     writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
 }
 
 async function readProfileAsync(name) {
-    const filePath = join(PROFILES_DIR, `${name}.json`);
+    const filePath = safeProfilePath(name);
     const data = await readFile(filePath, 'utf8');
     return JSON.parse(data);
 }
 
 async function writeProfileAsync(name, data) {
-    const filePath = join(PROFILES_DIR, `${name}.json`);
+    const filePath = safeProfilePath(name);
     await writeFile(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
@@ -353,9 +384,16 @@ async function handleModeCommand(arg, message) {
     }
 
     // Determine which profiles to switch
-    const targets = parts.length > 1
+    const rawTargets = parts.length > 1
         ? parts.slice(1).map(p => p.toLowerCase().replace('.json', ''))
         : [...ACTIVE_PROFILES];
+
+    // Validate all profile names before touching the filesystem
+    const invalidTargets = rawTargets.filter(name => !isValidProfileName(name));
+    if (invalidTargets.length > 0) {
+        return `❌ Invalid profile name(s): ${invalidTargets.map(n => `\`${n}\``).join(', ')}. Profile names may only contain letters, numbers, hyphens, and underscores.`;
+    }
+    const targets = rawTargets;
 
     await message.channel.sendTyping();
 
@@ -499,11 +537,13 @@ client.on('messageCreate', async (message) => {
                     return;
 
                 case '!reconnect':
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     await message.reply('🔄 Reconnecting to MindServer...');
                     connectToMindServer();
                     return;
 
                 case '!start': {
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!arg) { await message.reply('Usage: `!start <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const { agents: startTargets } = resolveAgents(arg);
@@ -513,6 +553,7 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!stop': {
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!arg) { await message.reply('Usage: `!stop <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const { agents: stopTargets } = resolveAgents(arg);
@@ -522,6 +563,7 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!restart': {
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!arg) { await message.reply('Usage: `!restart <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const { agents: restartTargets } = resolveAgents(arg);
@@ -531,18 +573,21 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!startall':
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     for (const name of BOT_GROUPS.all) mindServerSocket.emit('start-agent', name);
                     await message.reply(`▶️ Starting all agents: **${BOT_GROUPS.all.join(', ')}**...`);
                     return;
 
                 case '!stopall':
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     mindServerSocket.emit('stop-all-agents');
                     await message.reply('⏹️ Stopping all agents...');
                     return;
 
                 case '!mode': {
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     const modeResult = await handleModeCommand(arg, message);
                     await message.reply(modeResult);
                     return;
