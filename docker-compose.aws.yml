@@ -155,6 +155,28 @@ services:
           cpus: "0.25"
           memory: 256M
 
+  # ── World Backup → S3 ────────────────────────────────────────────────────
+  backup:
+    image: offen/docker-volume-backup:v2
+    container_name: minecraft-backup
+    environment:
+      AWS_S3_BUCKET_NAME: "mindcraft-world-backups-956959051528"
+      AWS_DEFAULT_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      BACKUP_CRON_EXPRESSION: "0 3 * * *"   # Daily at 3 AM UTC
+      BACKUP_RETENTION_DAYS: "7"
+      BACKUP_FILENAME: "minecraft-world-%Y-%m-%dT%H-%M-%S.tar.gz"
+    volumes:
+      - ./minecraft-data:/backup/minecraft-data:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 64M
+
   # ── ViaProxy (optional — connect older Minecraft clients) ─────────────────
   viaproxy:
     image: ghcr.io/viaversion/viaproxy:latest
