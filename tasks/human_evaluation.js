@@ -61,7 +61,7 @@ bot.on('spawn', async () => {
     bot.chat(`/tp andy ${usernames[0]}`);
     await new Promise(resolve => setTimeout(resolve, 5000));
     // console.log(taskData);
-    console.log(`Task id is ${task_id}`)
+    console.log(`Task id is ${task_id}`);
     console.log(task_id);
     const task = taskData[task_id];
     console.log(task);

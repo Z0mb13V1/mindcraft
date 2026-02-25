@@ -32,4 +32,4 @@ export const makeCompartment = (endowments = {}) => {
     // standard endowments
     ...endowments
   });
-}
+};

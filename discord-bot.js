@@ -479,7 +479,7 @@ client.on('messageCreate', async (message) => {
         if (content.startsWith('!')) {
             const parts = content.split(/\s+/);
             const cmd = parts[0].toLowerCase();
-            const arg = parts.slice(1).join(' ');
+            let arg = parts.slice(1).join(' ');
 
             switch (cmd) {
                 case '!ping':

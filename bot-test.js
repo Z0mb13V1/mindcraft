@@ -41,4 +41,4 @@ async function runTest() {
     });
 }
 
-runTest();
+await runTest();
