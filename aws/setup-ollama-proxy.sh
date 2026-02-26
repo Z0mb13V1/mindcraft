@@ -51,6 +51,13 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+# ── Kill any stale socat processes on the proxy port ─────────────────────────
+if pgrep -f "socat.*${PROXY_PORT}" &>/dev/null; then
+    info "Killing stale socat processes on port ${PROXY_PORT}..."
+    pkill -f "socat.*${PROXY_PORT}" || true
+    sleep 1
+fi
+
 # ── Enable and start ─────────────────────────────────────────────────────────
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
