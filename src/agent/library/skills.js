@@ -493,20 +493,27 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         }
         try {
             let success = false;
+            const invBefore = world.getInventoryCounts(bot);
             if (isLiquid) {
                 success = await useToolOnBlock(bot, 'bucket', block);
             }
             else if (mc.mustCollectManually(blockType)) {
                 await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
                 await bot.dig(block);
+                await new Promise(r => setTimeout(r, 300));
                 await pickupNearbyItems(bot);
-                success = true;
             }
             else {
                 await bot.collectBlock.collect(block);
-                await new Promise(r => setTimeout(r, 500)); // wait for item to register in inventory
+                await new Promise(r => setTimeout(r, 300));
                 await pickupNearbyItems(bot);
-                success = true;
+            }
+            // Verify items actually entered inventory
+            if (!isLiquid) {
+                const invAfter = world.getInventoryCounts(bot);
+                const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
+                const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
+                success = totalAfter > totalBefore;
             }
             if (success)
                 collected++;
@@ -538,25 +545,32 @@ export async function pickupNearbyItems(bot) {
      * @example
      * await skills.pickupNearbyItems(bot);
      **/
-    const distance = 8;
+    const distance = 10;
     const getNearestItem = bot => bot.nearestEntity(entity => entity.name === 'item' && bot.entity.position.distanceTo(entity.position) < distance);
     let nearestItem = getNearestItem(bot);
     let pickedUp = 0;
-    while (nearestItem) {
+    const maxAttempts = 10;
+    let attempts = 0;
+    while (nearestItem && attempts < maxAttempts) {
+        attempts++;
+        const invBefore = bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
         let movements = new pf.Movements(bot);
         movements.canDig = false;
         bot.pathfinder.setMovements(movements);
-        await goToGoal(bot, new pf.goals.GoalFollow(nearestItem, 1));
-        await new Promise(resolve => setTimeout(resolve, 200));
-        let prev = nearestItem;
-        nearestItem = getNearestItem(bot);
-        if (prev === nearestItem) {
-            break;
+        await goToGoal(bot, new pf.goals.GoalFollow(nearestItem, 0));
+        // Wait for item pickup with increasing delays
+        for (let wait = 0; wait < 5; wait++) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const invAfter = bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
+            if (invAfter > invBefore) {
+                pickedUp += (invAfter - invBefore);
+                break;
+            }
         }
-        pickedUp++;
+        nearestItem = getNearestItem(bot);
     }
     log(bot, `Picked up ${pickedUp} items.`);
-    return true;
+    return pickedUp > 0;
 }
 
 

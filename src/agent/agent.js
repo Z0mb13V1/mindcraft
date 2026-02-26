@@ -93,7 +93,7 @@ export class Agent {
         this.bot.once('kicked', (reason) => onDisconnect('Kicked', reason));
         this.bot.once('end', (reason) => onDisconnect('Disconnected', reason));
         this.bot.on('error', (err) => {
-            if (String(err).includes('Duplicate') || String(err).includes('ECONNREFUSED')) {
+            if (String(err).includes('Duplicate') || String(err).includes('ECONNREFUSED') || String(err).includes('EPIPE') || String(err).includes('ECONNRESET')) {
                  onDisconnect('Error', err);
             } else {
                  log(this.name, `[LoginGuard] Connection Error: ${String(err)}`);
