@@ -1,4 +1,6 @@
 import { strictFormat } from '../utils/text.js';
+import http from 'node:http';
+import https from 'node:https';
 
 export class Ollama {
     static prefix = 'ollama';
@@ -83,17 +85,36 @@ export class Ollama {
 
     async send(endpoint, body) {
         const url = new URL(endpoint, this.url);
-        let method = 'POST';
-        let headers = new Headers();
-        const request = new Request(url, { method, headers, body: JSON.stringify(body) });
+        const bodyStr = JSON.stringify(body);
+        const client = url.protocol === 'https:' ? https : http;
         let data = null;
         try {
-            const res = await fetch(request);
-            if (res.ok) {
-                data = await res.json();
-            } else {
-                throw new Error(`Ollama Status: ${res.status}`);
-            }
+            data = await new Promise((resolve, reject) => {
+                const req = client.request({
+                    hostname: url.hostname,
+                    port: url.port || (url.protocol === 'https:' ? 443 : 11434),
+                    path: url.pathname,
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(bodyStr),
+                    },
+                }, (res) => {
+                    if (res.statusCode < 200 || res.statusCode >= 300) {
+                        res.resume();
+                        return reject(new Error(`Ollama Status: ${res.statusCode}`));
+                    }
+                    let raw = '';
+                    res.on('data', chunk => raw += chunk);
+                    res.on('end', () => {
+                        try { resolve(JSON.parse(raw)); }
+                        catch (e) { reject(new Error(`Ollama parse error: ${raw.slice(0, 200)}`)); }
+                    });
+                });
+                req.on('error', reject);
+                req.write(bodyStr);
+                req.end();
+            });
         } catch (err) {
             console.error('Failed to send Ollama request.');
             console.error(err);
