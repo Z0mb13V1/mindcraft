@@ -202,14 +202,19 @@ services:
           memory: 256M
 
   # ── Tailscale VPN — connects EC2 to local GPU ──────────────────────────────
+  # network_mode: host puts tailscale0 in the HOST network namespace so that
+  # Docker bridge containers (mindcraft) can route to Tailscale IPs via the
+  # host gateway. Without this, the tunnel only exists in the container's
+  # namespace and mindcraft cannot reach 100.x.x.x addresses.
   tailscale:
     image: tailscale/tailscale:latest
     container_name: tailscale
-    hostname: mindcraft-ec2
+    network_mode: host
     environment:
       TS_AUTHKEY: "${TAILSCALE_AUTHKEY}"
       TS_EXTRA_ARGS: ""
       TS_STATE_DIR: /var/lib/tailscale
+      TS_HOSTNAME: "mindcraft-ec2"
     volumes:
       - tailscale-state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
