@@ -109,17 +109,25 @@ services:
     stdin_open: true
     tty: true
 
-  # ── LiteLLM (deferred — uncomment when ready) ──────────────
-  # Unified proxy for all LLM providers. See https://docs.litellm.ai
-  # litellm:
-  #   image: ghcr.io/berriai/litellm:main-latest
-  #   container_name: litellm-proxy
-  #   ports:
-  #     - "4000:4000"
-  #   volumes:
-  #     - ./litellm-config.yaml:/app/config.yaml
-  #   command: --config /app/config.yaml
-  #   restart: unless-stopped
+  # ── LiteLLM — Unified LLM proxy ──────────────────────────────────────────
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml
+    environment:
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+      XAI_API_KEY: "${XAI_API_KEY}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
+      VLLM_BASE_URL: "${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}"
+      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY:-sk-litellm-dev}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: --config /app/config.yaml
+    restart: unless-stopped
 
 volumes:
   vllm-models:

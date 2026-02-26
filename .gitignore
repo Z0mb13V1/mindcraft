@@ -28,7 +28,8 @@ services/viaproxy/saves.json
 services/viaproxy/viaproxy.yml
 tmp/
 wandb/
-experiments/
+experiments/runs/
+experiments/results/
 andy_*.json
 jill_*.json
 src/models/logs/*

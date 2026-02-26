@@ -1,0 +1,85 @@
+# =============================================================================
+# LiteLLM Proxy Configuration
+# =============================================================================
+# Unified gateway for all LLM providers used by Mindcraft.
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+#
+# Usage:
+#   docker compose up litellm          (local)
+#   docker compose -f docker-compose.aws.yml up litellm  (AWS)
+# =============================================================================
+
+model_list:
+  # ── Google Gemini ──────────────────────────────────────────────────────────
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: gemini-embedding-001
+    litellm_params:
+      model: gemini/gemini-embedding-001
+      api_key: os.environ/GEMINI_API_KEY
+
+  # ── xAI / Grok ────────────────────────────────────────────────────────────
+  - model_name: grok-4-1-fast-non-reasoning
+    litellm_params:
+      model: xai/grok-4-1-fast-non-reasoning
+      api_key: os.environ/XAI_API_KEY
+
+  - model_name: grok-code-fast-1
+    litellm_params:
+      model: xai/grok-code-fast-1
+      api_key: os.environ/XAI_API_KEY
+
+  # ── Anthropic / Claude ─────────────────────────────────────────────────────
+  - model_name: claude-sonnet-4
+    litellm_params:
+      model: anthropic/claude-sonnet-4-20250514
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: claude-haiku-4
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ── Ollama (local GPU via Tailscale) ───────────────────────────────────────
+  # These route to your local 3090 running Ollama.
+  # Set OLLAMA_BASE_URL in .env to your Tailscale IP, e.g.:
+  #   OLLAMA_BASE_URL=http://100.x.y.z:11434
+  - model_name: andy-4
+    litellm_params:
+      model: ollama/sweaterdog/andy-4:micro-q8_0
+      api_base: os.environ/OLLAMA_BASE_URL
+
+  - model_name: andy-70b
+    litellm_params:
+      model: ollama/andy-70b
+      api_base: os.environ/OLLAMA_BASE_URL
+
+  # ── vLLM (local GPU via Tailscale) ─────────────────────────────────────────
+  - model_name: qwen-2.5-7b
+    litellm_params:
+      model: openai/Qwen/Qwen2.5-7B-Instruct
+      api_base: os.environ/VLLM_BASE_URL
+
+# ── General Settings ─────────────────────────────────────────────────────────
+litellm_settings:
+  drop_params: true          # Silently drop unsupported params per provider
+  set_verbose: false
+  num_retries: 2
+  request_timeout: 60
+  fallbacks:
+    - gemini-2.5-pro: [gemini-2.5-flash]
+    - grok-4-1-fast-non-reasoning: [gemini-2.5-flash]
+    - andy-4: [gemini-2.5-flash]
+    - andy-70b: [gemini-2.5-flash]
+    - qwen-2.5-7b: [gemini-2.5-flash]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -12,6 +12,8 @@ const settings = {
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
         "./profiles/ensemble.json",
+        // "./profiles/cloud-persistent.json",
+        // "./profiles/local-research.json",
         // "./profiles/gemini.json",
         // "./profiles/gemini2.json",
         // "./profiles/grok.json",
