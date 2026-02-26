@@ -155,6 +155,7 @@ DISCORD_BOT_TOKEN=$(get_param DISCORD_BOT_TOKEN)
 BOT_DM_CHANNEL=$(get_param BOT_DM_CHANNEL)
 BACKUP_CHAT_CHANNEL=$(get_param BACKUP_CHAT_CHANNEL)
 S3_BUCKET=$(get_param S3_BUCKET)
+DISCORD_ADMIN_IDS=$(get_param DISCORD_ADMIN_IDS)
 ENV
 chmod 600 /app/.env
 echo ".env written."
