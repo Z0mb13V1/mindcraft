@@ -64,15 +64,23 @@ step "1. Sync code"
 if [[ -d "${APP_DIR}/.git" ]]; then
     info "Repo already at ${APP_DIR} — pulling latest..."
     cd "$APP_DIR"
-    # Update the remote URL to include the current token (in case it changed)
     git remote set-url origin "$CLONE_URL"
     git fetch origin
     git reset --hard origin/main
     git clean -fd
     info "Updated to: $(git log --oneline -1)"
+elif [[ -d "${APP_DIR}" ]]; then
+    # Dir exists but no .git — init in-place and pull
+    info "${APP_DIR} exists but has no git repo — initialising in-place..."
+    cd "$APP_DIR"
+    git init
+    git remote add origin "$CLONE_URL"
+    git fetch origin main
+    git reset --hard origin/main
+    git clean -fd
+    info "Initialised: $(git log --oneline -1)"
 else
     info "Cloning repo to ${APP_DIR}..."
-    mkdir -p "$APP_DIR"
     git clone "$CLONE_URL" "$APP_DIR"
     cd "$APP_DIR"
     info "Cloned: $(git log --oneline -1)"
