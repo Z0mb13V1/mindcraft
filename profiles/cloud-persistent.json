@@ -8,7 +8,7 @@
             { "id": "grok_a",   "model": "grok-4-1-fast-non-reasoning" },
             { "id": "grok_b",   "model": "grok-code-fast-1" }
         ],
-        "timeout_ms": 15000,
+        "timeout_ms": 30000,
         "min_responses": 2,
         "arbiter": {
             "strategy": "heuristic",
