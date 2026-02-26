@@ -28,18 +28,25 @@ services:
       MODE: "survival"
       ENABLE_COMMAND_BLOCK: "true"
       VIEW_DISTANCE: "10"
-      ONLINE_MODE: "FALSE"   # Required for mineflayer bots (offline auth)
+      ONLINE_MODE: "FALSE"        # Required for mineflayer bots (offline auth)
+      ENABLE_RCON: "true"         # Enables save-off/save-on for experiment backups
+      RCON_PASSWORD: "mindcraft"  # Only accessible from Docker network
     volumes:
       - ./minecraft-data:/data
     restart: unless-stopped
     stdin_open: true
     tty: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: ["CMD", "mc-health", "--host", "localhost", "--port", "25565"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
 
   # ── Mindcraft Agent(s) (always starts — PROFILES env controls which bots load) ─
   # Set PROFILES before calling docker compose, or use start.ps1.
@@ -71,16 +78,22 @@ services:
     depends_on:
       minecraft:
         condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
 
   # ── Discord Bot (only starts with --profile cloud or --profile discord) ────────
   discord-bot:
-    image: node:22
+    image: node:22-slim
     container_name: discord-bot
     working_dir: /app
     command: sh -c "npm install --production 2>/dev/null; node discord-bot.js"
@@ -98,6 +111,12 @@ services:
     depends_on:
       mindcraft:
         condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
     profiles:
       - cloud
       - discord
@@ -120,15 +139,24 @@ services:
       VLLM_BASE_URL: "${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}"
       LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY:-sk-litellm-local}"
     extra_hosts:
-      - "host.docker.internal:host-gateway"  # Reach Ollama/vLLM running on Windows host
+      - "host.docker.internal:host-gateway"
     command: --config /app/config.yaml
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "30m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     profiles:
       - litellm
 
   # ── ViaProxy (only starts with --profile viaproxy) ───────────────────────────
-  # Lets older Minecraft clients connect to newer servers.
-  # More info: ./services/viaproxy/README.md
   viaproxy:
     image: ghcr.io/viaversion/viaproxy:latest
     volumes:
@@ -140,10 +168,9 @@ services:
     profiles:
       - viaproxy
 
-  # ── vLLM (deferred — using WSL2 instead, see setup-wsl-vllm.ps1) ─────────────
+  # ── vLLM (deferred — using WSL2 or Ollama instead) ───────────────────────────
   # Start vLLM:  wsl -d Ubuntu-22.04 -- bash services/vllm/start.sh --background
-  # Endpoint:    http://host.docker.internal:8000/v1  (used by vllm-api profiles)
-  # Uncomment below only if you want to run vLLM inside Docker instead of WSL2.
+  # Endpoint:    http://host.docker.internal:8000/v1
   # vllm:
   #   image: vllm/vllm-openai:latest
   #   container_name: vllm-server

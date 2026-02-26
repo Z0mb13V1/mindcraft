@@ -1,52 +1,109 @@
-# LiteLLM Proxy Configuration
+# LiteLLM Proxy Configuration — Hybrid Research Rig
 # Routes requests to local Ollama and optionally cloud providers.
 # Docs: https://docs.litellm.ai/docs/proxy/configs
 #
-# This file is mounted into the litellm Docker container at /app/config.yaml.
-# Ollama runs natively on Windows — accessed via host.docker.internal:11434.
+# Ollama runs natively on Windows — Docker reaches it via host.docker.internal:11434.
+# Cloud models are optional — uncomment and set API keys in .env to use.
 
 model_list:
-  # ── Local Ollama models (native Windows, accessed via host bridge) ────────────
+  # ══════════════════════════════════════════════════════════════════════════════
+  # LOCAL MODELS (Ollama on Windows — free, no API keys needed)
+  # ══════════════════════════════════════════════════════════════════════════════
+
   - model_name: "sweaterdog/andy-4"
     litellm_params:
       model: "ollama/sweaterdog/andy-4"
       api_base: "http://host.docker.internal:11434"
+      timeout: 120
+      stream: false
 
   - model_name: "qwen2.5:32b-instruct-q4_K_M"
     litellm_params:
       model: "ollama/qwen2.5:32b-instruct-q4_K_M"
       api_base: "http://host.docker.internal:11434"
+      timeout: 180
+      stream: false
 
   - model_name: "llama3.1:8b-instruct"
     litellm_params:
       model: "ollama/llama3.1:8b-instruct"
       api_base: "http://host.docker.internal:11434"
+      timeout: 120
+      stream: false
 
   - model_name: "nomic-embed-text"
     litellm_params:
       model: "ollama/nomic-embed-text"
       api_base: "http://host.docker.internal:11434"
+      timeout: 30
 
-  # ── Cloud models (uncomment to route cloud calls through LiteLLM) ─────────────
+  # ══════════════════════════════════════════════════════════════════════════════
+  # CLOUD MODELS — Uncomment to route through LiteLLM for unified logging/retry
+  # Set API keys: GEMINI_API_KEY, XAI_API_KEY, ANTHROPIC_API_KEY in .env
+  # ══════════════════════════════════════════════════════════════════════════════
+
+  # ── Google Gemini ──────────────────────────────────────────────────────────
   # - model_name: "gemini-2.5-pro"
   #   litellm_params:
   #     model: "gemini/gemini-2.5-pro"
   #     api_key: "os.environ/GEMINI_API_KEY"
+  #     timeout: 30
   #
   # - model_name: "gemini-2.5-flash"
   #   litellm_params:
   #     model: "gemini/gemini-2.5-flash"
   #     api_key: "os.environ/GEMINI_API_KEY"
-  #
+  #     timeout: 20
+
+  # ── xAI Grok ──────────────────────────────────────────────────────────────
   # - model_name: "grok-code-fast-1"
   #   litellm_params:
   #     model: "xai/grok-code-fast-1"
   #     api_key: "os.environ/XAI_API_KEY"
+  #     timeout: 20
+
+  # ── Anthropic Claude (PREMIUM TIER — highest quality) ─────────────────────
+  # Best model quality. Use for high-stakes experiments or as a gold-standard
+  # judge. Set ANTHROPIC_API_KEY in .env. Pricing: ~$3/$15 per M tokens (Sonnet)
+  #
+  # - model_name: "claude-sonnet-4-6"
+  #   litellm_params:
+  #     model: "anthropic/claude-sonnet-4-6"
+  #     api_key: "os.environ/ANTHROPIC_API_KEY"
+  #     timeout: 60
+  #     max_tokens: 4096
+  #
+  # - model_name: "claude-haiku-4-5"
+  #   litellm_params:
+  #     model: "anthropic/claude-haiku-4-5-20251001"
+  #     api_key: "os.environ/ANTHROPIC_API_KEY"
+  #     timeout: 30
+  #     max_tokens: 4096
+
+  # ── OpenAI (if you have credits) ─────────────────────────────────────────
+  # - model_name: "gpt-4o"
+  #   litellm_params:
+  #     model: "openai/gpt-4o"
+  #     api_key: "os.environ/OPENAI_API_KEY"
+  #     timeout: 30
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RELIABILITY SETTINGS — Tuned for weeks-long unattended runs
+# ══════════════════════════════════════════════════════════════════════════════
 
 litellm_settings:
-  drop_params: true       # Don't error on unsupported parameters
-  set_verbose: false      # Set true for request/response debugging
-  request_timeout: 120    # Seconds before timing out a model call
+  drop_params: true             # Don't error on unsupported parameters
+  set_verbose: false            # Set true only when debugging
+  request_timeout: 120          # Default timeout seconds for all model calls
+  num_retries: 3                # Retry failed requests up to 3 times
+  retry_after: 5                # Wait seconds between retries
+  allowed_fails: 3              # Consecutive failures before marking model unhealthy
+  cooldown_time: 60             # Seconds before retrying an unhealthy model
+  cache: true                   # Enable response caching
+  cache_params:
+    type: "local"               # Local in-memory (no Redis needed)
+    ttl: 300                    # Cache TTL: 5 minutes
 
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"
+  alerting: []                  # No external alerting

@@ -10,7 +10,7 @@ import { RateLimiter } from './src/utils/rate_limiter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
-const ACTIVE_PROFILES = ['gemini', 'grok'];
+const ACTIVE_PROFILES = ['gemini', 'grok', 'ensemble', 'cloud-persistent', 'local-research'];
 
 // ── Admin Authorization ──────────────────────────────────────
 // Comma-separated Discord user IDs allowed to run destructive commands.
@@ -46,22 +46,34 @@ function safeProfilePath(name) {
 // ── Bot Groups (name → agent names) ─────────────────────────
 // Profile filename → in-game agent name mapping
 const PROFILE_AGENT_MAP = {
-    gemini: 'Gemini_1',
-    grok: 'Grok_1'
+    gemini:             'Gemini_1',
+    grok:               'Grok_1',
+    ensemble:           'Ensemble_1',
+    'cloud-persistent': 'CloudPersistent_1',
+    'local-research':   'LocalResearch_1',
 };
 const BOT_GROUPS = {
-    all:    ['Gemini_1', 'Grok_1'],
-    gemini: ['Gemini_1'],
-    grok:   ['Grok_1'],
-    cloud:  ['Gemini_1', 'Grok_1'],
+    all:      ['Gemini_1', 'Grok_1', 'Ensemble_1', 'CloudPersistent_1', 'LocalResearch_1'],
+    gemini:   ['Gemini_1'],
+    grok:     ['Grok_1'],
+    cloud:    ['Gemini_1', 'Grok_1', 'Ensemble_1', 'CloudPersistent_1'],
+    local:    ['LocalResearch_1'],
+    research: ['LocalResearch_1', 'CloudPersistent_1'],
+    ensemble: ['Ensemble_1'],
 };
 
 // ── Aliases (shorthand → canonical agent name) ──────────────
 const AGENT_ALIASES = {
-    'gemini': 'Gemini_1',
-    'gi':     'Gemini_1',
-    'grok':   'Grok_1',
-    'gk':     'Grok_1',
+    'gemini':   'Gemini_1',
+    'gi':       'Gemini_1',
+    'grok':     'Grok_1',
+    'gk':       'Grok_1',
+    'ensemble': 'Ensemble_1',
+    'ens':      'Ensemble_1',
+    'cloud':    'CloudPersistent_1',
+    'cp':       'CloudPersistent_1',
+    'local':    'LocalResearch_1',
+    'lr':       'LocalResearch_1',
 };
 
 /**
@@ -155,6 +167,8 @@ Prefix with a name/alias to target one: \`gi: go mine diamonds\`
 
 **Aliases:**
 \`gemini\` / \`gi\` = Gemini_1  |  \`grok\` / \`gk\` = Grok_1
+\`ensemble\` / \`ens\` = Ensemble_1  |  \`cloud\` / \`cp\` = CloudPersistent_1
+\`local\` / \`lr\` = LocalResearch_1
 
 **Commands:**
 \`!help\` -- Show this message
@@ -172,7 +186,7 @@ Prefix with a name/alias to target one: \`gi: go mine diamonds\`
 
 !ui | !local | !mindserver -- View MindServer backup UI (http://localhost:8080)
 
-**Groups:** \`all\`, \`gemini\`, \`grok\`, \`cloud\`
+**Groups:** \`all\`, \`gemini\`, \`grok\`, \`cloud\`, \`local\`, \`research\`, \`ensemble\`
 You can also comma-separate: \`!stop Gemini_1, Grok_1\`
 
 **What can I do?**
