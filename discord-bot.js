@@ -10,7 +10,7 @@ import { RateLimiter } from './src/utils/rate_limiter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
-const ACTIVE_PROFILES = ['gemini', 'grok', 'ensemble', 'cloud-persistent', 'local-research'];
+const ACTIVE_PROFILES = ['cloud-persistent', 'local-research'];
 
 // ── Admin Authorization ──────────────────────────────────────
 // Comma-separated Discord user IDs allowed to run destructive commands.
@@ -46,34 +46,24 @@ function safeProfilePath(name) {
 // ── Bot Groups (name → agent names) ─────────────────────────
 // Profile filename → in-game agent name mapping
 const PROFILE_AGENT_MAP = {
-    gemini:             'Gemini_1',
-    grok:               'Grok_1',
-    ensemble:           'Ensemble_1',
-    'cloud-persistent': 'CloudPersistent_1',
-    'local-research':   'LocalResearch_1',
+    'cloud-persistent': 'CloudGrok',
+    'local-research':   'LocalAndy',
 };
 const BOT_GROUPS = {
-    all:      ['Gemini_1', 'Grok_1', 'Ensemble_1', 'CloudPersistent_1', 'LocalResearch_1'],
-    gemini:   ['Gemini_1'],
-    grok:     ['Grok_1'],
-    cloud:    ['Gemini_1', 'Grok_1', 'Ensemble_1', 'CloudPersistent_1'],
-    local:    ['LocalResearch_1'],
-    research: ['LocalResearch_1', 'CloudPersistent_1'],
-    ensemble: ['Ensemble_1'],
+    all:      ['CloudGrok', 'LocalAndy'],
+    cloud:    ['CloudGrok'],
+    local:    ['LocalAndy'],
+    research: ['LocalAndy', 'CloudGrok'],
 };
 
 // ── Aliases (shorthand → canonical agent name) ──────────────
 const AGENT_ALIASES = {
-    'gemini':   'Gemini_1',
-    'gi':       'Gemini_1',
-    'grok':     'Grok_1',
-    'gk':       'Grok_1',
-    'ensemble': 'Ensemble_1',
-    'ens':      'Ensemble_1',
-    'cloud':    'CloudPersistent_1',
-    'cp':       'CloudPersistent_1',
-    'local':    'LocalResearch_1',
-    'lr':       'LocalResearch_1',
+    'cloud':    'CloudGrok',
+    'cg':       'CloudGrok',
+    'grok':     'CloudGrok',
+    'local':    'LocalAndy',
+    'la':       'LocalAndy',
+    'andy':     'LocalAndy',
 };
 
 /**
@@ -163,12 +153,11 @@ const HELP_TEXT = `**MindcraftBot -- Command Center**
 
 **Talk to agents:**
 Just type a message and it goes to ALL active bots.
-Prefix with a name/alias to target one: \`gi: go mine diamonds\`
+Prefix with a name/alias to target one: \`andy: go mine diamonds\`
 
 **Aliases:**
-\`gemini\` / \`gi\` = Gemini_1  |  \`grok\` / \`gk\` = Grok_1
-\`ensemble\` / \`ens\` = Ensemble_1  |  \`cloud\` / \`cp\` = CloudPersistent_1
-\`local\` / \`lr\` = LocalResearch_1
+\`cloud\` / \`cg\` / \`grok\` = CloudGrok
+\`local\` / \`la\` / \`andy\` = LocalAndy
 
 **Commands:**
 \`!help\` -- Show this message
@@ -179,19 +168,20 @@ Prefix with a name/alias to target one: \`gi: go mine diamonds\`
 \`!ping\` -- Pong
 \`!reconnect\` -- Reconnect to MindServer
 \`!start <name|alias|group>\` -- Start agent(s)
-\`!stop <name|alias|group>\` -- Stop agent(s)
+\`!stop [name|group]\` -- Stop agent process (default: all)
+\`!freeze [name|group]\` -- Freeze bot in-game (stops actions instantly)
 \`!restart <name|alias|group>\` -- Restart agent(s)
 \`!startall\` -- Start all agents
 \`!stopall\` -- Stop all agents
 
 !ui | !local | !mindserver -- View MindServer backup UI (http://localhost:8080)
 
-**Groups:** \`all\`, \`gemini\`, \`grok\`, \`cloud\`, \`local\`, \`research\`, \`ensemble\`
-You can also comma-separate: \`!stop Gemini_1, Grok_1\`
+**Groups:** \`all\`, \`cloud\`, \`local\`, \`research\`
+You can also comma-separate: \`!stop CloudGrok, LocalAndy\`
 
 **What can I do?**
 - Send chat messages to one or all agents
-- Use aliases: \`gi: mine\` or \`gk: come here\`
+- Use aliases: \`andy: mine\` or \`cg: come here\`
 - Command agents (mine, build, explore, etc.)
 - Monitor agent output and responses live
 - Start/stop/restart agents by name, alias, or group
@@ -569,12 +559,32 @@ client.on('messageCreate', async (message) => {
 
                 case '!stop': {
                     if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
-                    if (!arg) { await message.reply('Usage: `!stop <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
-                    const { agents: stopTargets } = resolveAgents(arg);
+                    const stopArg = arg || 'all';
+                    const { agents: stopTargets } = resolveAgents(stopArg);
                     for (const name of stopTargets) mindServerSocket.emit('stop-agent', name);
                     await message.reply(`⏹️ Stopping **${stopTargets.join(', ')}**...`);
                     setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
+                    return;
+                }
+
+                case '!freeze': {
+                    // Sends "freeze" as an in-game chat message to bots.
+                    // The hardcoded intercept in agent.js catches "freeze" and
+                    // calls actions.stop() + shut_up — no LLM involved.
+                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
+                    const freezeArg = arg || 'all';
+                    const { agents: freezeTargets } = resolveAgents(freezeArg);
+                    const inGame = freezeTargets.filter(n => knownAgents.find(a => a.name === n && a.in_game));
+                    if (inGame.length === 0) {
+                        await message.reply('❌ No matching agents are in-game.');
+                        return;
+                    }
+                    for (const name of inGame) {
+                        sendToAgent(name, 'freeze', message.author.username);
+                    }
+                    await message.reply(`🧊 Froze **${inGame.join(', ')}** — they will stop all actions immediately.`);
                     return;
                 }
 

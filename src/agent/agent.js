@@ -327,6 +327,18 @@ export class Agent {
         const self_prompt = source === 'system' || source === this.name;
         const from_other_bot = convoManager.isOtherAgent(source);
 
+        // ── Hardcoded stop/freeze: bypasses LLM, always works ──
+        if (!self_prompt) {
+            const lower = message.toLowerCase().trim();
+            if (lower === 'stop' || lower === 'freeze' || lower === 'stop!' || lower === 'freeze!') {
+                console.log(`[STOP] ${source} triggered "${lower}" on ${this.name}`);
+                await this.actions.stop();
+                this.shut_up = true;
+                this.routeResponse(source, `*${this.name} stopped.*`);
+                return true;
+            }
+        }
+
         if (!self_prompt && !from_other_bot) { // from user, check for forced commands
             const user_command_name = containsCommand(message);
             if (user_command_name) {
