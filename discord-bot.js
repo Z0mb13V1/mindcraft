@@ -145,6 +145,7 @@ const client = new Client({
 let mindServerSocket = null;
 let mindServerConnected = false;
 let knownAgents = [];      // [{name, in_game, socket_connected, viewerPort}]
+let agentStates = {};      // {agentName: {gameplay, action, inventory, nearby, ...}}
 let replyChannel = null;   // cached Discord channel for fast replies
 const messageLimiter = new RateLimiter(5, 60000);  // 5 messages per 60 seconds per user
 
@@ -163,6 +164,10 @@ Prefix with a name/alias to target one: \`andy: go mine diamonds\`
 \`!help\` -- Show this message
 \`!status\` -- MindServer connection + agent overview
 \`!agents\` -- List all agents with status
+\`!stats [agent]\` -- Live gameplay stats (health, hunger, position, biome)
+\`!inv [agent]\` -- Inventory and equipment
+\`!nearby [agent]\` -- Nearby players, bots, and entities
+\`!viewer\` -- Bot camera view links (prismarine-viewer)
 \`!mode [cloud|local|hybrid] [profile]\` -- View or switch compute mode
 \`!usage [agent|all]\` -- Show API usage stats and costs
 \`!ping\` -- Pong
@@ -233,6 +238,10 @@ function connectToMindServer() {
         knownAgents = agents || [];
         const summary = agents.map(a => `${a.name}${a.in_game ? '✅' : '⬛'}`).join(', ');
         console.log(`[Agents] ${summary}`);
+    });
+
+    mindServerSocket.on('state-update', (states) => {
+        if (states) agentStates = states;
     });
 
     mindServerSocket.on('connect_error', (error) => {
@@ -487,6 +496,76 @@ function formatAgentUsage(agentName, data) {
     return text;
 }
 
+// ── State Display Formatters ────────────────────────────────
+function formatHealth(hp) {
+    if (hp == null) return '?';
+    const hearts = Math.ceil(hp / 2);
+    return `${'❤️'.repeat(Math.min(hearts, 10))} ${hp}/20`;
+}
+
+function formatHunger(hunger) {
+    if (hunger == null) return '?';
+    const drums = Math.ceil(hunger / 2);
+    return `${'🍗'.repeat(Math.min(drums, 10))} ${hunger}/20`;
+}
+
+function formatPos(pos) {
+    if (!pos) return 'Unknown';
+    return `${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)}`;
+}
+
+function formatAgentStats(name, state) {
+    if (!state || state.error) return `**${name}** — No data available`;
+    const gp = state.gameplay || {};
+    const act = state.action || {};
+    const surr = state.surroundings || {};
+    let text = `**${name}**\n`;
+    text += `${formatHealth(gp.health)} | ${formatHunger(gp.hunger)}\n`;
+    text += `📍 ${formatPos(gp.position)} (${gp.dimension || '?'})\n`;
+    text += `🌿 ${gp.biome || '?'} | ${gp.weather || '?'} | ${gp.timeLabel || '?'}\n`;
+    text += `⚡ ${act.current || (act.isIdle ? 'Idle' : '?')}\n`;
+    text += `🧱 Standing on: ${surr.below || '?'}`;
+    return text;
+}
+
+function formatAgentInventory(name, state) {
+    if (!state || state.error) return `**${name}** — No data available`;
+    const inv = state.inventory || {};
+    const equip = inv.equipment || {};
+    let text = `**${name} — Inventory** (${inv.stacksUsed || 0}/${inv.totalSlots || 36} slots)\n`;
+
+    // Equipment
+    const slots = [
+        ['⛑️', equip.helmet], ['👕', equip.chestplate],
+        ['👖', equip.leggings], ['👢', equip.boots], ['🗡️', equip.mainHand]
+    ];
+    const equipped = slots.filter(([, v]) => v).map(([e, v]) => `${e} ${v}`);
+    if (equipped.length > 0) text += `**Equipped:** ${equipped.join(' | ')}\n`;
+
+    // Items
+    const counts = inv.counts || {};
+    const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) {
+        text += '*(empty)*';
+    } else {
+        text += entries.map(([item, count]) => `\`${item}\` x${count}`).join(', ');
+    }
+    return text;
+}
+
+function formatAgentNearby(name, state) {
+    if (!state || state.error) return `**${name}** — No data available`;
+    const nearby = state.nearby || {};
+    let text = `**${name} — Nearby**\n`;
+    const humans = nearby.humanPlayers || [];
+    const bots = nearby.botPlayers || [];
+    const entities = nearby.entityTypes || [];
+    text += `👤 Players: ${humans.length > 0 ? humans.join(', ') : 'none'}\n`;
+    text += `🤖 Bots: ${bots.length > 0 ? bots.join(', ') : 'none'}\n`;
+    text += `🐾 Entities: ${entities.length > 0 ? entities.join(', ') : 'none'}`;
+    return text;
+}
+
 // ── Discord Events ──────────────────────────────────────────
 client.on('ready', () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
@@ -532,7 +611,18 @@ client.on('messageCreate', async (message) => {
                     const ms = mindServerConnected ? '✅ MindServer connected' : '❌ MindServer disconnected';
                     const agentCount = knownAgents.length;
                     const inGame = knownAgents.filter(a => a.in_game).length;
-                    await message.reply(`${ms}\n📊 **${agentCount}** agents registered, **${inGame}** in-game\n\n${getAgentStatusText()}`);
+                    let reply = `${ms}\n📊 **${agentCount}** agents registered, **${inGame}** in-game\n\n`;
+                    for (const agent of knownAgents) {
+                        const status = agent.in_game ? '🟢 in-game' : (agent.socket_connected ? '🟡 connected' : '🔴 offline');
+                        reply += `• **${agent.name}** — ${status}`;
+                        const st = agentStates[agent.name];
+                        if (agent.in_game && st && st.gameplay) {
+                            const gp = st.gameplay;
+                            reply += ` | ❤️${gp.health || '?'}  🍗${gp.hunger || '?'}  📍${formatPos(gp.position)}`;
+                        }
+                        reply += '\n';
+                    }
+                    await message.reply(reply);
                     return;
                 }
 
@@ -653,6 +743,77 @@ client.on('messageCreate', async (message) => {
                             await message.reply(reply);
                         });
                     }
+                    return;
+                }
+
+                case '!stats': {
+                    if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
+                    if (!arg) {
+                        // Show all agents
+                        const lines = [];
+                        for (const agent of knownAgents) {
+                            if (agent.in_game && agentStates[agent.name]) {
+                                lines.push(formatAgentStats(agent.name, agentStates[agent.name]));
+                            } else {
+                                lines.push(`**${agent.name}** — ${agent.in_game ? 'no state data' : 'offline'}`);
+                            }
+                        }
+                        await message.reply(lines.join('\n\n') || 'No agents registered.');
+                    } else {
+                        const { agents: targets } = resolveAgents(arg);
+                        const lines = targets.map(n => formatAgentStats(n, agentStates[n]));
+                        await message.reply(lines.join('\n\n') || 'Agent not found.');
+                    }
+                    return;
+                }
+
+                case '!inv':
+                case '!inventory': {
+                    if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
+                    if (!arg) {
+                        const lines = [];
+                        for (const agent of knownAgents) {
+                            if (agent.in_game && agentStates[agent.name]) {
+                                lines.push(formatAgentInventory(agent.name, agentStates[agent.name]));
+                            }
+                        }
+                        await message.reply(lines.join('\n\n') || 'No in-game agents.');
+                    } else {
+                        const { agents: targets } = resolveAgents(arg);
+                        const lines = targets.map(n => formatAgentInventory(n, agentStates[n]));
+                        await message.reply(lines.join('\n\n') || 'Agent not found.');
+                    }
+                    return;
+                }
+
+                case '!nearby': {
+                    if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
+                    if (!arg) {
+                        const lines = [];
+                        for (const agent of knownAgents) {
+                            if (agent.in_game && agentStates[agent.name]) {
+                                lines.push(formatAgentNearby(agent.name, agentStates[agent.name]));
+                            }
+                        }
+                        await message.reply(lines.join('\n\n') || 'No in-game agents.');
+                    } else {
+                        const { agents: targets } = resolveAgents(arg);
+                        const lines = targets.map(n => formatAgentNearby(n, agentStates[n]));
+                        await message.reply(lines.join('\n\n') || 'Agent not found.');
+                    }
+                    return;
+                }
+
+                case '!viewer': {
+                    const lines = [];
+                    for (const agent of knownAgents) {
+                        if (agent.viewerPort) {
+                            lines.push(`**${agent.name}**: http://54.152.239.117:${agent.viewerPort}`);
+                        }
+                    }
+                    await message.reply(lines.length > 0
+                        ? `**Bot Camera Views:**\n${lines.join('\n')}`
+                        : 'No viewer ports active. Vision may be disabled.');
                     return;
                 }
 
