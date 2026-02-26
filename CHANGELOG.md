@@ -13,6 +13,15 @@ All notable changes to this project will be documented here.
 
 ### Added
 
+- **HUD Overlay** — gaming-style dashboard in the
+  MindServer web UI with per-bot runtime tracker
+  (MM:SS), current goal / next action display with
+  self-prompter state badges (Active/Paused/Stopped),
+  and scrollable color-coded command log (`0913c223`)
+- `full_state.js`: exposes `selfPrompter` (prompt +
+  state) and `action.resumeName` in 1Hz state payload
+- `mindserver.js`: tracks `loginTime` per agent for
+  accurate runtime calculation across browser refreshes
 - `rig-go.ps1` — one-command launcher for the full
   hybrid rig (server, bots, Discord, monitoring)
   (`bfbbc03d`)
@@ -28,10 +37,21 @@ All notable changes to this project will be documented here.
   and cleanup — 10 priorities resolved (`e5cf8b7a`)
 - Repo cleanup: removed 6 unnecessary tracked files
   (stale scripts, temp artifacts) (`67161dcd`)
-- Security section added to README with 7 hardening bullet points (`4625b6c4`)
+- Security section added to README with 7 hardening
+  bullet points (`4625b6c4`)
 
 ### Fixed
 
+- Viewer iframe used hardcoded `localhost` — now
+  uses `window.location.hostname` so viewers load
+  from any browser client (`153ada27`)
+- Dockerfile: `patches/` dir not copied before
+  `npm install` — `patch-package` postinstall
+  couldn't apply prismarine-viewer entity fix,
+  causing `Unknown entity` log spam (`ed8a8594`)
+- Xvfb timing race: added 2s delay before node
+  startup so WebGL context initializes correctly
+  (`742b5551`)
 - `grok.js`: null guard on `res` before `.replace()`
   — API can return null, causing TypeError crash
 - `gemini.js` `sendVisionRequest`: used

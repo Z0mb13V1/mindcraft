@@ -78,7 +78,9 @@ docker compose -f docker-compose.aws.yml up --build
 
 ### Key Features
 
-- **Vision enabled** for both bots — `xvfb-run` + Mesa software rendering in Docker (`LIBGL_ALWAYS_SOFTWARE=1`)
+- **HUD Overlay** — gaming-style dashboard in the MindServer web UI (`:8080`) with per-bot runtime tracker (MM:SS), current goal / next action display with self-prompter state badges, and a scrollable color-coded command log
+- **Live Bot Cameras** — first-person prismarine-viewer streams embedded as iframes in the web UI (ports 3000+)
+- **Vision enabled** for both bots — Xvfb + Mesa software rendering in Docker with 2s startup delay for WebGL context init
 - **Human message priority** — `requestInterrupt()` fires immediately when a human player speaks
 - **Loop detection** — tracks last 12 actions, cancels on 3-action pattern repeats or 5+ of the same action
 - **Per-profile `blocked_actions`** — LocalAndy blocks `!startConversation` to prevent hallucinated names
