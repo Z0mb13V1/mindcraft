@@ -1,4 +1,6 @@
 services:
+
+  # ── GPU Monitoring (only starts with --profile local or --profile monitoring) ──
   nvidia-gpu-exporter:
     image: nvidia-gpu-exporter
     container_name: nvidia-gpu-exporter
@@ -8,6 +10,11 @@ services:
     ports:
       - "9835:9835"
     restart: unless-stopped
+    profiles:
+      - local
+      - monitoring
+
+  # ── Minecraft Server (always starts — shared by all modes) ────────────────────
   minecraft:
     image: itzg/minecraft-server
     container_name: minecraft-server
@@ -21,6 +28,7 @@ services:
       MODE: "survival"
       ENABLE_COMMAND_BLOCK: "true"
       VIEW_DISTANCE: "10"
+      ONLINE_MODE: "FALSE"   # Required for mineflayer bots (offline auth)
     volumes:
       - ./minecraft-data:/data
     restart: unless-stopped
@@ -33,21 +41,33 @@ services:
       retries: 3
       start_period: 60s
 
+  # ── Mindcraft Agent(s) (always starts — PROFILES env controls which bots load) ─
+  # Set PROFILES before calling docker compose, or use start.ps1.
+  # Examples:
+  #   PROFILES='["./profiles/local-research.json"]'  → LocalResearch_1 only
+  #   PROFILES='["./profiles/cloud-persistent.json"]' → CloudPersistent_1 only
+  #   PROFILES='["./profiles/local-research.json","./profiles/cloud-persistent.json"]' → both
   mindcraft:
     build: .
     container_name: mindcraft-agents
     environment:
-      SETTINGS_JSON: '{"auto_open_ui": false, "mindserver_host_public": true}'
+      SETTINGS_JSON: '{"auto_open_ui": false, "mindserver_host_public": true, "host": "minecraft-server"}'
+      PROFILES: "${PROFILES:-}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      XAI_API_KEY: "${XAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      VLLM_BASE_URL: "${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}"
     volumes:
       - ./settings.js:/app/settings.js
       - ./keys.json:/app/keys.json
       - ./profiles:/app/profiles
       - ./bots:/app/bots
     ports:
-      - "3000-3003:3000-3003" # see the view from the camera mounted on your bot head: http://localhost:3000/
-      - "8080:8080" # MindServer UI: http://localhost:8080
+      - "3000-3003:3000-3003" # Bot camera views: http://localhost:3000/
+      - "8080:8080"           # MindServer UI: http://localhost:8080/
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:host-gateway"  # Reach Ollama/vLLM running on Windows host
     depends_on:
       minecraft:
         condition: service_healthy
@@ -58,10 +78,12 @@ services:
       retries: 3
       start_period: 60s
 
+  # ── Discord Bot (only starts with --profile cloud or --profile discord) ────────
   discord-bot:
     image: node:22
     container_name: discord-bot
     working_dir: /app
+    command: sh -c "npm install --production 2>/dev/null; node discord-bot.js"
     volumes:
       - ./discord-bot.js:/app/discord-bot.js
       - ./package.json:/app/package.json
@@ -73,11 +95,55 @@ services:
       BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
       DISCORD_ADMIN_IDS: "${DISCORD_ADMIN_IDS}"
       MINDSERVER_HOST: "${MINDSERVER_HOST:-mindcraft-agents}"
+    depends_on:
+      mindcraft:
+        condition: service_healthy
+    profiles:
+      - cloud
+      - discord
 
-  # ── vLLM (deferred — using WSL2 instead, see setup-wsl-vllm.ps1) ────────────
+  # ── LiteLLM Proxy (only starts with --profile litellm) ───────────────────────
+  # Unified OpenAI-compatible proxy for Ollama and cloud models.
+  # Start: docker compose --profile litellm up -d litellm
+  # Health: http://localhost:4000/health
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./services/litellm/litellm_config.yaml:/app/config.yaml
+    environment:
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      XAI_API_KEY: "${XAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      VLLM_BASE_URL: "${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}"
+      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY:-sk-litellm-local}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Reach Ollama/vLLM running on Windows host
+    command: --config /app/config.yaml
+    restart: unless-stopped
+    profiles:
+      - litellm
+
+  # ── ViaProxy (only starts with --profile viaproxy) ───────────────────────────
+  # Lets older Minecraft clients connect to newer servers.
+  # More info: ./services/viaproxy/README.md
+  viaproxy:
+    image: ghcr.io/viaversion/viaproxy:latest
+    volumes:
+      - ./services/viaproxy:/app/run
+    ports:
+      - "25568:25568"
+    stdin_open: true
+    tty: true
+    profiles:
+      - viaproxy
+
+  # ── vLLM (deferred — using WSL2 instead, see setup-wsl-vllm.ps1) ─────────────
   # Start vLLM:  wsl -d Ubuntu-22.04 -- bash services/vllm/start.sh --background
-  # Endpoint:    http://host.docker.internal:8000/v1  (used by all bot profiles)
-  # Uncomment below only if you want to run vLLM in Docker instead of WSL2.
+  # Endpoint:    http://host.docker.internal:8000/v1  (used by vllm-api profiles)
+  # Uncomment below only if you want to run vLLM inside Docker instead of WSL2.
   # vllm:
   #   image: vllm/vllm-openai:latest
   #   container_name: vllm-server
@@ -99,34 +165,6 @@ services:
   #   restart: unless-stopped
   #   profiles:
   #     - vllm
-
-  viaproxy: #use this service to connect to an unsupported minecraft server versions. more info: ./services/viaproxy/README.md
-    image: ghcr.io/viaversion/viaproxy:latest
-    volumes:
-      - ./services/viaproxy:/app/run
-    ports:
-      - "25568:25568"
-    stdin_open: true
-    tty: true
-
-  # ── LiteLLM — Unified LLM proxy ──────────────────────────────────────────
-  litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    container_name: litellm-proxy
-    ports:
-      - "4000:4000"
-    volumes:
-      - ./litellm-config.yaml:/app/config.yaml
-    environment:
-      GEMINI_API_KEY: "${GEMINI_API_KEY}"
-      XAI_API_KEY: "${XAI_API_KEY}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
-      VLLM_BASE_URL: "${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}"
-      LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY:-sk-litellm-dev}"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    command: --config /app/config.yaml
-    restart: unless-stopped
 
 volumes:
   vllm-models:

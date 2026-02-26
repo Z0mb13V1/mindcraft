@@ -1,0 +1,52 @@
+# LiteLLM Proxy Configuration
+# Routes requests to local Ollama and optionally cloud providers.
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+#
+# This file is mounted into the litellm Docker container at /app/config.yaml.
+# Ollama runs natively on Windows — accessed via host.docker.internal:11434.
+
+model_list:
+  # ── Local Ollama models (native Windows, accessed via host bridge) ────────────
+  - model_name: "sweaterdog/andy-4"
+    litellm_params:
+      model: "ollama/sweaterdog/andy-4"
+      api_base: "http://host.docker.internal:11434"
+
+  - model_name: "qwen2.5:32b-instruct-q4_K_M"
+    litellm_params:
+      model: "ollama/qwen2.5:32b-instruct-q4_K_M"
+      api_base: "http://host.docker.internal:11434"
+
+  - model_name: "llama3.1:8b-instruct"
+    litellm_params:
+      model: "ollama/llama3.1:8b-instruct"
+      api_base: "http://host.docker.internal:11434"
+
+  - model_name: "nomic-embed-text"
+    litellm_params:
+      model: "ollama/nomic-embed-text"
+      api_base: "http://host.docker.internal:11434"
+
+  # ── Cloud models (uncomment to route cloud calls through LiteLLM) ─────────────
+  # - model_name: "gemini-2.5-pro"
+  #   litellm_params:
+  #     model: "gemini/gemini-2.5-pro"
+  #     api_key: "os.environ/GEMINI_API_KEY"
+  #
+  # - model_name: "gemini-2.5-flash"
+  #   litellm_params:
+  #     model: "gemini/gemini-2.5-flash"
+  #     api_key: "os.environ/GEMINI_API_KEY"
+  #
+  # - model_name: "grok-code-fast-1"
+  #   litellm_params:
+  #     model: "xai/grok-code-fast-1"
+  #     api_key: "os.environ/XAI_API_KEY"
+
+litellm_settings:
+  drop_params: true       # Don't error on unsupported parameters
+  set_verbose: false      # Set true for request/response debugging
+  request_timeout: 120    # Seconds before timing out a model call
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"

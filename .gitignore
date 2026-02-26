@@ -28,8 +28,12 @@ services/viaproxy/saves.json
 services/viaproxy/viaproxy.yml
 tmp/
 wandb/
-experiments/runs/
-experiments/results/
+# Experiment DATA (world snapshots, logs, results) is ignored — not scripts
+experiments/*/world-before/
+experiments/*/world-after/
+experiments/*/logs/
+experiments/*/results/
+experiments/*/metadata.json
 andy_*.json
 jill_*.json
 src/models/logs/*
