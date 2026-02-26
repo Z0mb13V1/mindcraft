@@ -27,8 +27,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Copy package files first for better caching
+# Copy package files and patches for better caching
 COPY package*.json ./
+COPY patches/ ./patches/
 RUN npm install
 
 # Copy requirements and install Python deps
