@@ -93,10 +93,15 @@ export class Agent {
         this.bot.once('kicked', (reason) => onDisconnect('Kicked', reason));
         this.bot.once('end', (reason) => onDisconnect('Disconnected', reason));
         this.bot.on('error', (err) => {
-            if (String(err).includes('Duplicate') || String(err).includes('ECONNREFUSED') || String(err).includes('EPIPE') || String(err).includes('ECONNRESET')) {
+            const errStr = String(err);
+            if (errStr.includes('Duplicate') || errStr.includes('ECONNREFUSED')) {
                  onDisconnect('Error', err);
+            } else if (errStr.includes('EPIPE') || errStr.includes('ECONNRESET')) {
+                 // Connection broken — log it but let mineflayer's 'end' event
+                 // handle the actual disconnect/restart to avoid false restarts
+                 console.warn(`[${this.name}] Connection error: ${errStr}. Waiting for disconnect event...`);
             } else {
-                 log(this.name, `[LoginGuard] Connection Error: ${String(err)}`);
+                 log(this.name, `[LoginGuard] Connection Error: ${errStr}`);
             }
         });
 
