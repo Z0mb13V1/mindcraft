@@ -67,17 +67,16 @@ if [[ -d "${APP_DIR}/.git" ]]; then
     git remote set-url origin "$CLONE_URL"
     git fetch origin
     git reset --hard origin/main
-    git clean -fd
+    git clean -fd --exclude=chromadb-data/ 2>/dev/null || true
     info "Updated to: $(git log --oneline -1)"
 elif [[ -d "${APP_DIR}" ]]; then
     # Dir exists but no .git — init in-place and pull
     info "${APP_DIR} exists but has no git repo — initialising in-place..."
     cd "$APP_DIR"
-    git init
+    git init -b main
     git remote add origin "$CLONE_URL"
     git fetch origin main
     git reset --hard origin/main
-    git clean -fd
     info "Initialised: $(git log --oneline -1)"
 else
     info "Cloning repo to ${APP_DIR}..."
