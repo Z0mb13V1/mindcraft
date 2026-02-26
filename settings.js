@@ -23,7 +23,7 @@ const settings = {
     ],
 
     "load_memory": true, // load memory from previous session
-    "init_message": "Respond with hello world, your name, the AI model you run on, and whether your compute is cloud-based, local, or hybrid.", // sends to all on spawn
+    "init_message": "Say hello and introduce yourself by name.", // sends to all on spawn
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
     "speak": false,
