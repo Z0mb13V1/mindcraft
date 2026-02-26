@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================================
-# aws/ec2-go.sh — One-command EC2 redeploy from Mac/Linux
+# aws/ec2-go.sh — One-command Mindcraft deploy
 # =============================================================================
-# Usage (from Mac):
+# Auto-detects whether you're ON EC2 or remote (Mac/Linux).
+#   On EC2:    runs everything locally (no SSH needed)
+#   Remote:    SSHs into EC2 to run commands
+#
+# Usage:
 #   bash aws/ec2-go.sh                  # Pull latest code + restart containers
 #   bash aws/ec2-go.sh --build          # Pull + rebuild Docker images
 #   bash aws/ec2-go.sh --secrets        # Re-pull SSM secrets + restart
 #   bash aws/ec2-go.sh --full           # Full: secrets + build + restart
-#
-# Requires: ssh key at ~/.ssh/mindcraft-ec2.pem (or set EC2_KEY_FILE)
 # =============================================================================
 set -euo pipefail
 
@@ -18,14 +20,12 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 step()  { echo -e "\n${CYAN}=== $* ===${NC}"; }
 
-# ── Configuration ─────────────────────────────────────────────────────────────
-EC2_IP="${EC2_PUBLIC_IP:-54.152.239.117}"
-EC2_KEY="${EC2_KEY_FILE:-$HOME/.ssh/mindcraft-ec2.pem}"
-EC2_USER="ubuntu"
+# ── Parse args ────────────────────────────────────────────────────────────────
 COMPOSE_FILE="docker-compose.aws.yml"
-
+APP_DIR="/app"
 DO_BUILD=false
 DO_SECRETS=false
+
 for arg in "$@"; do
     case "$arg" in
         --build)   DO_BUILD=true ;;
@@ -41,56 +41,68 @@ for arg in "$@"; do
     esac
 done
 
-# ── Validate SSH key ──────────────────────────────────────────────────────────
-if [[ ! -f "$EC2_KEY" ]]; then
-    # Try EC2 Instance Connect as fallback hint
-    error "SSH key not found: ${EC2_KEY}
-  Options:
-    1. Copy your .pem file:  cp /path/to/mindcraft-ec2.pem ~/.ssh/
-    2. Set env var:          export EC2_KEY_FILE=/path/to/key.pem
-    3. Use browser SSH:      EC2 Console → Connect → EC2 Instance Connect"
+# ── Detect: are we ON EC2 or remote? ─────────────────────────────────────────
+IS_EC2=false
+if curl -sf -m 2 http://169.254.169.254/latest/meta-data/instance-id >/dev/null 2>&1; then
+    IS_EC2=true
 fi
 
-SSH_OPTS="-i ${EC2_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=10"
-SSH="ssh ${SSH_OPTS} ${EC2_USER}@${EC2_IP}"
+if $IS_EC2; then
+    info "Detected: running ON EC2 — executing locally"
+    # run_cmd just runs the command directly
+    run_cmd() { bash -c "$1"; }
+else
+    info "Detected: running remotely — will SSH into EC2"
+    EC2_IP="${EC2_PUBLIC_IP:-54.152.239.117}"
+    EC2_KEY="${EC2_KEY_FILE:-$HOME/.ssh/mindcraft-ec2.pem}"
+    EC2_USER="ubuntu"
 
-# ── Step 1: Test SSH ──────────────────────────────────────────────────────────
-step "1/5 SSH Connectivity"
-if ! $SSH "echo ok" >/dev/null 2>&1; then
-    error "Cannot SSH to ${EC2_IP}. Is the instance running?
-  Check: aws ec2 describe-instances --filters Name=ip-address,Values=${EC2_IP}"
+    if [[ ! -f "$EC2_KEY" ]]; then
+        error "SSH key not found: ${EC2_KEY}
+  Set EC2_KEY_FILE or copy your .pem to ~/.ssh/mindcraft-ec2.pem
+  Or run this script directly on EC2 (it auto-detects)."
+    fi
+
+    SSH_OPTS="-i ${EC2_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+    SSH_CMD="ssh ${SSH_OPTS} ${EC2_USER}@${EC2_IP}"
+
+    # Test SSH
+    if ! $SSH_CMD "echo ok" >/dev/null 2>&1; then
+        error "Cannot SSH to ${EC2_IP}. Is the instance running?"
+    fi
+    info "SSH connected to ${EC2_IP}"
+
+    # run_cmd sends the command over SSH
+    run_cmd() { $SSH_CMD bash -c "$1"; }
 fi
-info "SSH connected to ${EC2_IP}"
 
-# ── Step 2: Git pull on EC2 ───────────────────────────────────────────────────
-step "2/5 Git Pull"
-$SSH bash -s <<'REMOTE'
-set -euo pipefail
+# ── Step 1: Git pull ─────────────────────────────────────────────────────────
+step "1/4 Git Pull"
+run_cmd '
 cd /app
-if [[ -d .git ]]; then
+if [ -d .git ]; then
     git fetch origin main 2>&1 || echo "[WARN] git fetch failed — using local files"
     git reset --hard origin/main 2>&1 || echo "[WARN] git reset failed"
     echo "[OK] Code updated from origin/main"
 else
     echo "[WARN] /app is not a git repo — skipping pull"
-    echo "  To fix: cd /app && git init && git remote add origin https://github.com/Z0mb13V1/mindcraft-0.1.3.git"
 fi
-REMOTE
+'
 
-# ── Step 3: Re-pull secrets from SSM (optional) ──────────────────────────────
+# ── Step 2: Re-pull secrets from SSM (optional) ──────────────────────────────
 if $DO_SECRETS; then
-    step "3/5 Pull Secrets from SSM"
-    $SSH bash -s <<'REMOTE'
-set -euo pipefail
+    step "2/4 Pull Secrets from SSM"
+    run_cmd '
 cd /app
-REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+REGION=$(curl -sf -m 5 http://169.254.169.254/latest/meta-data/placement/region)
+if [ -z "$REGION" ]; then echo "[ERROR] Cannot get AWS region from metadata"; exit 1; fi
 
 get_param() {
     aws ssm get-parameter \
         --region "$REGION" \
         --name "/mindcraft/$1" \
         --with-decryption \
-        --query 'Parameter.Value' \
+        --query "Parameter.Value" \
         --output text 2>/dev/null || echo ""
 }
 
@@ -145,43 +157,30 @@ EC2_PUBLIC_IP=${EC2_PUBLIC_IP}
 GITHUB_TOKEN=${GITHUB_TOKEN}
 ENV
 chmod 600 /app/.env
-
 echo "[OK] keys.json and .env written from SSM"
-REMOTE
+'
 else
-    step "3/5 Secrets (skipped — use --secrets to refresh)"
+    step "2/4 Secrets (skipped — use --secrets to refresh)"
 fi
 
-# ── Step 4: Docker compose up ─────────────────────────────────────────────────
-step "4/5 Docker Compose"
+# ── Step 3: Docker compose up ─────────────────────────────────────────────────
+step "3/4 Docker Compose"
 BUILD_FLAG=""
 if $DO_BUILD; then
     BUILD_FLAG="--build"
     info "Rebuilding Docker images..."
 fi
 
-$SSH bash -s -- "$COMPOSE_FILE" "$BUILD_FLAG" <<'REMOTE'
-set -euo pipefail
-cd /app
-COMPOSE_FILE="$1"
-BUILD_FLAG="$2"
+run_cmd "cd /app && docker compose -f ${COMPOSE_FILE} up -d --force-recreate ${BUILD_FLAG} 2>&1 && echo '' && docker compose -f ${COMPOSE_FILE} ps"
 
-docker compose -f "$COMPOSE_FILE" up -d --force-recreate $BUILD_FLAG 2>&1
-echo ""
-docker compose -f "$COMPOSE_FILE" ps
-REMOTE
-
-# ── Step 5: Verify bots ──────────────────────────────────────────────────────
-step "5/5 Bot Verification"
+# ── Step 4: Verify bots ──────────────────────────────────────────────────────
+step "4/4 Bot Verification"
 info "Waiting 15s for bots to connect..."
 sleep 15
 
-$SSH bash -s <<'REMOTE'
-set -euo pipefail
+run_cmd '
 cd /app
 LOGS=$(docker compose -f docker-compose.aws.yml logs --tail 30 mindcraft 2>&1)
-
-# Check for bot connections
 for bot in "CloudGrok" "LocalAndy"; do
     if echo "$LOGS" | grep -q "$bot"; then
         echo "[OK] $bot appears in logs"
@@ -189,23 +188,23 @@ for bot in "CloudGrok" "LocalAndy"; do
         echo "[WARN] $bot not found in recent logs (may still be starting)"
     fi
 done
-
-# Show last few meaningful lines
 echo ""
 echo "=== Recent logs ==="
 echo "$LOGS" | tail -15
-REMOTE
+'
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  EC2 deploy complete!${NC}"
+echo -e "${GREEN}  Deploy complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "  Minecraft:  ${EC2_IP}:25565"
-echo "  MindServer: http://${EC2_IP}:8080"
-echo "  Grafana:    http://${EC2_IP}:3004"
+if $IS_EC2; then
+    EC2_IP=$(curl -sf -m 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "this-host")
+fi
+echo "  Minecraft:  ${EC2_IP:-localhost}:25565"
+echo "  MindServer: http://${EC2_IP:-localhost}:8080"
+echo "  Grafana:    http://${EC2_IP:-localhost}:3004"
 echo ""
-echo "  SSH:    ssh ${SSH_OPTS} ${EC2_USER}@${EC2_IP}"
-echo "  Logs:   ssh ... 'docker compose -f /app/docker-compose.aws.yml logs -f mindcraft'"
+echo "  Logs: docker compose -f /app/docker-compose.aws.yml logs -f mindcraft"
 echo ""
