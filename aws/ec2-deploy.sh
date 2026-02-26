@@ -153,8 +153,16 @@ ENV
 chmod 600 "${APP_DIR}/.env"
 info ".env written."
 
-# ── Step 4: Start containers ──────────────────────────────────────────────────
-step "4. Start containers"
+# ── Step 4: Ollama proxy (Tailscale → local GPU) ─────────────────────────────
+step "4. Set up Ollama proxy"
+if [[ -f "${APP_DIR}/aws/setup-ollama-proxy.sh" ]]; then
+    bash "${APP_DIR}/aws/setup-ollama-proxy.sh" || warn "Ollama proxy setup had issues (non-fatal)."
+else
+    warn "setup-ollama-proxy.sh not found — skipping."
+fi
+
+# ── Step 5: Start containers ──────────────────────────────────────────────────
+step "5. Start containers"
 cd "$APP_DIR"
 
 # Install npm deps into a named volume if node_modules doesn't exist yet
@@ -170,8 +178,8 @@ fi
 docker compose -f "$COMPOSE_FILE" pull --ignore-pull-failures 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" up -d --build
 
-# ── Step 5: Install backup cron ───────────────────────────────────────────────
-step "5. Install backup cron"
+# ── Step 6: Install backup cron ───────────────────────────────────────────────
+step "6. Install backup cron"
 if [[ -f "${APP_DIR}/aws-cron.tab" ]]; then
     crontab "${APP_DIR}/aws-cron.tab" 2>/dev/null \
         || sudo crontab -u ubuntu "${APP_DIR}/aws-cron.tab" 2>/dev/null \

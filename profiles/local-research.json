@@ -3,7 +3,7 @@
     "model": {
         "api": "ollama",
         "model": "sweaterdog/andy-4",
-        "url": "http://100.122.190.4:11434"
+        "url": "http://127.0.0.1:11435"
     },
     "cooldown": 1500,
     "embedding": {
