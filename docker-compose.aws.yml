@@ -208,7 +208,7 @@ services:
     hostname: mindcraft-ec2
     environment:
       TS_AUTHKEY: "${TAILSCALE_AUTHKEY}"
-      TS_EXTRA_ARGS: "--advertise-tags=tag:mindcraft"
+      TS_EXTRA_ARGS: ""
       TS_STATE_DIR: /var/lib/tailscale
     volumes:
       - tailscale-state:/var/lib/tailscale
