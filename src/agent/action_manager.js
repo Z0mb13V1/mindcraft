@@ -80,6 +80,21 @@ export class ActionManager {
                 }
             }
             this.last_action_time = Date.now();
+
+            // Detect slow repeating action patterns (e.g. craftRecipe→searchForBlock→goToPlayer loop)
+            if (!this._actionHistory) this._actionHistory = [];
+            this._actionHistory.push(actionLabel);
+            if (this._actionHistory.length > 12) this._actionHistory.shift();
+            if (this._actionHistory.length >= 6) {
+                const last3 = this._actionHistory.slice(-3).join(',');
+                const prev3 = this._actionHistory.slice(-6, -3).join(',');
+                if (last3 === prev3) {
+                    console.warn(`[ActionManager] Slow loop detected: "${last3}" repeated. Cancelling resume.`);
+                    this.cancelResume();
+                    this._actionHistory = [];
+                    return { success: false, message: `Action loop detected (${last3}). Stopping to avoid infinite loop.`, interrupted: true, timedout: false };
+                }
+            }
             console.log('executing code...\n');
 
             // await current action to finish (executing=false), with 10 seconds timeout
