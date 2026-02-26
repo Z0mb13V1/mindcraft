@@ -50,8 +50,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 1536M
 
   # ── Discord Bot ───────────────────────────────────────────────────────────
   discord-bot:
