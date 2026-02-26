@@ -8,7 +8,14 @@ export class VisionInterpreter {
         this.allow_vision = allow_vision;
         this.fp = './bots/'+agent.name+'/screenshots/';
         if (allow_vision) {
-            this.camera = new Camera(agent.bot, this.fp);
+            try {
+                this.camera = new Camera(agent.bot, this.fp);
+            } catch (err) {
+                console.warn(`[Vision] Camera init failed (WebGL not available): ${err.message}`);
+                console.warn('[Vision] Vision disabled — bots will continue without screenshot capability.');
+                this.allow_vision = false;
+                this.camera = null;
+            }
         }
     }
 
