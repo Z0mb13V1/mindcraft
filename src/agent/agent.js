@@ -333,8 +333,10 @@ export class Agent {
             if (lower === 'stop' || lower === 'freeze' || lower === 'stop!' || lower === 'freeze!') {
                 console.log(`[STOP] ${source} triggered "${lower}" on ${this.name}`);
                 await this.actions.stop();
+                this.actions.cancelResume(); // prevent idle event from restarting previous action
+                if (this.self_prompter.isActive()) this.self_prompter.stop(false);
+                this.routeResponse(source, `*${this.name} stopped.*`); // send confirmation before shut_up
                 this.shut_up = true;
-                this.routeResponse(source, `*${this.name} stopped.*`);
                 return true;
             }
         }
