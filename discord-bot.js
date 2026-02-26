@@ -703,7 +703,14 @@ client.on('messageCreate', async (message) => {
                     await message.channel.sendTyping();
 
                     if (!arg || arg.toLowerCase() === 'all') {
+                        let replied = false;
+                        const timeout = setTimeout(async () => {
+                            if (!replied) { replied = true; await message.reply('⏱️ Usage request timed out. Agents may be busy.'); }
+                        }, 10000);
                         mindServerSocket.emit('get-all-usage', async (results) => {
+                            if (replied) return;
+                            replied = true;
+                            clearTimeout(timeout);
                             if (!results || Object.keys(results).length === 0) {
                                 await message.reply('No usage data available. Are any agents in-game?');
                                 return;
@@ -722,7 +729,14 @@ client.on('messageCreate', async (message) => {
                         const { agents: usageTargets } = resolveAgents(arg);
                         const target = usageTargets[0];
                         if (!target) { await message.reply(`Agent "${arg}" not found.`); return; }
+                        let replied = false;
+                        const timeout = setTimeout(async () => {
+                            if (!replied) { replied = true; await message.reply('⏱️ Usage request timed out.'); }
+                        }, 10000);
                         mindServerSocket.emit('get-agent-usage', target, async (response) => {
+                            if (replied) return;
+                            replied = true;
+                            clearTimeout(timeout);
                             if (response.error) { await message.reply(`Error: ${response.error}`); return; }
                             if (!response.usage) { await message.reply(`No usage data for **${target}**.`); return; }
                             const reply = '**API Usage Report**\n' + formatAgentUsage(target, response.usage);

@@ -11,8 +11,11 @@ const COST_TABLE = {
     'gemini-2.5-flash': { input: 0.15, output: 0.60 },
     'gemini-embedding-001': { input: 0.00, output: 0.00 },
     // xAI Grok
+    'grok-4-1-fast-non-reasoning': { input: 0.20, output: 0.50 },
+    'grok-4-1-fast': { input: 0.20, output: 0.50 },
+    'grok-code-fast-1': { input: 0.20, output: 1.50 },
     'grok-3-mini-latest': { input: 0.30, output: 0.50 },
-    'grok-code-fast-1': { input: 0.10, output: 0.30 },
+    'grok-2-vision-1212': { input: 2.00, output: 10.00 },
     // Ollama (local) — free
     '_ollama_default': { input: 0.00, output: 0.00 },
     // vLLM (local) — free
