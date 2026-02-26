@@ -41,6 +41,7 @@ class AgentConnection {
         this.in_game = false;
         this.full_state = null;
         this.viewer_port = viewer_port;
+        this.loginTime = null;
     }
     setSettings(settings) {
         this.settings = settings;
@@ -55,6 +56,7 @@ export function registerAgent(settings, viewer_port) {
 export function logoutAgent(agentName) {
     if (agent_connections[agentName]) {
         agent_connections[agentName].in_game = false;
+        agent_connections[agentName].loginTime = null;
         agentsStatusUpdate();
     }
 }
@@ -133,6 +135,7 @@ export function createMindServer(host_public = false, port = 8080) {
             if (agent_connections[agentName]) {
                 agent_connections[agentName].socket = socket;
                 agent_connections[agentName].in_game = true;
+                agent_connections[agentName].loginTime = Date.now();
                 curAgentName = agentName;
                 agentsStatusUpdate();
             }
@@ -145,6 +148,7 @@ export function createMindServer(host_public = false, port = 8080) {
             if (agent_connections[curAgentName]) {
                 console.log(`Agent ${curAgentName} disconnected`);
                 agent_connections[curAgentName].in_game = false;
+                agent_connections[curAgentName].loginTime = null;
                 agent_connections[curAgentName].socket = null;
                 agentsStatusUpdate();
             }
@@ -322,10 +326,11 @@ function agentsStatusUpdate(socket) {
     for (let agentName in agent_connections) {
         const conn = agent_connections[agentName];
         agents.push({
-            name: agentName, 
+            name: agentName,
             in_game: conn.in_game,
             viewerPort: conn.viewer_port,
-            socket_connected: !!conn.socket
+            socket_connected: !!conn.socket,
+            loginTime: conn.loginTime || null
         });
     };
     socket.emit('agents-status', agents);

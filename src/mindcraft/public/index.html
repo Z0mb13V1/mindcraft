@@ -306,6 +306,134 @@
             border-top: 1px solid #3a3a3a;
         }
         .footer-left { color: #cccccc; font-style: italic; }
+
+        /* ── HUD: Runtime Badge ── */
+        .runtime-badge {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            color: #4CAF50;
+            background: #111;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid #4CAF5080;
+            margin-left: 8px;
+            letter-spacing: 1.5px;
+        }
+        .runtime-badge.offline {
+            color: #555;
+            border-color: #333;
+        }
+
+        /* ── HUD: Task/Goal Display ── */
+        .hud-task-panel {
+            background: #1e1e2e;
+            border-left: 3px solid #7c4dff;
+            padding: 8px 12px;
+            border-radius: 0 6px 6px 0;
+            margin: 4px 0;
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .hud-task-section {
+            flex: 1;
+            min-width: 180px;
+        }
+        .hud-task-label {
+            font-size: 0.7em;
+            text-transform: uppercase;
+            color: #666;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+        .hud-task-value {
+            color: #e0e0e0;
+            font-size: 0.9em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .hud-task-value.inactive {
+            color: #555;
+            font-style: italic;
+        }
+        .sp-state-badge {
+            font-size: 0.65em;
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: bold;
+        }
+        .sp-state-badge.active {
+            background: #1b5e20;
+            color: #66bb6a;
+        }
+        .sp-state-badge.paused {
+            background: #4a3800;
+            color: #f0ad4e;
+        }
+        .sp-state-badge.stopped {
+            background: #2a2a2a;
+            color: #555;
+        }
+
+        /* ── HUD: Command Log ── */
+        .hud-log-section {
+            grid-column: 1 / -1;
+            margin-top: 4px;
+        }
+        .hud-log-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .hud-log-title {
+            font-size: 0.75em;
+            text-transform: uppercase;
+            color: #666;
+            letter-spacing: 0.5px;
+        }
+        .hud-log-clear {
+            font-size: 0.7em;
+            color: #555;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        .hud-log-clear:hover { color: #f44336; }
+        .hud-log {
+            background: #0a0a0f;
+            border: 1px solid #222;
+            border-radius: 4px;
+            padding: 6px 8px;
+            max-height: 180px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.78em;
+            line-height: 1.5;
+            color: #888;
+        }
+        .hud-log::-webkit-scrollbar { width: 5px; }
+        .hud-log::-webkit-scrollbar-track { background: #0a0a0f; }
+        .hud-log::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 3px;
+        }
+        .hud-log .log-entry {
+            padding: 1px 0;
+        }
+        .hud-log .log-time {
+            color: #444;
+            margin-right: 6px;
+        }
+        .hud-log .log-entry.action { color: #4fc3f7; }
+        .hud-log .log-entry.chat { color: #aed581; }
+        .hud-log .log-entry.system { color: #ffab40; }
     </style>
 </head>
 <body>
@@ -385,6 +513,77 @@
         const agentLastMessage = {};
         const inventoryOpen = {};
         let currentAgents = [];
+
+        // ── HUD State ──
+        const agentLoginTimes = {};
+        const commandLogs = {};
+        const commandLogOpen = {};
+        const lastActionLabel = {};
+        const MAX_LOG_ENTRIES = 100;
+
+        function formatRuntime(loginTime) {
+            if (!loginTime) return '--:--';
+            const elapsed = Math.max(0, Math.floor((Date.now() - loginTime) / 1000));
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
+            return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function addCommandLogEntry(name, type, text) {
+            if (!commandLogs[name]) commandLogs[name] = [];
+            const now = new Date();
+            const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+            commandLogs[name].push({ time: timeStr, type, text });
+            if (commandLogs[name].length > MAX_LOG_ENTRIES) commandLogs[name].shift();
+            const logEl = document.getElementById('hudLog-' + name);
+            if (logEl) {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry ' + type;
+                entry.innerHTML = '<span class="log-time">' + timeStr + '</span>' + escapeHtml(text);
+                logEl.appendChild(entry);
+                while (logEl.children.length > MAX_LOG_ENTRIES) logEl.removeChild(logEl.firstChild);
+                const nearBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 50;
+                if (nearBottom) logEl.scrollTop = logEl.scrollHeight;
+            }
+        }
+
+        function renderLogEntries(name) {
+            return (commandLogs[name] || []).map(e =>
+                '<div class="log-entry ' + e.type + '"><span class="log-time">' + e.time + '</span>' + escapeHtml(e.text) + '</div>'
+            ).join('');
+        }
+
+        function clearCommandLog(name) {
+            commandLogs[name] = [];
+            const logEl = document.getElementById('hudLog-' + name);
+            if (logEl) logEl.innerHTML = '';
+        }
+        window.clearCommandLog = clearCommandLog;
+
+        function toggleCommandLog(name) {
+            const section = document.getElementById('hudLogSection-' + name);
+            if (!section) return;
+            const visible = section.style.display !== 'none';
+            section.style.display = visible ? 'none' : '';
+            commandLogOpen[name] = !visible;
+        }
+        window.toggleCommandLog = toggleCommandLog;
+
+        // 1Hz runtime badge ticker
+        setInterval(() => {
+            for (const name in agentLoginTimes) {
+                const el = document.getElementById('runtime-' + name);
+                if (el && agentLoginTimes[name]) {
+                    el.textContent = formatRuntime(agentLoginTimes[name]);
+                }
+            }
+        }, 1000);
 
         const statusEl = document.getElementById('msStatus');
         function updateStatus(connected) {
@@ -537,6 +736,7 @@
             if (messageDiv) {
                 messageDiv.textContent = message;
             }
+            addCommandLogEntry(agentName, 'chat', message);
         });
 
         // Subscribe to aggregated state updates (re-sent on each connect)
@@ -590,6 +790,50 @@
                     }
                     if (actionEl && st.action) {
                         actionEl.textContent = `${st.action.current || 'Idle'}`;
+                    }
+                    // ── HUD: Task/Goal Display ──
+                    if (st.selfPrompter) {
+                        const sp = st.selfPrompter;
+                        const stateNames = ['stopped', 'active', 'paused'];
+                        const stateName = stateNames[sp.state] || 'stopped';
+                        const spStateEl = document.getElementById('spState-' + name);
+                        const spPromptEl = document.getElementById('spPrompt-' + name);
+                        if (spStateEl) {
+                            spStateEl.textContent = stateName;
+                            spStateEl.className = 'sp-state-badge ' + stateName;
+                        }
+                        if (spPromptEl) {
+                            if (sp.prompt && sp.state !== 0) {
+                                spPromptEl.textContent = sp.prompt;
+                                spPromptEl.classList.remove('inactive');
+                            } else {
+                                spPromptEl.textContent = 'No active goal';
+                                spPromptEl.classList.add('inactive');
+                            }
+                        }
+                    }
+                    const resumeEl = document.getElementById('resume-' + name);
+                    if (resumeEl && st.action) {
+                        if (st.action.resumeName) {
+                            resumeEl.textContent = st.action.resumeName;
+                            resumeEl.classList.remove('inactive');
+                        } else {
+                            resumeEl.textContent = 'None queued';
+                            resumeEl.classList.add('inactive');
+                        }
+                    }
+                    // ── HUD: Command Log — detect action transitions ──
+                    if (st.action) {
+                        const prev = lastActionLabel[name] || '';
+                        const cur = st.action.current || 'Idle';
+                        if (cur !== prev) {
+                            lastActionLabel[name] = cur;
+                            if (cur !== 'Idle') {
+                                addCommandLogEntry(name, 'action', cur);
+                            } else if (prev && prev !== 'Idle') {
+                                addCommandLogEntry(name, 'system', prev + ' completed');
+                            }
+                        }
                     }
                     if (invGrid && st.inventory?.counts) {
                         const counts = st.inventory.counts;
@@ -758,18 +1002,34 @@
             const lastMessage = agentLastMessage[agent.name] || '';
             const invOpen = inventoryOpen[agent.name] === true;
             const invStyle = invOpen ? '' : 'display:none;';
+            const logOpen = commandLogOpen[agent.name] !== false;
+            const logStyle = logOpen ? '' : 'display:none;';
+            const runtimeStr = agent.in_game ? formatRuntime(agent.loginTime) : '--:--';
+            const runtimeClass = agent.in_game ? 'runtime-badge' : 'runtime-badge offline';
             return `
                     <div class="agent" id="agent-${agent.name}">
                         <div class="agent-grid">
                             <div class="cell title" style="grid-column: 1 / -1; display:flex; align-items:center; justify-content:space-between;">
                                 <span><span class="status-icon ${agent.in_game ? 'online' : 'offline'}">●</span>${agent.name}${agent.socket_connected && !agent.in_game ? '<span style="margin-left:6px;color:#f0ad4e;">joining...</span>' : ''}
+                                    <span class="${runtimeClass}" id="runtime-${agent.name}">${runtimeStr}</span>
                                     <button class="gear-btn" title="Settings" onclick="openAgentSettings('${agent.name}')">⚙</button>
                                     <button class="gear-btn" title="Inventory" onclick="toggleDetails('${agent.name}')">Inventory</button>
+                                    <button class="gear-btn" title="Command Log" onclick="toggleCommandLog('${agent.name}')">Log</button>
                                 </span>
                             </div>
                             ${showViewer ? `<div class="cell" style="grid-row: span 3; padding:0;">${viewerHTML}</div>` : ''}
                             <div class="cell" id="action-${agent.name}">action: -</div>
                             <div class="cell" id="mode-${agent.name}">gamemode: -</div>
+                            <div class="hud-task-panel">
+                                <div class="hud-task-section">
+                                    <div class="hud-task-label">Current Goal <span class="sp-state-badge stopped" id="spState-${agent.name}">stopped</span></div>
+                                    <div class="hud-task-value inactive" id="spPrompt-${agent.name}">No active goal</div>
+                                </div>
+                                <div class="hud-task-section" style="flex:0 0 auto; min-width:160px;">
+                                    <div class="hud-task-label">Next Action</div>
+                                    <div class="hud-task-value inactive" id="resume-${agent.name}">None queued</div>
+                                </div>
+                            </div>
                             <div class="cell" id="health-${agent.name}">health: -</div>
                             <div class="cell" id="hunger-${agent.name}">hunger: -</div>
                             <div class="cell" id="pos-${agent.name}">pos: -</div>
@@ -782,6 +1042,13 @@
                                 <div class="inventory-grid" id="inventory-${agent.name}"></div>
                             </div>
                             <div id="lastMessage-${agent.name}" class="last-message" style="grid-column: 1 / -1;"><strong>Last Message:</strong> ${lastMessage}</div>
+                            <div class="hud-log-section" id="hudLogSection-${agent.name}" style="${logStyle}">
+                                <div class="hud-log-header">
+                                    <span class="hud-log-title">Command Log</span>
+                                    <button class="hud-log-clear" onclick="clearCommandLog('${agent.name}')">clear</button>
+                                </div>
+                                <div class="hud-log" id="hudLog-${agent.name}">${renderLogEntries(agent.name)}</div>
+                            </div>
                         </div>
                         <div class="controls-row">
                             <button class="start-btn" id="sendBtn-${agent.name}" disabled onclick="sendMessage('${agent.name}', document.getElementById('messageInput-${agent.name}').value)">Send</button>
@@ -868,6 +1135,11 @@
 
             // Update current agents list
             currentAgents = agents;
+
+            // Track login times for runtime badge
+            agents.forEach(a => {
+                agentLoginTimes[a.name] = (a.in_game && a.loginTime) ? a.loginTime : null;
+            });
 
             // If agentsDiv is empty, do a full render
             if (!agentsDiv.children.length) {
