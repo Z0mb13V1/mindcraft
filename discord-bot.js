@@ -152,45 +152,31 @@ const messageLimiter = new RateLimiter(5, 60000);  // 5 messages per 60 seconds 
 // ── Help Text ───────────────────────────────────────────────
 const HELP_TEXT = `**MindcraftBot -- Command Center**
 
-**Talk to agents:**
-Just type a message and it goes to ALL active bots.
-Prefix with a name/alias to target one: \`andy: go mine diamonds\`
+**Chat with bots:**
+Just type a message — goes to ALL active bots.
+Target one bot: \`andy: go mine diamonds\` or \`cg: come here\`
 
-**Aliases:**
-\`cloud\` / \`cg\` / \`grok\` = CloudGrok
-\`local\` / \`la\` / \`andy\` = LocalAndy
+**Aliases:** \`cloud\` / \`cg\` / \`grok\` = CloudGrok | \`local\` / \`la\` / \`andy\` = LocalAndy
+**Groups:** \`all\`, \`cloud\`, \`local\`, \`research\` | Comma-separate: \`!stop cg, andy\`
 
-**Commands:**
-\`!help\` -- Show this message
-\`!status\` -- MindServer connection + agent overview
-\`!agents\` -- List all agents with status
-\`!stats [agent]\` -- Live gameplay stats (health, hunger, position, biome)
-\`!inv [agent]\` -- Inventory and equipment
-\`!nearby [agent]\` -- Nearby players, bots, and entities
-\`!viewer\` -- Bot camera view links (prismarine-viewer)
-\`!mode [cloud|local|hybrid] [profile]\` -- View or switch compute mode
-\`!usage [agent|all]\` -- Show API usage stats and costs
-\`!ping\` -- Pong
-\`!reconnect\` -- Reconnect to MindServer
-\`!start <name|alias|group>\` -- Start agent(s)
-\`!stop [name|group]\` -- Stop agent process (default: all)
-\`!freeze [name|group]\` -- Freeze bot in-game (stops actions instantly)
-\`!restart <name|alias|group>\` -- Restart agent(s)
-\`!startall\` -- Start all agents
-\`!stopall\` -- Stop all agents
+**Monitoring:**
+\`!status\` — Overview with health, hunger, position
+\`!stats [bot]\` — Detailed gameplay stats (biome, weather, action)
+\`!inv [bot]\` — Inventory contents and equipped gear
+\`!nearby [bot]\` — Nearby players, bots, and mobs
+\`!viewer\` — Bot camera view links (first-person POV)
+\`!usage [bot|all]\` — API costs and token usage
 
-!ui | !local | !mindserver -- View MindServer backup UI (http://localhost:8080)
+**Controls:**
+\`!start <bot|group>\` — Start bot(s)
+\`!stop [bot|group]\` — Stop bot process (default: all)
+\`!restart <bot|group>\` — Restart bot(s)
+\`!freeze [bot|group]\` — Instant in-game freeze (no LLM)
 
-**Groups:** \`all\`, \`cloud\`, \`local\`, \`research\`
-You can also comma-separate: \`!stop CloudGrok, LocalAndy\`
-
-**What can I do?**
-- Send chat messages to one or all agents
-- Use aliases: \`andy: mine\` or \`cg: come here\`
-- Command agents (mine, build, explore, etc.)
-- Monitor agent output and responses live
-- Start/stop/restart agents by name, alias, or group
-- Switch between cloud/local/hybrid compute modes`;
+**System:**
+\`!mode [cloud|local|hybrid]\` — View or switch compute mode
+\`!reconnect\` — Reconnect to MindServer
+\`!ping\` — Pong`;
 
 // ── MindServer Connection ───────────────────────────────────
 function connectToMindServer() {
