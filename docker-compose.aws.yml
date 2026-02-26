@@ -222,21 +222,8 @@ services:
           cpus: "0.10"
           memory: 64M
 
-  # ── ViaProxy (optional — connect older Minecraft clients) ─────────────────
-  viaproxy:
-    image: ghcr.io/viaversion/viaproxy:latest
-    volumes:
-      - ./services/viaproxy:/app/run
-    ports:
-      - "25568:25568"
-    stdin_open: true
-    tty: true
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "0.25"
-          memory: 256M
+  # viaproxy disabled — needs >256MB JVM heap, not enough RAM on t3.large
+  # To re-enable: uncomment and set memory limit to 512M
 
 volumes:
   grafana-data:
