@@ -32,7 +32,7 @@ services:
     container_name: mindcraft-agents
     environment:
       PROFILES: '["./profiles/cloud-persistent.json"]'
-      SETTINGS_JSON: '{"auto_open_ui": false, "host": "minecraft-server"}'
+      SETTINGS_JSON: '{"auto_open_ui": false, "host": "minecraft-server", "mindserver_host_public": true}'
       CHROMADB_URL: "http://chromadb:8000"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       XAI_API_KEY: "${XAI_API_KEY}"
