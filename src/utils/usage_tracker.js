@@ -64,6 +64,8 @@ export class UsageTracker {
         } catch (err) {
             this.data = this._defaultData();
         }
+        // Clear any existing interval to prevent double-timer leak
+        if (this._saveInterval) clearInterval(this._saveInterval);
         this._saveInterval = setInterval(() => {
             if (this._dirty) this.saveSync();
         }, 30_000);
@@ -126,8 +128,11 @@ export class UsageTracker {
         this.data.last_call = new Date().toISOString();
         this._dirty = true;
 
-        // Rolling window for RPM/TPM
+        // Rolling window for RPM/TPM (cap at 1000 entries to prevent unbounded growth)
         this._recentCalls.push({ timestamp: Date.now(), tokens: tt });
+        if (this._recentCalls.length > 1000) {
+            this._cleanRollingWindow();
+        }
     }
 
     _cleanRollingWindow() {

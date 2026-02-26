@@ -52,9 +52,16 @@ export class FeedbackCollector {
 
     async recordDecision(decision) {
         if (!this._ready || !this._embedFn) return;
+
+        // Hoist variables so the catch block can access them for retry
+        let id = null;
+        let cleanEmb = null;
+        let text = '';
+        let meta = null;
+
         try {
             const { winner, proposals, situationText } = decision;
-            const text = situationText || '';
+            text = situationText || '';
             if (text.trim().length < 5) return;
 
             const embedding = await this._embedFn(text.slice(0, 512));
@@ -63,7 +70,7 @@ export class FeedbackCollector {
                 return;
             }
             // Ensure all values are numbers
-            const cleanEmb = embedding.map(v => Number(v));
+            cleanEmb = embedding.map(v => Number(v));
             if (cleanEmb.some(v => !isFinite(v))) {
                 console.warn('[Feedback] Embedding contains non-finite values, skipping');
                 return;
@@ -71,14 +78,14 @@ export class FeedbackCollector {
 
             this._decisionCount++;
             const ts = Date.now();
-            const id = 'dec_' + ts + '_' + this._decisionCount;
+            id = 'dec_' + ts + '_' + this._decisionCount;
             this._lastDecisionId = id;
 
             const successful = proposals.filter(p => p.status === 'success');
             const rawCmd = winner.command;
             const rawScore = winner.score;
 
-            const meta = {
+            meta = {
                 winner_id: String(winner.agentId || 'unknown'),
                 winner_command: (rawCmd && typeof rawCmd === 'string') ? rawCmd : '',
                 winner_score: (typeof rawScore === 'number' && isFinite(rawScore)) ? rawScore : 0,

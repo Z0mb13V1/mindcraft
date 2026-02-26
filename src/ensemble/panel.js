@@ -86,10 +86,11 @@ export class Panel {
      */
     async _queryMember(member, turns, systemMessage) {
         const startTime = Date.now();
+        let timer = null;
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('timeout')), this.timeoutMs)
-        );
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('timeout')), this.timeoutMs);
+        });
 
         try {
             const response = await Promise.race([
@@ -97,6 +98,7 @@ export class Panel {
                 timeoutPromise
             ]);
 
+            clearTimeout(timer);
             const latencyMs = Date.now() - startTime;
             const responseStr = typeof response === 'string' ? response : String(response || '');
             const command = containsCommand(responseStr);
@@ -124,6 +126,7 @@ export class Panel {
                 usage: member.model._lastUsage || null
             };
         } catch (err) {
+            clearTimeout(timer);
             const latencyMs = Date.now() - startTime;
             const isTimeout = err.message === 'timeout';
 

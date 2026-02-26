@@ -29,6 +29,8 @@ export class Prompter {
             base_fp = './profiles/defaults/creative.json';
         } else if (settings.base_profile.includes('god_mode')) {
             base_fp = './profiles/defaults/god_mode.json';
+        } else {
+            base_fp = './profiles/defaults/survival.json'; // safe fallback
         }
         let base_profile = JSON.parse(readFileSync(base_fp, 'utf8'));
 
@@ -117,12 +119,11 @@ export class Prompter {
         }
 
         mkdirSync(`./bots/${name}`, { recursive: true });
-        writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4), (err) => {
-            if (err) {
-                throw new Error('Failed to save profile:', err);
-            }
-            console.log("Copy profile saved.");
-        });
+        try {
+            writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4));
+        } catch (err) {
+            console.error('Failed to save profile:', err.message);
+        }
 
         this.usageTracker = new UsageTracker(name);
     }
@@ -308,15 +309,18 @@ export class Prompter {
             return '```//no response```';
         }
         this.awaiting_coding = true;
-        await this.checkCooldown();
-        let prompt = this.profile.coding;
-        prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
+        try {
+            await this.checkCooldown();
+            let prompt = this.profile.coding;
+            prompt = await this.replaceStrings(prompt, messages, this.coding_examples);
 
-        let resp = await this.code_model.sendRequest(messages, prompt);
-        this._recordUsage(this.code_model, 'code');
-        this.awaiting_coding = false;
-        await this._saveLog(prompt, messages, resp, 'coding');
-        return resp;
+            let resp = await this.code_model.sendRequest(messages, prompt);
+            this._recordUsage(this.code_model, 'code');
+            await this._saveLog(prompt, messages, resp, 'coding');
+            return resp;
+        } finally {
+            this.awaiting_coding = false;
+        }
     }
 
     async promptMemSaving(to_summarize) {

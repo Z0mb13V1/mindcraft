@@ -1,4 +1,5 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFile, readFile, mkdir } from 'fs/promises';
+import { existsSync } from 'fs';
 import path from 'path';
 
 const MAX_ENTRIES = 500;
@@ -11,12 +12,12 @@ export class EnsembleLogger {
         this.filePath = path.join(this.dir, 'ensemble_log.json');
         this.decisionCount = 0;
 
-        if (!existsSync(this.dir)) {
-            mkdirSync(this.dir, { recursive: true });
-        }
+        this._ready = !existsSync(this.dir)
+            ? mkdir(this.dir, { recursive: true })
+            : Promise.resolve();
     }
 
-    logDecision(allProposals, winner) {
+    async logDecision(allProposals, winner) {
         this.decisionCount++;
 
         const successful = allProposals.filter(p => p.status === 'success');
@@ -51,7 +52,8 @@ export class EnsembleLogger {
             panel_agreement: Math.round(agreement * 100) / 100
         };
 
-        let log = this._readLog();
+        await this._ready;
+        let log = await this._readLog();
         log.push(entry);
 
         if (log.length > MAX_ENTRIES) {
@@ -59,14 +61,14 @@ export class EnsembleLogger {
         }
 
         try {
-            writeFileSync(this.filePath, JSON.stringify(log, null, 2));
+            await writeFile(this.filePath, JSON.stringify(log, null, 2));
         } catch (err) {
             console.error(`[Ensemble] Failed to write log: ${err.message}`);
         }
     }
 
-    getStats() {
-        const log = this._readLog();
+    async getStats() {
+        const log = await this._readLog();
         const wins = {};
         let totalLatency = 0;
         let latencyCount = 0;
@@ -90,13 +92,12 @@ export class EnsembleLogger {
         };
     }
 
-    _readLog() {
+    async _readLog() {
         try {
-            if (existsSync(this.filePath)) {
-                return JSON.parse(readFileSync(this.filePath, 'utf8'));
-            }
+            const raw = await readFile(this.filePath, 'utf8');
+            return JSON.parse(raw);
         } catch {
-            // corrupted file — start fresh
+            // file missing or corrupted — start fresh
         }
         return [];
     }

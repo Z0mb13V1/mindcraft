@@ -1,5 +1,59 @@
-.vscode
-node_modules
+# ── Secrets & credentials ─────────────────────────────────────
+.env
+.env.*
+keys.json
+passwords.txt
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+.credentials
+aws/config.env
+
+# ── Git & IDE ─────────────────────────────────────────────────
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# ── Docs & scripts (not needed at runtime) ───────────────────
+*.ps1
+*.bat
+LICENSE
+FAQ.md
+
+# ── Docker / CI files ────────────────────────────────────────
+docker-compose*.yml
+Tasks.Dockerfile
+.dockerignore
+prometheus*.yml
+litellm-config.yaml
+grafana-provisioning/
+
+# ── Data & logs (mounted as volumes instead) ─────────────────
+minecraft-data/
+chromadb-data/
 bots/*/
 !bots/*
-keys.json
+node_modules/
+tmp/
+wandb/
+experiments/
+server_data/
+results/
+
+# ── Build artifacts & temp files ─────────────────────────────
+tmpclaude-*
+nul
+*.bak
+.test-async-io.json
+scratch.js
+
+# ── Sensitive report files ───────────────────────────────────
+SECURITY-INCIDENT-REPORT.md
+SECURITY-SUMMARY.txt
+COMPLETION-STATUS.txt
+ACTION-ITEMS.md
+PHASE2-VERIFICATION.txt
+MAINTENANCE.md

@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 
 let keys = {};
 let keysLoaded = false;
+const _warnedKeys = new Set();
 
 // Try to load keys.json only if it exists, but prefer environment variables
 function loadKeysFile() {
@@ -27,7 +28,10 @@ export function getKey(name) {
     loadKeysFile();
     key = keys[name];
     if (key) {
-        console.warn(`⚠️  Using key from keys.json for "${name}". Migrate to environment variables.`);
+        if (!_warnedKeys.has(name)) {
+            _warnedKeys.add(name);
+            console.warn(`\u26A0\uFE0F  Using key from keys.json for "${name}". Migrate to environment variables.`);
+        }
         return key;
     }
 

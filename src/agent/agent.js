@@ -156,7 +156,7 @@ export class Agent {
 
             } catch (error) {
                 console.error('Error in spawn event:', error);
-                process.exit(0);
+                process.exit(1);
             }
         });
     }
@@ -540,9 +540,7 @@ export class Agent {
             prev_health = this.bot.health;
         });
         // Logging callbacks
-        this.bot.on('error' , (err) => {
-            console.error('Error event!', err);
-        });
+        // Note: 'error' is already handled by initBot() login guard — no duplicate needed
         // Use connection handler for runtime disconnects
         this.bot.on('end', (reason) => {
             if (!this._disconnectHandled) {

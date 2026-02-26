@@ -26,7 +26,7 @@ param(
 
 $ErrorActionPreference = 'Continue'
 
-$RepoPath = 'C:\Users\Tyler\Desktop\AI\minecraft ai bot\Mindcraft\mindcraft-0.1.3'
+$RepoPath = $PSScriptRoot  # Use script's own directory instead of hardcoded path
 
 # ── Navigate to repo ──────────────────────────────────────────────────────────
 

@@ -73,8 +73,13 @@ export class LLMJudge {
 
             // Parse: extract first matching agent ID from the response
             const validIds = proposals.map(p => p.agentId);
+            const trimmedResult = result.trim();
+            // Try exact match first (model responded with just the ID)
+            if (validIds.includes(trimmedResult)) return trimmedResult;
+            // Fall back to word-boundary regex match
             for (const id of validIds) {
-                if (result.includes(id)) return id;
+                const pattern = new RegExp(`\\b${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+                if (pattern.test(result)) return id;
             }
 
             console.warn(`[Judge] Could not parse agent ID from response: "${result.slice(0, 100)}"`);

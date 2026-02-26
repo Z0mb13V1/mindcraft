@@ -51,6 +51,20 @@ src/mindcraft-py/__pycache__/
 tmpclaude-*
 nul
 
+# Sensitive docs (contain API keys, channel IDs, internal notes)
+SECURITY-INCIDENT-REPORT.md
+SECURITY-SUMMARY.txt
+COMPLETION-STATUS.txt
+ACTION-ITEMS.md
+PHASE2-VERIFICATION.txt
+MAINTENANCE.md
+discord-bot.js.bak
+.test-async-io.json
+
+# AWS / Docker runtime
+aws/config.env
+docker-compose.override.yml
+
 # Minecraft server data (synced with NAS)
 minecraft-data/
 sync-log.txt
