@@ -2,8 +2,16 @@
     "name": "LocalAndy",
     "model": {
         "api": "ollama",
-        "model": "sweaterdog/andy-4",
-        "url": "http://127.0.0.1:11435"
+        "model": "sweaterdog/andy-4:micro-q8_0",
+        "url": "http://127.0.0.1:11435",
+        "params": {
+            "options": {
+                "num_ctx": 4096,
+                "num_predict": 256,
+                "num_gpu": 99,
+                "temperature": 0.5
+            }
+        }
     },
     "cooldown": 1500,
     "embedding": {
