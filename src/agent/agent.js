@@ -71,7 +71,7 @@ export class Agent {
             taskStart = Date.now();
         }
         this.task = new Task(this, settings.task, taskStart);
-        this.blocked_actions = settings.blocked_actions.concat(this.task.blocked_actions || []);
+        this.blocked_actions = settings.blocked_actions.concat(this.task.blocked_actions || []).concat(this.prompter.profile.blocked_actions || []);
         blacklistCommands(this.blocked_actions);
 
         console.log(this.name, 'logging into minecraft...');
