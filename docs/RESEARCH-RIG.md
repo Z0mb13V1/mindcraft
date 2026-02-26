@@ -240,6 +240,29 @@ Options:
 | `survival_score` | 1 - (deaths / total messages) |
 | `cost_per_command` | API cost efficiency ($/command) |
 | `deaths` | Total death events detected |
+| `tokens_per_decision` | Average tokens consumed per ensemble decision |
+| `efficiency_score` | (commands * survival%) / cost — overall value metric |
+
+**Output formats**: `summary.json`, `summary.txt`, `metrics.csv` (one row per bot, spreadsheet-ready)
+
+### A/B Testing
+
+Run multiple trials across model variants with automatic world restore between runs:
+
+```powershell
+$variants = @(
+    @{ Name = "andy-4-local";   Mode = "local"; Profile = "local-research.json" },
+    @{ Name = "gemini-cloud";   Mode = "cloud"; Profile = "cloud-persistent.json" }
+)
+.\experiments\run-ab-test.ps1 `
+    -TestName "local-vs-cloud" `
+    -Variants $variants `
+    -TrialsPerVariant 5 `
+    -DurationMinutes 15 `
+    -Goal "Collect 64 wood logs"
+```
+
+Outputs: comparison table with mean +/- stddev per metric, `results.csv`, `comparison.csv`, `full-results.json`. Discord webhook notifications for each completed trial.
 
 ### World Snapshots
 
@@ -390,6 +413,8 @@ mindcraft-0.1.3/
 ├── start.ps1                    # Main launcher (local/cloud/both/stop/status)
 ├── full-hybrid-setup.ps1        # One-time master setup (8 checks)
 ├── setup-litellm.ps1            # Ollama + LiteLLM installer
+├── deploy-to-aws.ps1            # One-command EC2 deployment
+├── tailscale-setup.ps1          # Tailscale VPN automation (Windows 11)
 ├── docker-compose.yml           # All services with Compose profiles
 ├── .env                         # API keys + config (gitignored)
 ├── keys.json                    # Alternative API key storage (gitignored)
@@ -409,11 +434,13 @@ mindcraft-0.1.3/
 ├── experiments/
 │   ├── new-experiment.ps1       # Create experiment directory
 │   ├── start-experiment.ps1     # Run experiment (snapshot → launch → collect)
+│   ├── run-ab-test.ps1          # Multi-variant A/B testing with stats
 │   ├── backup-world.ps1         # World backup via RCON
 │   ├── restore-world.ps1        # World restore
-│   └── analyze.ps1              # Parse logs → research metrics
+│   └── analyze.ps1              # Parse logs → research metrics + CSV
 ├── docs/
 │   ├── RESEARCH-RIG.md          # This file
+│   ├── PRODUCTION-DEPLOYMENT.md # EC2/hybrid deployment guide
 │   └── TAILSCALE.md             # VPN setup for EC2 connectivity
 └── bots/                        # Runtime bot data (gitignored)
     ├── LocalResearch_1/

@@ -355,10 +355,65 @@ $lines += "TOTALS: ${grandK}K tokens | $grandCalls calls | `$$([Math]::Round($gr
 $summaryTxtPath = Join-Path $resultsDir "summary.txt"
 $lines | Set-Content -Path $summaryTxtPath -Encoding UTF8
 
+# ── CSV export (one row per bot) ─────────────────────────────────────────────
+
+$csvRows = @()
+foreach ($botName in $allBots) {
+    $ens  = $ensembleSummaries[$botName]
+    $use  = $usageSummaries[$botName]
+    $conv = $conversationMetrics[$botName]
+    $rs   = $researchScores[$botName]
+
+    $row = [ordered]@{
+        experiment      = $meta.id
+        bot             = $botName
+        mode            = $meta.mode
+        duration_min    = $meta.duration_minutes
+        goal            = if ($meta.goal) { $meta.goal } else { "" }
+        # Ensemble
+        decisions       = if ($ens) { $ens.total_decisions } else { 0 }
+        avg_latency_ms  = if ($ens) { $ens.avg_latency_ms } else { "" }
+        p50_latency_ms  = if ($ens) { $ens.p50_latency_ms } else { "" }
+        p99_latency_ms  = if ($ens) { $ens.p99_latency_ms } else { "" }
+        agreement_pct   = if ($ens) { $ens.avg_agreement_pct } else { "" }
+        judge_overrides = if ($ens) { $ens.judge_overrides } else { "" }
+        # Usage
+        total_tokens    = if ($use) { $use.total_tokens } else { 0 }
+        total_calls     = if ($use) { $use.total_calls } else { 0 }
+        cost_usd        = if ($use) { $use.estimated_cost_usd } else { 0 }
+        # Conversation
+        total_messages  = if ($conv) { $conv.total_messages } else { 0 }
+        total_commands  = if ($conv) { $conv.total_commands } else { 0 }
+        total_errors    = if ($conv) { $conv.total_errors } else { 0 }
+        # Research scores
+        cmds_per_min    = if ($rs) { $rs.commands_per_minute } else { 0 }
+        error_rate_pct  = if ($rs) { $rs.error_rate_pct } else { 0 }
+        cmd_diversity   = if ($rs) { $rs.command_diversity } else { 0 }
+        coord_score     = if ($rs) { $rs.coordination_score } else { 0 }
+        survival_score  = if ($rs) { $rs.survival_score } else { 0 }
+        deaths          = if ($rs) { $rs.deaths } else { 0 }
+        cost_per_cmd    = if ($rs) { $rs.cost_per_command } else { "" }
+        # Derived: tokens per decision
+        tokens_per_decision = if ($ens -and $ens.total_decisions -gt 0 -and $use) {
+            [Math]::Round($use.total_tokens / $ens.total_decisions, 0)
+        } else { "" }
+        # Derived: overall efficiency (commands * survival / max(cost, 0.001))
+        efficiency_score = if ($rs -and $conv -and $conv.total_commands -gt 0) {
+            $costVal = if ($use -and $use.estimated_cost_usd -gt 0) { $use.estimated_cost_usd } else { 0.001 }
+            [Math]::Round(($conv.total_commands * $rs.survival_score / 100) / $costVal, 1)
+        } else { 0 }
+    }
+    $csvRows += [PSCustomObject]$row
+}
+
+$csvPath = Join-Path $resultsDir "metrics.csv"
+$csvRows | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
+
 Write-Host ""
 Write-Host "  Results: $resultsDir" -ForegroundColor Green
-Write-Host "    summary.json  (structured data for further analysis)" -ForegroundColor DarkGray
-Write-Host "    summary.txt   (human-readable report)" -ForegroundColor DarkGray
+Write-Host "    summary.json   (structured data)" -ForegroundColor DarkGray
+Write-Host "    summary.txt    (human-readable report)" -ForegroundColor DarkGray
+Write-Host "    metrics.csv    (spreadsheet-ready, one row per bot)" -ForegroundColor DarkGray
 Write-Host ""
 
 if ($Open) { Start-Process "notepad.exe" -ArgumentList $summaryTxtPath }

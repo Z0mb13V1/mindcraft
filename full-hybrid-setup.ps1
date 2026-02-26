@@ -217,8 +217,13 @@ if ($fail -eq 0) {
     Write-Host "    Bot Camera:     http://localhost:3000/" -ForegroundColor DarkGray
     Write-Host "    Minecraft:      localhost:25565" -ForegroundColor DarkGray
     Write-Host ""
+    Write-Host "  Optional next steps:" -ForegroundColor DarkGray
+    Write-Host "    .\tailscale-setup.ps1           # Connect to EC2 via Tailscale" -ForegroundColor DarkGray
+    Write-Host "    .\deploy-to-aws.ps1             # Deploy cloud bot to AWS EC2" -ForegroundColor DarkGray
+    Write-Host ""
 } else {
     Write-Host ""
-    Write-Host "  Fix the failures above before launching." -ForegroundColor Red
+    Write-Host "  Fix the $fail failure(s) above before launching." -ForegroundColor Red
+    Write-Host "  Re-run: .\full-hybrid-setup.ps1" -ForegroundColor Red
     Write-Host ""
 }

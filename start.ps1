@@ -180,8 +180,8 @@ if ($Mode -in @("local", "both") -and -not $NoOllama) {
         $ollamaCmd = Get-Command ollama -ErrorAction SilentlyContinue
         if ($ollamaCmd) {
             Start-Process "ollama" -ArgumentList "serve" -WindowStyle Hidden
-            # Wait with progress dots
-            for ($i = 0; $i -lt 8; $i++) {
+            # Wait up to 30s for Ollama to become healthy (first start can be slow)
+            for ($i = 0; $i -lt 30; $i++) {
                 Start-Sleep -Seconds 1
                 Write-Host "." -NoNewline -ForegroundColor DarkGray
                 try {
@@ -194,7 +194,7 @@ if ($Mode -in @("local", "both") -and -not $NoOllama) {
             if ($ollamaReady) {
                 Write-OK "Ollama started successfully."
             } else {
-                Write-Fail "Ollama still not responding. Run '.\setup-litellm.ps1' first."
+                Write-Fail "Ollama still not responding after 30s. Run '.\setup-litellm.ps1' first."
                 Write-Fail "Or use -NoOllama to skip this check."
                 exit 1
             }
@@ -288,6 +288,12 @@ Write-Host ""
 
 $startTime = Get-Date
 & docker @composeArgs
+
+if ($LASTEXITCODE -ne 0 -and -not $Detach) {
+    Write-Fail "docker compose exited with code $LASTEXITCODE"
+    Write-Info "Check logs: docker compose logs --tail 50"
+    exit $LASTEXITCODE
+}
 
 if ($LASTEXITCODE -eq 0 -and $Detach) {
     $elapsed = [Math]::Round(((Get-Date) - $startTime).TotalSeconds)
