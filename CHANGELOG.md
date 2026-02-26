@@ -4,12 +4,78 @@ All notable changes to this project will be documented here.
 
 ---
 
-## [Unreleased]
+## [0.1.3-local.5] - 2026-02-26
 
-> **Workflow:** Add entries here as changes are made.
-> When committing, move entries to a new versioned
-> section `[0.1.3-local.N] - YYYY-MM-DD` and bump
-> the patch number.
+### Added
+
+- **`aws/ec2-go.sh`** — one-command deploy script
+  that auto-detects local vs remote execution.
+  Supports `--build`, `--secrets`, `--full` flags.
+  IMDSv2 support with hostname fallback detection
+  (`6981138`)
+- **LiteLLM proxy** — unified OpenAI-compatible
+  gateway (port 4000) with config for Gemini, Grok,
+  Claude, Ollama models. Added to both docker-compose
+  files (`7d30447`)
+- **Tailscale VPN sidecar** — connects EC2 to local
+  RTX 3090 via Tailscale. Socat proxy on EC2 bridges
+  `localhost:11435` → Tailscale → `100.122.190.4:11434`
+- **Experiment framework** — `experiments/` directory
+  with `snapshot.sh`, `analyze.sh`, `compare.sh` for
+  A/B testing bot configurations
+- **Dual bot profiles** —
+  `profiles/cloud-persistent.json` (CloudGrok, Gemini
+  ensemble) and `profiles/local-research.json`
+  (LocalAndy, Ollama andy-4) (`1422258`)
+- `docs/mac-workflow.md` — MacBook Pro operational
+  guide (daily commands, API key rotation, monitoring)
+- `docs/hud-checklist.md` — HUD overlay verification
+  checklist (visual elements, socket.io events, tests)
+- `.env.example` updated with infrastructure vars:
+  `EC2_PUBLIC_IP`, `TAILSCALE_AUTHKEY`,
+  `LITELLM_MASTER_KEY`, `GITHUB_TOKEN`, `PUBLIC_HOST`
+
+### Changed
+
+- Bot names finalized: CloudGrok (cloud ensemble) +
+  LocalAndy (Ollama via Tailscale) (`1422258`)
+- `settings.js`: `deepSanitize()` for SETTINGS_JSON,
+  empty `init_message`, `max_commands: 15`
+- `discord-bot.js`: replaced hardcoded EC2 IP with
+  `process.env.PUBLIC_HOST` (`445c383`)
+- `aws/setup-ollama-proxy.sh`: parameterized
+  Tailscale IP with `OLLAMA_TAILSCALE_IP` env var
+- `rig-go.ps1`: replaced hardcoded EC2 IP with
+  `.env` / env var lookup (`e87448b`)
+- `aws/deploy.sh`: added SSM params for Gemini, XAI,
+  Anthropic, Tailscale, LiteLLM, EC2 IP, GitHub token
+
+### Fixed
+
+- **Dockerfile build break** — removed references to
+  deleted `requirements.txt` (lines 36-37). File was
+  removed in `445c383` but Dockerfile still COPY'd it,
+  breaking CI (`e87448b`)
+- `ec2-go.sh` IMDSv2 detection — EC2 instances with
+  IMDSv2 (token-required) silently rejected metadata
+  curls. Now tries IMDSv2 token first, falls back to
+  IMDSv1, then hostname pattern `ip-*` (`6981138`)
+- Deleted `minecollab.md` and `requirements.txt`
+  (no longer needed) (`445c383`)
+- Cleaned duplicate `LITELLM_MASTER_KEY` and
+  `BACKUP_CHAT_CHANNEL` entries from EC2 `.env`
+
+### Security
+
+- Wiped live API key from `keys.json` (not tracked
+  by git, `.gitignore` working correctly)
+- Removed all hardcoded IPs from tracked files
+- Added `GITHUB_TOKEN` support for private repo
+  pulls on EC2 (`445c383`)
+
+---
+
+## [0.1.3-local.4] - 2026-02-26
 
 ### Added
 

@@ -63,45 +63,72 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybr
 
 ### Running the Hybrid Rig
 
-```powershell
-# One-command launcher (recommended) — starts everything
-.\rig-go.ps1
-```
+**On EC2 (one-command deploy/restart):**
 
 ```bash
-# AWS deployment (both bots + all services)
-docker compose -f docker-compose.aws.yml up --build
-
-# Profiles are set in SETTINGS_JSON env var:
-# PROFILES='["./profiles/cloud-persistent.json", "./profiles/local-research.json"]'
+cd /app && bash aws/ec2-go.sh --full    # Pull code + SSM secrets + rebuild + restart
+cd /app && bash aws/ec2-go.sh           # Quick restart (code pull only)
+cd /app && bash aws/ec2-go.sh --secrets # Refresh API keys from SSM only
 ```
+
+`ec2-go.sh` auto-detects whether it's running on EC2 (local execution) or remotely (SSH wrapper). IMDSv2 supported.
+
+**On Windows PC (one-command launcher):**
+
+```powershell
+.\rig-go.ps1                            # Full flow: pull, validate, launch, logs
+.\rig-go.ps1 -Build                     # Rebuild Docker images first
+.\rig-go.ps1 -SkipPull -NoLogs          # Quick relaunch, no git pull, no log tail
+```
+
+**From Mac (remote deploy):**
+
+```bash
+bash aws/ec2-go.sh                      # SSH into EC2 + deploy (needs .pem)
+```
+
+See [docs/mac-workflow.md](docs/mac-workflow.md) for the full Mac operational guide.
 
 ### Key Features
 
-- **HUD Overlay** — gaming-style dashboard in the MindServer web UI (`:8080`) with per-bot runtime tracker (MM:SS), current goal / next action display with self-prompter state badges, and a scrollable color-coded command log
+- **HUD Overlay** — gaming-style dashboard in the MindServer web UI (`:8080`) with per-bot runtime tracker (MM:SS), current goal / next action display with self-prompter state badges, and a scrollable color-coded command log. See [docs/hud-checklist.md](docs/hud-checklist.md).
 - **Live Bot Cameras** — first-person prismarine-viewer streams embedded as iframes in the web UI (ports 3000+)
 - **Vision enabled** for both bots — Xvfb + Mesa software rendering in Docker with 2s startup delay for WebGL context init
 - **Human message priority** — `requestInterrupt()` fires immediately when a human player speaks
 - **Loop detection** — tracks last 12 actions, cancels on 3-action pattern repeats or 5+ of the same action
 - **Per-profile `blocked_actions`** — LocalAndy blocks `!startConversation` to prevent hallucinated names
 - **Graceful vision fallback** — if WebGL init fails, bots continue without crashing
+- **LiteLLM proxy** — unified OpenAI-compatible gateway for all model providers (port 4000). Config in `litellm-config.yaml`.
+- **Tailscale VPN** — EC2 ↔ local 3090 tunnel for LocalAndy inference. Socat proxy bridges `localhost:11435` → Tailscale → `100.122.190.4:11434`.
+- **`ec2-go.sh`** — one-command deploy script with IMDSv2 support, SSM secret refresh, and auto-detection of local vs remote execution
+- **Experiment framework** — `experiments/` directory with `snapshot.sh`, `analyze.sh`, `compare.sh` for A/B testing bot configurations
 
 ### Security
 
 This fork includes several security hardening measures:
 
 - **Environment variable keys** — API keys loaded from `.env` / env vars (priority over `keys.json`). See `.env.example`.
+- **AWS SSM Parameter Store** — secrets stored encrypted at `/mindcraft/*`, pulled at deploy time via `ec2-go.sh --secrets`
 - **Recursive prototype pollution protection** — `SETTINGS_JSON` sanitized at all nesting depths
 - **Cross-platform path traversal guard** — Discord bot profile paths validated with `path.sep`
 - **Input validation** — message validator with command injection detection, type checks, control char stripping
 - **Rate limiting with auto-cleanup** — prevents abuse and memory leaks from stale entries
-- **Docker non-root user** — container runs as `mindcraft` user, not root
+- **No hardcoded IPs** — EC2 public IP, Tailscale IP, and public hostnames loaded from env vars
 - **ESLint hardening** — `no-unused-vars`, `no-unreachable`, `no-floating-promise` enabled as warnings
 - **Deep audit** — 10 priorities resolved across code, config, Docker, and cleanup (`e5cf8b7a`)
 
 See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Security) for full details.
 
-See the [wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) for full documentation, including architecture diagrams, bot commands, ensemble pipeline details, and troubleshooting guides.
+### Documentation
+
+| Doc | Description |
+| --- | ----------- |
+| [docs/mac-workflow.md](docs/mac-workflow.md) | MacBook Pro operational guide — daily commands, API key rotation, monitoring |
+| [docs/hud-checklist.md](docs/hud-checklist.md) | HUD overlay verification checklist — visual elements, socket.io events, tests |
+| [docs/PRODUCTION-DEPLOYMENT.md](docs/PRODUCTION-DEPLOYMENT.md) | Full EC2 deployment guide |
+| [docs/TAILSCALE.md](docs/TAILSCALE.md) | Tailscale VPN setup for EC2 ↔ local GPU |
+| [docs/RESEARCH-RIG.md](docs/RESEARCH-RIG.md) | Research rig architecture and design |
+| [Wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, troubleshooting |
 
 ---
 
