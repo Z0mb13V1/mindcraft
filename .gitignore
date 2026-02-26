@@ -47,9 +47,18 @@ server_data*
 **/.DS_Store
 src/mindcraft-py/__pycache__/
 
-# Claude Code temp files
+# Claude Code temp files & local settings
 tmpclaude-*
 nul
+.claude/
+
+# Removed / superseded files (prevent re-adding)
+StartAndy.bat
+bot-test.js
+test-phase2.js
+
+# ViaProxy binary cache
+services/viaproxy/viabedrock/blob_cache/
 
 # Sensitive docs (contain API keys, channel IDs, internal notes)
 SECURITY-INCIDENT-REPORT.md
