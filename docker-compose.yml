@@ -121,7 +121,6 @@ services:
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       XAI_API_KEY: "${XAI_API_KEY}"
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY}"
-      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://host.docker.internal:11434}"
       VLLM_BASE_URL: "${VLLM_BASE_URL:-http://host.docker.internal:8000/v1}"
       LITELLM_MASTER_KEY: "${LITELLM_MASTER_KEY:-sk-litellm-dev}"
     extra_hosts:
