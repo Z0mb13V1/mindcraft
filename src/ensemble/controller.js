@@ -13,6 +13,8 @@ import { FeedbackCollector } from './feedback.js';
  * runs an arbiter to pick the best response, and returns the winning string.
  */
 export class EnsembleModel {
+    static prefix = 'ensemble';
+
     /**
      * @param {Object} ensembleConfig - the profile.ensemble configuration block
      * @param {Object} profile - the full bot profile (for context/name)
@@ -37,6 +39,7 @@ export class EnsembleModel {
 
         // Usage tracking compatibility (Prompter reads this after each call)
         this._lastUsage = null;
+        this._lastUsageByModel = null;
 
         console.log(`[Ensemble] Initialized for ${profile.name}: ${this.panel.members.length} panel members`);
     }
@@ -144,6 +147,7 @@ export class EnsembleModel {
 
         // Aggregate usage from all successful members
         this._lastUsage = this._aggregateUsage(successful);
+        this._lastUsageByModel = this._buildUsageBreakdown(successful);
 
         return winner.response;
     }
@@ -169,5 +173,18 @@ export class EnsembleModel {
         }
         if (prompt === 0 && completion === 0) return null;
         return { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion };
+    }
+
+    _buildUsageBreakdown(proposals) {
+        const breakdown = [];
+        for (const p of proposals) {
+            if (!p.usage) continue;
+            breakdown.push({
+                modelName: p.modelName || 'unknown',
+                provider: p.provider || 'unknown',
+                usage: p.usage
+            });
+        }
+        return breakdown.length > 0 ? breakdown : null;
     }
 }

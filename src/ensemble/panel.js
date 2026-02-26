@@ -5,6 +5,7 @@ import { containsCommand } from '../agent/commands/index.js';
  * @typedef {Object} Proposal
  * @property {string} agentId - Panel member ID (e.g., "gemini_a")
  * @property {string} modelName - Model name (e.g., "gemini-2.5-pro")
+ * @property {string} provider - Provider prefix (e.g., "gemini", "xai")
  * @property {string} response - Raw response string from the model
  * @property {string|null} command - Extracted command (e.g., "!attackEntity") or null
  * @property {string} preCommandText - Text before the first command
@@ -112,13 +113,15 @@ export class Panel {
             return {
                 agentId: member.id,
                 modelName: member.modelName,
+                provider: member.model.constructor?.prefix || 'unknown',
                 response: responseStr,
                 command: command,
                 preCommandText: preCommandText,
                 latencyMs: latencyMs,
                 status: 'success',
                 error: null,
-                score: null
+                score: null,
+                usage: member.model._lastUsage || null
             };
         } catch (err) {
             const latencyMs = Date.now() - startTime;

@@ -382,6 +382,16 @@ export class Prompter {
     }
 
     _recordUsage(model, callType) {
+        const breakdown = model._lastUsageByModel || null;
+        if (Array.isArray(breakdown) && breakdown.length > 0) {
+            for (const entry of breakdown) {
+                const modelName = entry.modelName || 'unknown';
+                const provider = entry.provider || 'unknown';
+                const usage = entry.usage || null;
+                this.usageTracker.record(modelName, provider, callType, usage);
+            }
+            return;
+        }
         const usage = model._lastUsage || null;
         const modelName = model.model_name || 'unknown';
         const provider = model.constructor?.prefix || 'unknown';
