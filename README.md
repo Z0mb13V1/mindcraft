@@ -78,6 +78,20 @@ docker compose -f docker-compose.aws.yml up --build
 - **Per-profile `blocked_actions`** — LocalAndy blocks `!startConversation` to prevent hallucinated names
 - **Graceful vision fallback** — if WebGL init fails, bots continue without crashing
 
+### Security
+
+This fork includes several security hardening measures:
+
+- **Environment variable keys** — API keys loaded from `.env` / env vars (priority over `keys.json`). See `.env.example`.
+- **Recursive prototype pollution protection** — `SETTINGS_JSON` sanitized at all nesting depths
+- **Cross-platform path traversal guard** — Discord bot profile paths validated with `path.sep`
+- **Input validation** — message validator with command injection detection, type checks, control char stripping
+- **Rate limiting with auto-cleanup** — prevents abuse and memory leaks from stale entries
+- **Docker non-root user** — container runs as `mindcraft` user, not root
+- **ESLint hardening** — `no-unused-vars`, `no-unreachable`, `no-floating-promise` enabled as warnings
+
+See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Security) for full details.
+
 See the [wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) for full documentation.
 
 ---
@@ -101,7 +115,9 @@ See the [wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) for full docume
 
 2. Download the [latest release](https://github.com/mindcraft-bots/mindcraft/releases/latest) and unzip it, or clone the repository.
 
-3. Rename `keys.example.json` to `keys.json` and fill in your API keys (you only need one). The desired model is set in `andy.json` or other profiles. For other models refer to the table below.
+3. Set up your API keys (you only need one provider):
+   - **Recommended:** Copy `.env.example` to `.env` and fill in your keys. Environment variables take priority.
+   - **Legacy:** Rename `keys.example.json` to `keys.json` and fill in your keys. *(Less secure — migrate to `.env` when possible.)*
 
 4. In terminal/command prompt, run `npm install` from the installed directory
 
