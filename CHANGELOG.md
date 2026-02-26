@@ -9,12 +9,24 @@ All notable changes to this project will be documented here.
 > **Workflow:** Add entries here as changes are made. When committing, move entries to a new
 > versioned section `[0.1.3-local.N] - YYYY-MM-DD` and bump the patch number.
 
+### Added
+
+- `rig-go.ps1` — one-command launcher that starts the full hybrid rig (Minecraft server, bots, Discord bot, monitoring) (`bfbbc03d`)
+- **GitHub Wiki** — 10 comprehensive pages: Architecture, Ensemble Bot, Security, Compute Modes, Bot Configuration, Bot Commands, Discord Bot, CI/CD Pipeline, Setup & Installation, Troubleshooting
+
+### Changed
+
+- Deep audit fixes across code, config, Docker, and cleanup — 10 priorities resolved (`e5cf8b7a`)
+- Repo cleanup: removed 6 unnecessary tracked files (stale scripts, temp artifacts) (`67161dcd`)
+- Security section added to README with 7 hardening bullet points (`4625b6c4`)
+
 ### Fixed
 
 - `grok.js`: null guard on `res` before `.replace()` — API can return null content, causing TypeError crash
 - `gemini.js` `sendVisionRequest`: used `generationConfig:` (old v0.x SDK field) instead of `config:` (v1.x SDK) — now consistent with `sendRequest`
 - `discord-bot.js` HELP_TEXT: hardcoded old agent name `gemini:` updated to `Gemini_1:`
 - `AVAILABLE-MODELS.md`: Current Configuration section had stale profile names and wrong Grok model (`grok-beta` → `grok-code-fast-1`)
+- Resolved all markdownlint warnings across README, wiki pages, and PSScriptAnalyzer warnings in PowerShell scripts (`1aee8110`)
 
 ---
 

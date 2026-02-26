@@ -63,6 +63,11 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybr
 
 ### Running the Hybrid Rig
 
+```powershell
+# One-command launcher (recommended) — starts everything
+.\rig-go.ps1
+```
+
 ```bash
 # AWS deployment (both bots + all services)
 docker compose -f docker-compose.aws.yml up --build
@@ -90,10 +95,11 @@ This fork includes several security hardening measures:
 - **Rate limiting with auto-cleanup** — prevents abuse and memory leaks from stale entries
 - **Docker non-root user** — container runs as `mindcraft` user, not root
 - **ESLint hardening** — `no-unused-vars`, `no-unreachable`, `no-floating-promise` enabled as warnings
+- **Deep audit** — 10 priorities resolved across code, config, Docker, and cleanup (`e5cf8b7a`)
 
 See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Security) for full details.
 
-See the [wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) for full documentation.
+See the [wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) for full documentation, including architecture diagrams, bot commands, ensemble pipeline details, and troubleshooting guides.
 
 ---
 
