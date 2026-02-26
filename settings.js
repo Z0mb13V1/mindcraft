@@ -23,7 +23,7 @@ const settings = {
     ],
 
     "load_memory": true, // load memory from previous session
-    "init_message": "Say hello and introduce yourself by name.", // sends to all on spawn
+    "init_message": "", // empty = use hardcoded "Hello world! I am [name]" (bypasses LLM, avoids andy-4 hallucination)
     "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
 
     "speak": false,
