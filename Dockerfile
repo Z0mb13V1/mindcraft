@@ -41,4 +41,11 @@ COPY . .
 # Run tests during build
 RUN npm test
 
+# Create non-root user for runtime security
+RUN groupadd --gid 1001 mindcraft && \
+    useradd --uid 1001 --gid mindcraft --shell /bin/bash --create-home mindcraft && \
+    chown -R mindcraft:mindcraft /app
+
+USER mindcraft
+
 CMD ["npm", "start"]

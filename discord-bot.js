@@ -3,7 +3,7 @@ import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { io } from 'socket.io-client';
 import { readFile, writeFile } from 'fs/promises';
 import { readFileSync, writeFileSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { validateDiscordMessage } from './src/utils/message_validator.js';
 import { RateLimiter } from './src/utils/rate_limiter.js';
@@ -37,7 +37,7 @@ function safeProfilePath(name) {
     const filePath = join(PROFILES_DIR, `${name}.json`);
     const resolvedDir = resolve(PROFILES_DIR);
     const resolvedFile = resolve(filePath);
-    if (!resolvedFile.startsWith(resolvedDir + '/')) {
+    if (!resolvedFile.startsWith(resolvedDir + sep)) {
         throw new Error(`Path traversal detected for profile: "${name}"`);
     }
     return filePath;

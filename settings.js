@@ -56,14 +56,28 @@ const settings = {
 
 };
 
+/**
+ * Recursively strips prototype-polluting keys from an object.
+ * Prevents __proto__, constructor, and prototype injection at any depth.
+ */
+function deepSanitize(obj) {
+    const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(item => deepSanitize(item));
+    const sanitized = {};
+    for (const [key, value] of Object.entries(obj)) {
+        if (BLOCKED_KEYS.has(key)) continue;
+        sanitized[key] = (typeof value === 'object' && value !== null)
+            ? deepSanitize(value)
+            : value;
+    }
+    return sanitized;
+}
+
 if (process.env.SETTINGS_JSON) {
     try {
         const parsed = JSON.parse(process.env.SETTINGS_JSON);
-        // Strip prototype-polluting keys before merging
-        const BLOCKED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-        const safe = Object.fromEntries(
-            Object.entries(parsed).filter(([k]) => !BLOCKED_KEYS.has(k))
-        );
+        const safe = deepSanitize(parsed);
         Object.assign(settings, safe);
     } catch (err) {
         console.error("Failed to parse SETTINGS_JSON:", err);
