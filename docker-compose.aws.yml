@@ -70,6 +70,7 @@ services:
       BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
       DISCORD_ADMIN_IDS: "${DISCORD_ADMIN_IDS}"
       MINDSERVER_HOST: "host.docker.internal"
+      PUBLIC_HOST: "${EC2_PUBLIC_IP}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

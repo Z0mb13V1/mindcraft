@@ -19,7 +19,7 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-OLLAMA_REMOTE="100.122.190.4:11434"
+OLLAMA_REMOTE="${OLLAMA_TAILSCALE_IP:-100.122.190.4}:11434"
 PROXY_PORT="11435"
 SERVICE_NAME="ollama-proxy"
 

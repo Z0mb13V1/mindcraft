@@ -808,7 +808,7 @@ client.on('messageCreate', async (message) => {
                     const lines = [];
                     for (const agent of knownAgents) {
                         if (agent.viewerPort) {
-                            lines.push(`**${agent.name}**: http://54.152.239.117:${agent.viewerPort}`);
+                            lines.push(`**${agent.name}**: http://${process.env.PUBLIC_HOST || 'localhost'}:${agent.viewerPort}`);
                         }
                     }
                     await message.reply(lines.length > 0
