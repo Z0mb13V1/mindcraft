@@ -42,8 +42,17 @@ for arg in "$@"; do
 done
 
 # ── Detect: are we ON EC2 or remote? ─────────────────────────────────────────
+# Check 3 ways: IMDSv2 (token-based), IMDSv1, or hostname pattern ip-*
 IS_EC2=false
-if curl -sf -m 2 http://169.254.169.254/latest/meta-data/instance-id >/dev/null 2>&1; then
+IMDS_TOKEN=$(curl -sf -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
+if [[ -n "$IMDS_TOKEN" ]]; then
+    # IMDSv2 works
+    IS_EC2=true
+elif curl -sf -m 2 http://169.254.169.254/latest/meta-data/instance-id >/dev/null 2>&1; then
+    # IMDSv1 fallback
+    IS_EC2=true
+elif hostname | grep -q '^ip-'; then
+    # EC2 default hostname pattern (ip-10-0-1-107 etc.)
     IS_EC2=true
 fi
 
@@ -94,8 +103,13 @@ if $DO_SECRETS; then
     step "2/4 Pull Secrets from SSM"
     run_cmd '
 cd /app
-REGION=$(curl -sf -m 5 http://169.254.169.254/latest/meta-data/placement/region)
-if [ -z "$REGION" ]; then echo "[ERROR] Cannot get AWS region from metadata"; exit 1; fi
+TOKEN=$(curl -sf -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
+if [ -n "$TOKEN" ]; then
+    REGION=$(curl -sf -m 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+else
+    REGION=$(curl -sf -m 5 http://169.254.169.254/latest/meta-data/placement/region)
+fi
+if [ -z "$REGION" ]; then REGION="us-east-1"; echo "[WARN] Metadata unavailable, defaulting to us-east-1"; fi
 
 get_param() {
     aws ssm get-parameter \
@@ -200,7 +214,12 @@ echo -e "${GREEN}  Deploy complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 if $IS_EC2; then
-    EC2_IP=$(curl -sf -m 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "this-host")
+    TOKEN=$(curl -sf -m 2 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
+    if [[ -n "$TOKEN" ]]; then
+        EC2_IP=$(curl -sf -m 2 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "this-host")
+    else
+        EC2_IP=$(curl -sf -m 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "this-host")
+    fi
 fi
 echo "  Minecraft:  ${EC2_IP:-localhost}:25565"
 echo "  MindServer: http://${EC2_IP:-localhost}:8080"
