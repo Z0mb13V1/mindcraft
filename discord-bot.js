@@ -549,6 +549,7 @@ client.on('messageCreate', async (message) => {
                     const { agents: startTargets } = resolveAgents(arg);
                     for (const name of startTargets) mindServerSocket.emit('start-agent', name);
                     await message.reply(`▶️ Starting **${startTargets.join(', ')}**...`);
+                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
                     return;
                 }
 
@@ -559,6 +560,7 @@ client.on('messageCreate', async (message) => {
                     const { agents: stopTargets } = resolveAgents(arg);
                     for (const name of stopTargets) mindServerSocket.emit('stop-agent', name);
                     await message.reply(`⏹️ Stopping **${stopTargets.join(', ')}**...`);
+                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
                     return;
                 }
 
@@ -569,6 +571,7 @@ client.on('messageCreate', async (message) => {
                     const { agents: restartTargets } = resolveAgents(arg);
                     for (const name of restartTargets) mindServerSocket.emit('restart-agent', name);
                     await message.reply(`🔄 Restarting **${restartTargets.join(', ')}**...`);
+                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 8000);
                     return;
                 }
 
@@ -577,6 +580,7 @@ client.on('messageCreate', async (message) => {
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     for (const name of BOT_GROUPS.all) mindServerSocket.emit('start-agent', name);
                     await message.reply(`▶️ Starting all agents: **${BOT_GROUPS.all.join(', ')}**...`);
+                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
                     return;
 
                 case '!stopall':
@@ -584,6 +588,7 @@ client.on('messageCreate', async (message) => {
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     mindServerSocket.emit('stop-all-agents');
                     await message.reply('⏹️ Stopping all agents...');
+                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
                     return;
 
                 case '!mode': {
