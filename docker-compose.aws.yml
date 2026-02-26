@@ -30,21 +30,17 @@ services:
   mindcraft:
     build: .
     container_name: mindcraft-agents
+    network_mode: host
     environment:
       PROFILES: '["./profiles/cloud-persistent.json", "./profiles/local-research.json"]'
-      SETTINGS_JSON: '{"auto_open_ui": false, "host": "minecraft-server", "mindserver_host_public": true}'
-      CHROMADB_URL: "http://chromadb:8000"
+      SETTINGS_JSON: '{"auto_open_ui": false, "host": "localhost", "mindserver_host_public": true}'
+      CHROMADB_URL: "http://localhost:8000"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
       XAI_API_KEY: "${XAI_API_KEY}"
     volumes:
       - ./settings.js:/app/settings.js
       - ./profiles:/app/profiles
       - ./bots:/app/bots
-    ports:
-      - "3000-3003:3000-3003"
-      - "8080:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       - minecraft
       - chromadb
@@ -82,6 +78,8 @@ services:
   chromadb:
     image: chromadb/chroma:0.5.20
     container_name: chromadb
+    ports:
+      - "8000:8000"
     volumes:
       - ./chromadb-data:/chroma/chroma
     restart: unless-stopped
