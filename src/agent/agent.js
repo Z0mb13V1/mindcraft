@@ -339,6 +339,11 @@ export class Agent {
             }
         }
 
+        // Human player messages take absolute priority — interrupt any ongoing action immediately
+        if (!self_prompt && !from_other_bot && !this.isIdle()) {
+            this.requestInterrupt();
+        }
+
         if (!self_prompt && !from_other_bot) { // from user, check for forced commands
             const user_command_name = containsCommand(message);
             if (user_command_name) {
