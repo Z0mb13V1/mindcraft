@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 -->
 # 🧠mindcraft⛏️
 
 [![CI/CD Pipeline](https://github.com/Z0mb13V1/mindcraft-0.1.3/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Z0mb13V1/mindcraft-0.1.3/actions/workflows/ci-cd.yml)
@@ -27,14 +28,14 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybr
 ### Active Bots
 
 | Bot | Model | Vision | Role |
-|-----|-------|--------|------|
+| --- | ----- | ------ | ---- |
 | **CloudGrok** | 4-model ensemble (Gemini + Grok panel) | `grok-2-vision-1212` | Persistent survival bot — base maintenance, resource gathering, building |
 | **LocalAndy** | `sweaterdog/andy-4` via Ollama (RTX 3090) | `gemini-2.5-flash` | Research & exploration bot — biome exploration, strategy testing |
 
 ### Ensemble Decision Pipeline (CloudGrok)
 
 | Phase | Name | Description |
-|-------|------|-------------|
+| ----- | ---- | ----------- |
 | **1** | Heuristic Arbiter | All 4 panel models queried in parallel; proposals scored on length, completeness, and action quality — highest score wins |
 | **2** | LLM-as-Judge | When top two proposals are within 0.08 margin, Gemini Flash reviews all proposals and picks the winner |
 | **3** | ChromaDB Memory | Before querying the panel, similar past decisions (similarity > 0.6) are retrieved via 3072-dim Gemini embeddings and injected as `[PAST EXPERIENCE]` context |
@@ -42,7 +43,7 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybr
 ### Panel Models (CloudGrok Ensemble)
 
 | Model | Provider | Role |
-|-------|----------|------|
+| ----- | -------- | ---- |
 | `gemini-2.5-pro` | Google | Panel member |
 | `gemini-2.5-flash` | Google | Panel member + LLM Judge |
 | `grok-4-1-fast-non-reasoning` | xAI | Panel member |
@@ -51,7 +52,7 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybr
 ### Infrastructure
 
 | Component | Location |
-|-----------|----------|
+| --------- | -------- |
 | Minecraft server | AWS EC2 (us-east-1) — `ONLINE_MODE=FALSE` |
 | CloudGrok (ensemble bot) | AWS EC2 (us-east-1) — cloud APIs |
 | LocalAndy (Ollama bot) | AWS EC2 (us-east-1) — inference on local RTX 3090 via Tailscale |

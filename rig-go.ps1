@@ -122,7 +122,6 @@ function Send-DiscordWebhook {
     }
     if (-not $url) { return }
     try {
-        $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
         $body = @{
             embeds = @(
                 @{
