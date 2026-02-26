@@ -18,13 +18,20 @@ Do not connect this bot to public servers with coding enabled. This project allo
 
 ---
 
-## This Fork: Ensemble Bot System
+## This Fork: Hybrid Research Rig
 
-This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with an **Ensemble Bot** — a multi-model decision pipeline that queries several LLMs in parallel and selects the best action through a 3-phase arbiter system.
+This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybrid Research Rig** — two AI bots running simultaneously on AWS EC2, combining cloud ensemble intelligence with local GPU inference.
 
 > **Live deployment**: All services run on AWS EC2 via `docker-compose.aws.yml`. See the [Architecture wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Architecture) for full infrastructure diagrams.
 
-### Ensemble Decision Pipeline
+### Active Bots
+
+| Bot | Model | Vision | Role |
+|-----|-------|--------|------|
+| **CloudGrok** | 4-model ensemble (Gemini + Grok panel) | `grok-2-vision-1212` | Persistent survival bot — base maintenance, resource gathering, building |
+| **LocalAndy** | `sweaterdog/andy-4` via Ollama (RTX 3090) | `gemini-2.5-flash` | Research & exploration bot — biome exploration, strategy testing |
+
+### Ensemble Decision Pipeline (CloudGrok)
 
 | Phase | Name | Description |
 |-------|------|-------------|
@@ -32,34 +39,46 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with an **Ens
 | **2** | LLM-as-Judge | When top two proposals are within 0.08 margin, Gemini Flash reviews all proposals and picks the winner |
 | **3** | ChromaDB Memory | Before querying the panel, similar past decisions (similarity > 0.6) are retrieved via 3072-dim Gemini embeddings and injected as `[PAST EXPERIENCE]` context |
 
-### Panel Models
+### Panel Models (CloudGrok Ensemble)
 
 | Model | Provider | Role |
 |-------|----------|------|
 | `gemini-2.5-pro` | Google | Panel member |
-| `grok-code-fast-1` | xAI | Panel member (x2) |
 | `gemini-2.5-flash` | Google | Panel member + LLM Judge |
+| `grok-4-1-fast-non-reasoning` | xAI | Panel member |
+| `grok-code-fast-1` | xAI | Panel member |
 
 ### Infrastructure
 
 | Component | Location |
 |-----------|----------|
 | Minecraft server | AWS EC2 (us-east-1) — `ONLINE_MODE=FALSE` |
-| Ensemble bot (mindcraft) | AWS EC2 (us-east-1) |
+| CloudGrok (ensemble bot) | AWS EC2 (us-east-1) — cloud APIs |
+| LocalAndy (Ollama bot) | AWS EC2 (us-east-1) — inference on local RTX 3090 via Tailscale |
 | ChromaDB vector store | AWS EC2 (us-east-1) |
-| Discord bot | AWS EC2 (us-east-1) |
+| Discord bot | AWS EC2 (us-east-1) — MindcraftBot#9501 |
+| Ollama (inference) | Local Windows PC (RTX 3090) — connected via Tailscale VPN |
+| S3 backup | Daily 3 AM UTC, 7-day retention |
 
-### Running with the Ensemble Profile
+### Running the Hybrid Rig
 
 ```bash
-# AWS deployment
+# AWS deployment (both bots + all services)
 docker compose -f docker-compose.aws.yml up --build
 
-# Or set in settings.js
-profiles: ["./profiles/ensemble.json"]
+# Profiles are set in SETTINGS_JSON env var:
+# PROFILES='["./profiles/cloud-persistent.json", "./profiles/local-research.json"]'
 ```
 
-See [Ensemble Bot wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Ensemble-Bot) for full configuration reference.
+### Key Features
+
+- **Vision enabled** for both bots — `xvfb-run` + Mesa software rendering in Docker (`LIBGL_ALWAYS_SOFTWARE=1`)
+- **Human message priority** — `requestInterrupt()` fires immediately when a human player speaks
+- **Loop detection** — tracks last 12 actions, cancels on 3-action pattern repeats or 5+ of the same action
+- **Per-profile `blocked_actions`** — LocalAndy blocks `!startConversation` to prevent hallucinated names
+- **Graceful vision fallback** — if WebGL init fails, bots continue without crashing
+
+See the [wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) for full documentation.
 
 ---
 
