@@ -504,6 +504,8 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             }
             else {
                 await bot.collectBlock.collect(block);
+                await new Promise(r => setTimeout(r, 500)); // wait for item to register in inventory
+                await pickupNearbyItems(bot);
                 success = true;
             }
             if (success)
