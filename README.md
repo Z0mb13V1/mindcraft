@@ -11,8 +11,7 @@ Crafting minds for Minecraft with LLMs and [Mineflayer](https://prismarinejs.git
 [Video Tutorial](https://www.youtube.com/watch?v=gRotoL8P8D8) |
 [Blog Post](https://kolbynottingham.com/mindcraft/) |
 [Contributor TODO](https://github.com/users/kolbytn/projects/1) |
-[Paper Website](https://mindcraft-minecollab.github.io/index.html) |
-[MineCollab](https://github.com/mindcraft-bots/mindcraft/blob/main/minecollab.md)
+[Paper Website](https://mindcraft-minecollab.github.io/index.html)
 
 > [!Caution]
 Do not connect this bot to public servers with coding enabled. This project allows an LLM to write/execute code on your computer. The code is sandboxed, but still vulnerable to injection attacks. Code writing is disabled by default, you can enable it by setting `allow_insecure_coding` to `true` in `settings.js`. Ye be warned.
@@ -161,7 +160,7 @@ See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Se
 
 6. Run `node main.js` from the installed directory
 
-If you encounter issues, check the [FAQ](https://github.com/mindcraft-bots/mindcraft/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC). We are currently not very responsive to github issues. To run tasks please refer to [Minecollab Instructions](minecollab.md#installation)
+If you encounter issues, check the [FAQ](https://github.com/mindcraft-bots/mindcraft/blob/main/FAQ.md) or find support on [discord](https://discord.gg/mp73p35dzC).
 
 ## Configuration
 
@@ -256,7 +255,7 @@ Here is an example task json format:
 
 The `initial_inventory` is what the bot will have at the start of the episode, `target` refers to the target item and `number_of_target` refers to the number of target items the agent needs to collect to successfully complete the task.
 
-If you want more optimization and automatic launching of the minecraft world, you will need to follow the instructions in [Minecollab Instructions](minecollab.md#installation)
+For more optimization and automatic launching of the minecraft world, see the [Tasks section](https://github.com/mindcraft-bots/mindcraft#tasks) of the base Mindcraft repo.
 
 ## Docker Container
 
