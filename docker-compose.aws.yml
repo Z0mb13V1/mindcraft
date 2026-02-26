@@ -31,7 +31,7 @@ services:
     build: .
     container_name: mindcraft-agents
     network_mode: host
-    command: xvfb-run -a npm start
+    command: sh -c "Xvfb :99 -screen 0 1024x768x24 &>/dev/null & export DISPLAY=:99 && exec node main.js"
     environment:
       PROFILES: '["./profiles/cloud-persistent.json", "./profiles/local-research.json"]'
       SETTINGS_JSON: '{"auto_open_ui": false, "host": "localhost", "mindserver_host_public": true, "allow_vision": true}'
