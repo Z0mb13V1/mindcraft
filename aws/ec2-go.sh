@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# =============================================================================
+# aws/ec2-go.sh — One-command EC2 redeploy from Mac/Linux
+# =============================================================================
+# Usage (from Mac):
+#   bash aws/ec2-go.sh                  # Pull latest code + restart containers
+#   bash aws/ec2-go.sh --build          # Pull + rebuild Docker images
+#   bash aws/ec2-go.sh --secrets        # Re-pull SSM secrets + restart
+#   bash aws/ec2-go.sh --full           # Full: secrets + build + restart
+#
+# Requires: ssh key at ~/.ssh/mindcraft-ec2.pem (or set EC2_KEY_FILE)
+# =============================================================================
+set -euo pipefail
+
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'; NC='\033[0m'
+info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
+error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
+step()  { echo -e "\n${CYAN}=== $* ===${NC}"; }
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+EC2_IP="${EC2_PUBLIC_IP:-54.152.239.117}"
+EC2_KEY="${EC2_KEY_FILE:-$HOME/.ssh/mindcraft-ec2.pem}"
+EC2_USER="ubuntu"
+COMPOSE_FILE="docker-compose.aws.yml"
+
+DO_BUILD=false
+DO_SECRETS=false
+for arg in "$@"; do
+    case "$arg" in
+        --build)   DO_BUILD=true ;;
+        --secrets) DO_SECRETS=true ;;
+        --full)    DO_BUILD=true; DO_SECRETS=true ;;
+        --help|-h)
+            echo "Usage: ec2-go.sh [--build] [--secrets] [--full]"
+            echo "  --build    Rebuild Docker images"
+            echo "  --secrets  Re-pull secrets from SSM to .env and keys.json"
+            echo "  --full     Both --build and --secrets"
+            exit 0 ;;
+        *) warn "Unknown arg: $arg" ;;
+    esac
+done
+
+# ── Validate SSH key ──────────────────────────────────────────────────────────
+if [[ ! -f "$EC2_KEY" ]]; then
+    # Try EC2 Instance Connect as fallback hint
+    error "SSH key not found: ${EC2_KEY}
+  Options:
+    1. Copy your .pem file:  cp /path/to/mindcraft-ec2.pem ~/.ssh/
+    2. Set env var:          export EC2_KEY_FILE=/path/to/key.pem
+    3. Use browser SSH:      EC2 Console → Connect → EC2 Instance Connect"
+fi
+
+SSH_OPTS="-i ${EC2_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+SSH="ssh ${SSH_OPTS} ${EC2_USER}@${EC2_IP}"
+
+# ── Step 1: Test SSH ──────────────────────────────────────────────────────────
+step "1/5 SSH Connectivity"
+if ! $SSH "echo ok" >/dev/null 2>&1; then
+    error "Cannot SSH to ${EC2_IP}. Is the instance running?
+  Check: aws ec2 describe-instances --filters Name=ip-address,Values=${EC2_IP}"
+fi
+info "SSH connected to ${EC2_IP}"
+
+# ── Step 2: Git pull on EC2 ───────────────────────────────────────────────────
+step "2/5 Git Pull"
+$SSH bash -s <<'REMOTE'
+set -euo pipefail
+cd /app
+if [[ -d .git ]]; then
+    git fetch origin main 2>&1 || echo "[WARN] git fetch failed — using local files"
+    git reset --hard origin/main 2>&1 || echo "[WARN] git reset failed"
+    echo "[OK] Code updated from origin/main"
+else
+    echo "[WARN] /app is not a git repo — skipping pull"
+    echo "  To fix: cd /app && git init && git remote add origin https://github.com/Z0mb13V1/mindcraft-0.1.3.git"
+fi
+REMOTE
+
+# ── Step 3: Re-pull secrets from SSM (optional) ──────────────────────────────
+if $DO_SECRETS; then
+    step "3/5 Pull Secrets from SSM"
+    $SSH bash -s <<'REMOTE'
+set -euo pipefail
+cd /app
+REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+
+get_param() {
+    aws ssm get-parameter \
+        --region "$REGION" \
+        --name "/mindcraft/$1" \
+        --with-decryption \
+        --query 'Parameter.Value' \
+        --output text 2>/dev/null || echo ""
+}
+
+echo "Pulling secrets from SSM /mindcraft/*..."
+GEMINI_API_KEY=$(get_param GEMINI_API_KEY)
+XAI_API_KEY=$(get_param XAI_API_KEY)
+ANTHROPIC_API_KEY=$(get_param ANTHROPIC_API_KEY)
+DISCORD_BOT_TOKEN=$(get_param DISCORD_BOT_TOKEN)
+BOT_DM_CHANNEL=$(get_param BOT_DM_CHANNEL)
+BACKUP_CHAT_CHANNEL=$(get_param BACKUP_CHAT_CHANNEL)
+DISCORD_ADMIN_IDS=$(get_param DISCORD_ADMIN_IDS)
+TAILSCALE_AUTHKEY=$(get_param TAILSCALE_AUTHKEY)
+LITELLM_MASTER_KEY=$(get_param LITELLM_MASTER_KEY)
+EC2_PUBLIC_IP=$(get_param EC2_PUBLIC_IP)
+GITHUB_TOKEN=$(get_param GITHUB_TOKEN)
+
+cat > /app/keys.json <<KEYS
+{
+    "OPENAI_API_KEY": "",
+    "OPENAI_ORG_ID": "",
+    "GEMINI_API_KEY": "${GEMINI_API_KEY}",
+    "ANTHROPIC_API_KEY": "${ANTHROPIC_API_KEY}",
+    "REPLICATE_API_KEY": "",
+    "GROQCLOUD_API_KEY": "",
+    "HUGGINGFACE_API_KEY": "",
+    "QWEN_API_KEY": "",
+    "XAI_API_KEY": "${XAI_API_KEY}",
+    "MISTRAL_API_KEY": "",
+    "DEEPSEEK_API_KEY": "",
+    "GHLF_API_KEY": "",
+    "HYPERBOLIC_API_KEY": "",
+    "NOVITA_API_KEY": "",
+    "OPENROUTER_API_KEY": "",
+    "CEREBRAS_API_KEY": "",
+    "MERCURY_API_KEY": "",
+    "DISCORD_BOT_TOKEN": "${DISCORD_BOT_TOKEN}"
+}
+KEYS
+chmod 600 /app/keys.json
+
+cat > /app/.env <<ENV
+DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+BOT_DM_CHANNEL=${BOT_DM_CHANNEL}
+BACKUP_CHAT_CHANNEL=${BACKUP_CHAT_CHANNEL}
+DISCORD_ADMIN_IDS=${DISCORD_ADMIN_IDS}
+GEMINI_API_KEY=${GEMINI_API_KEY}
+XAI_API_KEY=${XAI_API_KEY}
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+TAILSCALE_AUTHKEY=${TAILSCALE_AUTHKEY}
+LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+EC2_PUBLIC_IP=${EC2_PUBLIC_IP}
+GITHUB_TOKEN=${GITHUB_TOKEN}
+ENV
+chmod 600 /app/.env
+
+echo "[OK] keys.json and .env written from SSM"
+REMOTE
+else
+    step "3/5 Secrets (skipped — use --secrets to refresh)"
+fi
+
+# ── Step 4: Docker compose up ─────────────────────────────────────────────────
+step "4/5 Docker Compose"
+BUILD_FLAG=""
+if $DO_BUILD; then
+    BUILD_FLAG="--build"
+    info "Rebuilding Docker images..."
+fi
+
+$SSH bash -s -- "$COMPOSE_FILE" "$BUILD_FLAG" <<'REMOTE'
+set -euo pipefail
+cd /app
+COMPOSE_FILE="$1"
+BUILD_FLAG="$2"
+
+docker compose -f "$COMPOSE_FILE" up -d --force-recreate $BUILD_FLAG 2>&1
+echo ""
+docker compose -f "$COMPOSE_FILE" ps
+REMOTE
+
+# ── Step 5: Verify bots ──────────────────────────────────────────────────────
+step "5/5 Bot Verification"
+info "Waiting 15s for bots to connect..."
+sleep 15
+
+$SSH bash -s <<'REMOTE'
+set -euo pipefail
+cd /app
+LOGS=$(docker compose -f docker-compose.aws.yml logs --tail 30 mindcraft 2>&1)
+
+# Check for bot connections
+for bot in "CloudGrok" "LocalAndy"; do
+    if echo "$LOGS" | grep -q "$bot"; then
+        echo "[OK] $bot appears in logs"
+    else
+        echo "[WARN] $bot not found in recent logs (may still be starting)"
+    fi
+done
+
+# Show last few meaningful lines
+echo ""
+echo "=== Recent logs ==="
+echo "$LOGS" | tail -15
+REMOTE
+
+# ── Done ──────────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}  EC2 deploy complete!${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo ""
+echo "  Minecraft:  ${EC2_IP}:25565"
+echo "  MindServer: http://${EC2_IP}:8080"
+echo "  Grafana:    http://${EC2_IP}:3004"
+echo ""
+echo "  SSH:    ssh ${SSH_OPTS} ${EC2_USER}@${EC2_IP}"
+echo "  Logs:   ssh ... 'docker compose -f /app/docker-compose.aws.yml logs -f mindcraft'"
+echo ""

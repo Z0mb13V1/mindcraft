@@ -62,7 +62,17 @@ $LocalName    = 'LocalAndy'
 $CloudName    = 'CloudGrok'
 $LocalProfile = 'profiles\local-research.json'
 $CloudProfile = 'profiles\cloud-persistent.json'
-$EC2_IP       = '54.152.239.117'                   # For connection info display
+# Load EC2 IP from .env, fall back to env var, then default
+$EC2_IP = $env:EC2_PUBLIC_IP
+if (-not $EC2_IP -and (Test-Path (Join-Path $RepoPath '.env'))) {
+    $ipLine = Get-Content (Join-Path $RepoPath '.env') |
+        Where-Object { $_ -match '^\s*EC2_PUBLIC_IP\s*=' } |
+        Select-Object -First 1
+    if ($ipLine -match '=\s*(.+)\s*$') {
+        $EC2_IP = $Matches[1].Trim().Trim('"').Trim("'")
+    }
+}
+if (-not $EC2_IP) { $EC2_IP = 'your-ec2-ip' }    # Placeholder — set EC2_PUBLIC_IP in .env
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPERS — colored output + counters

@@ -32,10 +32,6 @@ COPY package*.json ./
 COPY patches/ ./patches/
 RUN npm install
 
-# Copy requirements and install Python deps
-COPY requirements.txt ./
-RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
-
 # Copy source code
 COPY . .
 
