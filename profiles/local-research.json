@@ -14,6 +14,10 @@
         }
     },
     "cooldown": 1500,
+    "vision_model": {
+        "api": "google",
+        "model": "gemini-2.5-flash"
+    },
     "embedding": {
         "api": "google",
         "model": "gemini-embedding-001"
