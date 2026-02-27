@@ -459,12 +459,12 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
     for (let i=0; i<num; i++) {
         let blocks = world.getNearestBlocksWhere(bot, block => {
-            if (!blocktypes.includes(block.name)) {
+            if (!block.position || !blocktypes.includes(block.name)) {
                 return false;
             }
             if (exclude) {
                 for (let position of exclude) {
-                    if (block.position.x === position.x && block.position.y === position.y && block.position.z === position.z) {
+                    if (position && block.position.x === position.x && block.position.y === position.y && block.position.z === position.z) {
                         return false;
                     }
                 }
