@@ -107,7 +107,7 @@ docker compose -f docker-compose.aws.yml logs -f mindcraft
 | t3.large | 2 | 8GB | ~$60 | MC + ensemble bot + Discord |
 | t3.xlarge | 4 | 16GB | ~$120 | Everything with headroom |
 
-Recommended: **t3.medium** for CloudPersistent bot (API calls are the bottleneck, not CPU).
+Recommended: **t3.medium** for CloudGrok bot (API calls are the bottleneck, not CPU).
 
 ### Security Group Rules
 
@@ -149,7 +149,7 @@ The most powerful configuration: local RTX 3090 bot + cloud ensemble bot on EC2,
 Desktop (RTX 3090)          Tailscale VPN           AWS EC2 (t3.medium)
 ┌──────────────────┐        ═══════════════        ┌──────────────────┐
 │ Ollama           │                               │ MC Server :25565 │
-│ LocalResearch_1  │────── 100.x.x.x ──────────── │ CloudPersistent_1│
+│ LocalAndy        │────── 100.x.x.x ──────────── │ CloudGrok        │
 │ MindServer :8080 │       (encrypted)             │ Discord Bot      │
 │ Docker           │                               │ ChromaDB         │
 └──────────────────┘                               └──────────────────┘

@@ -44,26 +44,40 @@ function safeProfilePath(name) {
 }
 
 // ── Bot Groups (name → agent names) ─────────────────────────
-// Profile filename → in-game agent name mapping
-const PROFILE_AGENT_MAP = {
-    'cloud-persistent': 'CloudGrok',
-    'local-research':   'LocalAndy',
-};
+// Reads agent names from profile JSON files at startup so the map
+// stays in sync with whatever profiles are configured.
+function loadProfileAgentMap() {
+    const map = {};
+    for (const profileName of ACTIVE_PROFILES) {
+        try {
+            const filePath = safeProfilePath(profileName);
+            const profile = JSON.parse(readFileSync(filePath, 'utf8'));
+            if (profile.name) map[profileName] = profile.name;
+        } catch { /* profile may not exist yet */ }
+    }
+    return map;
+}
+const PROFILE_AGENT_MAP = loadProfileAgentMap();
+const allAgentNames = Object.values(PROFILE_AGENT_MAP);
 const BOT_GROUPS = {
-    all:      ['CloudGrok', 'LocalAndy'],
-    cloud:    ['CloudGrok'],
-    local:    ['LocalAndy'],
-    research: ['LocalAndy', 'CloudGrok'],
+    all:      allAgentNames.length > 0 ? allAgentNames : ['CloudGrok', 'LocalAndy'],
+    cloud:    allAgentNames.filter(n => PROFILE_AGENT_MAP['cloud-persistent'] === n),
+    local:    allAgentNames.filter(n => PROFILE_AGENT_MAP['local-research'] === n),
+    research: allAgentNames.length > 0 ? [...allAgentNames] : ['LocalAndy', 'CloudGrok'],
 };
+console.log('[Boot] Profile→Agent map:', JSON.stringify(PROFILE_AGENT_MAP));
 
 // ── Aliases (shorthand → canonical agent name) ──────────────
+// Build aliases dynamically from discovered names, with static fallbacks
+const cloudAgent = PROFILE_AGENT_MAP['cloud-persistent'] || 'CloudGrok';
+const localAgent = PROFILE_AGENT_MAP['local-research'] || 'LocalAndy';
 const AGENT_ALIASES = {
-    'cloud':    'CloudGrok',
-    'cg':       'CloudGrok',
-    'grok':     'CloudGrok',
-    'local':    'LocalAndy',
-    'la':       'LocalAndy',
-    'andy':     'LocalAndy',
+    'cloud':    cloudAgent,
+    'cg':       cloudAgent,
+    'grok':     cloudAgent,
+    'local':    localAgent,
+    'la':       localAgent,
+    'andy':     localAgent,
 };
 
 /**

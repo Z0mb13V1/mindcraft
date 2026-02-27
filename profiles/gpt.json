@@ -1,7 +1,7 @@
 {
     "name": "gpt",
     "model": {
-        "model": "gpt-5",
+        "model": "gpt-4o",
         "params": {
             "reasoning": {
                 "effort": "low"
@@ -12,7 +12,7 @@
     "_modes": {
         "cloud": {
             "model": {
-                "model": "gpt-5",
+                "model": "gpt-4o",
                 "params": {
                     "reasoning": {
                         "effort": "low"
@@ -35,7 +35,7 @@
         },
         "hybrid": {
             "model": {
-                "model": "gpt-5",
+                "model": "gpt-4o",
                 "params": {
                     "reasoning": {
                         "effort": "low"

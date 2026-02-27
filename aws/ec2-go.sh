@@ -62,7 +62,7 @@ if $IS_EC2; then
     run_cmd() { bash -c "$1"; }
 else
     info "Detected: running remotely — will SSH into EC2"
-    EC2_IP="${EC2_PUBLIC_IP:-54.152.239.117}"
+    EC2_IP="${EC2_PUBLIC_IP:?Set EC2_PUBLIC_IP in .env or environment}"
     EC2_KEY="${EC2_KEY_FILE:-$HOME/.ssh/mindcraft-ec2.pem}"
     EC2_USER="ubuntu"
 

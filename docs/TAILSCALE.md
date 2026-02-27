@@ -100,7 +100,7 @@ The local bot joins the same world via Tailscale:
 .\start.ps1 local -McHost 100.y.y.y
 ```
 
-In Minecraft client, join `100.y.y.y:25565` (or the EC2 public IP `54.152.239.117:25565`)
+In Minecraft client, join `100.y.y.y:25565` (or the EC2 public IP from your `.env` `EC2_PUBLIC_IP:25565`)
 to see both bots in the same world.
 
 ---

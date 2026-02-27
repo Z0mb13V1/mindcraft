@@ -97,7 +97,7 @@ See [docs/mac-workflow.md](docs/mac-workflow.md) for the full Mac operational gu
 - **Loop detection** — tracks last 12 actions, cancels on 3-action pattern repeats or 5+ of the same action
 - **Per-profile `blocked_actions`** — LocalAndy blocks `!startConversation` to prevent hallucinated names
 - **Graceful vision fallback** — if WebGL init fails, bots continue without crashing
-- **LiteLLM proxy** — unified OpenAI-compatible gateway for all model providers (port 4000). Config in `litellm-config.yaml`.
+- **LiteLLM proxy** — unified OpenAI-compatible gateway for all model providers (port 4000). Config in `services/litellm/litellm_config.yaml`.
 - **Tailscale VPN** — EC2 ↔ local 3090 tunnel for LocalAndy inference. Socat proxy bridges `localhost:11435` → Tailscale → `100.122.190.4:11434`.
 - **`ec2-go.sh`** — one-command deploy script with IMDSv2 support, SSM secret refresh, and auto-detection of local vs remote execution
 - **Experiment framework** — `experiments/` directory with `snapshot.sh`, `analyze.sh`, `compare.sh` for A/B testing bot configurations

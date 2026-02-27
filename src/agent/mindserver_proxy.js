@@ -20,13 +20,20 @@ class MindServerProxy {
 
     async connect(name, port) {
         if (this.connected) return;
-        
+
         this.name = name;
         this.socket = io(`http://localhost:${port}`);
 
         await new Promise((resolve, reject) => {
-            this.socket.on('connect', resolve);
+            const timeout = setTimeout(() => {
+                reject(new Error(`MindServer connection timed out after 30s (port ${port})`));
+            }, 30000);
+            this.socket.on('connect', () => {
+                clearTimeout(timeout);
+                resolve();
+            });
             this.socket.on('connect_error', (err) => {
+                clearTimeout(timeout);
                 console.error('Connection failed:', err);
                 reject(err);
             });
