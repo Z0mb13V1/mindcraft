@@ -238,10 +238,28 @@ If no issue:
 
 async function runAutoFix() {
     if (!AUTOFIX_ENABLED || !GOOGLE_API_KEY || !mindServerConnected) return;
-    const bufferText = buildChatBufferText();
-    if (!bufferText) return;
+
+    // Fetch last 10 Discord messages for context
+    let recentChat = '';
     try {
-        const raw = await callGemini(AUTOFIX_SYSTEM, bufferText);
+        if (client.isReady() && BACKUP_CHAT_CHANNEL) {
+            const channel = await client.channels.fetch(BACKUP_CHAT_CHANNEL).catch(() => null);
+            if (channel && channel.messages) {
+                const msgs = await channel.messages.fetch({ limit: 10 });
+                recentChat = msgs.reverse()
+                    .map(m => `${m.author.username}: ${m.content.substring(0, 100)}`)
+                    .join('\n');
+            }
+        }
+    } catch (e) {
+        // Fallback to buffer if channel fetch fails
+    }
+
+    const contextText = recentChat || buildChatBufferText();
+    if (!contextText) return;
+
+    try {
+        const raw = await callGemini(AUTOFIX_SYSTEM, contextText);
         if (!raw) return;
         const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
         const result = JSON.parse(cleaned);
@@ -764,11 +782,23 @@ client.on('messageCreate', async (message) => {
                     const status = AUTOFIX_ENABLED ? '🟢 enabled' : '🔴 disabled';
                     const fixes = Object.entries(lastAutoFix)
                         .map(([bot, ts]) => `• **${bot}** — last fix ${Math.round((Date.now() - ts) / 1000)}s ago`);
-                    const bufTotal = Object.values(chatBuffer).reduce((s, a) => s + a.length, 0);
-                    const recent = buildChatBufferText(6) || 'empty';
+
+                    // Fetch last 10 messages from channel for auto-fix context
+                    let recent = 'empty';
+                    try {
+                        const msgs = await message.channel.messages.fetch({ limit: 10 });
+                        if (msgs.size > 0) {
+                            recent = msgs.reverse()
+                                .map(m => `${m.author.username}: ${m.content.substring(0, 80)}`)
+                                .join('\n');
+                        }
+                    } catch (e) {
+                        recent = '(could not fetch messages)';
+                    }
+
                     let reply = `**Auto-Fix Monitor** — ${status}\n`;
                     reply += fixes.length > 0 ? fixes.join('\n') + '\n' : 'No fixes sent this session.\n';
-                    reply += `\n**Chat buffer** (${bufTotal} msgs):\n\`\`\`\n${recent}\n\`\`\``;
+                    reply += `\n**Last 10 messages** (monitored):\n\`\`\`\n${recent}\n\`\`\``;
                     await message.reply(reply.substring(0, 1990));
                     return;
                 }
