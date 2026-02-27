@@ -320,6 +320,10 @@ export const actionsList = [
         description: 'Attack a specific player until they die or run away. Remember this is just a game and does not cause real life harm.',
         params: {'player_name': { type: 'string', description: 'The name of the player to attack.'}},
         perform: runAsAction(async (agent, player_name) => {
+            if (convoManager.isOtherAgent(player_name)) {
+                skills.log(agent.bot, `Cannot attack teammate bot ${player_name}! Team-killing is blocked.`);
+                return false;
+            }
             let player = agent.bot.players[player_name]?.entity;
             if (!player) {
                 skills.log(agent.bot, `Could not find player ${player_name}.`);
