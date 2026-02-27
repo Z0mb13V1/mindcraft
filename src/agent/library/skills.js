@@ -100,7 +100,15 @@ export async function craftRecipe(bot, itemName, num=1) {
     const requiredIngredients = mc.ingredientsFromPrismarineRecipe(recipe); //Items required to use the recipe once.
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
     
-    await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    try {
+        await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    } catch (err) {
+        log(bot, `Failed to craft ${itemName}: ${err.message}`);
+        if (placedTable) {
+            await collectBlock(bot, 'crafting_table', 1);
+        }
+        return false;
+    }
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {
@@ -109,7 +117,7 @@ export async function craftRecipe(bot, itemName, num=1) {
 
     //Equip any armor the bot may have crafted.
     //There is probablly a more efficient method than checking the entire inventory but this is all mineflayer-armor-manager provides. :P
-    bot.armorManager.equipAll(); 
+    bot.armorManager.equipAll();
 
     return true;
 }
@@ -517,6 +525,24 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
                 const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
                 success = totalAfter > totalBefore;
+                // Fallback: if collectBlock didn't work, try manual dig
+                if (!success) {
+                    try {
+                        await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
+                        await bot.dig(block);
+                        await new Promise(r => setTimeout(r, 300));
+                        await pickupNearbyItems(bot);
+                        const invRetry = world.getInventoryCounts(bot);
+                        const totalRetry = Object.values(invRetry).reduce((a, b) => a + b, 0);
+                        success = totalRetry > totalBefore;
+                    } catch (_digErr) {
+                        // Skip this block, will be excluded below
+                    }
+                    if (!success) {
+                        if (!exclude) exclude = [];
+                        exclude.push(block.position);
+                    }
+                }
             }
             if (success)
                 collected++;

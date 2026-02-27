@@ -65,6 +65,7 @@ export function initBot(username) {
     }
 
     const bot = createBot(options);
+    bot.setMaxListeners(25);
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(pvp);
     bot.loadPlugin(collectblock);
