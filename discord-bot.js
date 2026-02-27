@@ -300,40 +300,44 @@ async function handleDirectChat(userMessage) {
 }
 
 // ── Help Text ───────────────────────────────────────────────
-const HELP_TEXT = `**MindcraftBot -- Command Center**
+const HELP_TEXT = `**MindcraftBot — Command Center**
+🔒 = requires the \`admin\` Discord role (or your user ID in \`DISCORD_ADMIN_IDS\`)
 
 **Chat with bots:**
-Just type a message — goes to ALL active bots.
-Target one bot: \`andy: go mine diamonds\` or \`cg: come here\`
-
-**Aliases:** \`cloud\` / \`cg\` / \`grok\` = CloudGrok | \`local\` / \`la\` / \`andy\` = LocalAndy
-**Groups:** \`all\`, \`cloud\`, \`local\`, \`research\` | Comma-separate: \`!stop cg, andy\`
+Just type a message → goes to ALL active bots
+Target one: \`andy: go mine diamonds\` | \`cg: come here\`
+Aliases: \`cloud\`/\`cg\`/\`grok\` = CloudGrok | \`local\`/\`la\`/\`andy\` = LocalAndy
+Groups: \`all\` \`cloud\` \`local\` \`research\` | Comma-separate targets: \`cg, andy\`
 
 **Talk to MindcraftBot directly:**
-\`bot: <question>\` — Ask the bot anything (uses live agent state + recent chat)
-DM the bot — same as \`bot:\` prefix, works even when MindServer is offline
+\`bot: <question>\` — Chat with the bot itself (live agent state + recent chat context)
+DM the bot — same as \`bot:\`, works even when MindServer is offline
 
 **Monitoring:**
-\`!status\` — Overview with health, hunger, position
-\`!stats [bot]\` — Detailed gameplay stats (biome, weather, action)
+\`!status\` — Agent overview (health, hunger, position, online/offline)
+\`!agents\` — Quick agent connection status
+\`!stats [bot]\` — Detailed gameplay stats (biome, weather, current action)
 \`!inv [bot]\` — Inventory contents and equipped gear
 \`!nearby [bot]\` — Nearby players, bots, and mobs
-\`!viewer\` — Bot camera view links (first-person POV)
-\`!usage [bot|all]\` — API costs and token usage
-\`!autofix\` — Show auto-fix monitor status and recent chat buffer
+\`!viewer\` — First-person camera links for each bot
+\`!usage [bot|all]\` — API token counts and cost breakdown
+\`!autofix\` — Auto-fix monitor status and buffered chat log
 
-**Controls:**
+**Controls:** 🔒
 \`!start <bot|group>\` — Start bot(s)
-\`!stop [bot|group]\` — Stop bot process (default: all)
+\`!startall\` — Start every bot
+\`!stop [bot|group]\` — Stop bot(s) (default: all)
+\`!stopall\` — Stop every bot
 \`!restart <bot|group>\` — Restart bot(s)
-\`!freeze [bot|group]\` — Instant in-game freeze (no LLM)
+\`!freeze [bot|group]\` — Instant in-game halt, no LLM (default: all)
 
 **System:**
-\`!mode [cloud|local|hybrid]\` — View or switch compute mode
-\`!reconnect\` — Reconnect to MindServer
-\`!ping\` — Pong
+\`!mode [cloud|local|hybrid] [profile]\` — View or switch compute mode 🔒
+\`!reconnect\` — Reconnect to MindServer 🔒
+\`!ui\` / \`!mindserver\` — MindServer dashboard URL
+\`!ping\` — Latency check
 
-**Auto-Fix:** Monitors bot chat every 5 messages and auto-sends corrections for death loops, forgotten tasks, item loss, and context resets. Set \`AUTOFIX_ENABLED=false\` to disable.`;
+**Auto-Fix:** Watches bot chat every 5 messages, auto-corrects death loops, forgotten tasks, item loss, and context resets (60s cooldown per bot). Disable with \`AUTOFIX_ENABLED=false\`.`;
 
 // ── MindServer Connection ───────────────────────────────────
 function connectToMindServer() {
