@@ -108,10 +108,12 @@
             transform: scale(1.2);
         }
         .agent-view-container {
+            position: relative;
             width: 100%;
-            height: 100%;
             aspect-ratio: 4/3;
             overflow: hidden;
+            background: #111;
+            border-radius: 4px;
         }
         .agent-viewer {
             width: 100%;
@@ -119,6 +121,46 @@
             border: none;
             display: block;
         }
+        .viewer-toolbar {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            display: flex;
+            gap: 4px;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .agent-view-container:hover .viewer-toolbar {
+            opacity: 1;
+        }
+        .viewer-btn {
+            background: rgba(0,0,0,0.65);
+            color: #e0e0e0;
+            border: 1px solid #555;
+            border-radius: 3px;
+            padding: 2px 7px;
+            font-size: 0.78em;
+            cursor: pointer;
+            text-decoration: none;
+            line-height: 1.6;
+        }
+        .viewer-btn:hover { background: rgba(40,40,40,0.9); color: #fff; }
+        .viewer-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 6px;
+            color: #666;
+            font-size: 0.82em;
+            text-align: center;
+            padding: 12px;
+            height: 100%;
+            box-sizing: border-box;
+        }
+        .viewer-placeholder a { color: #5b9cf6; text-decoration: none; }
+        .viewer-placeholder a:hover { text-decoration: underline; }
         .last-message {
             font-style: italic;
             color: #aaa;
@@ -132,10 +174,9 @@
             opacity: 0.4;
             cursor: not-allowed;
         }
-        .agent-view-container {
-            margin-top: 6px;
-            display: flex;
-            justify-content: flex-start;
+        .viewer-cell {
+            margin-top: 0;
+            padding: 0 !important;
         }
         .agent-grid {
             display: grid;
@@ -966,14 +1007,23 @@
         function updateAgentViewer(name) {
             const agentEl = document.getElementById(`agent-${name}`);
             if (!agentEl) return;
-
             const settings = agentSettings[name];
             const viewerContainer = agentEl.querySelector('.agent-view-container');
             if (!viewerContainer) return;
-
             const agentState = currentAgents.find(a => a.name === name);
             const shouldShow = agentState?.in_game && settings?.render_bot_view === true;
-            viewerContainer.parentElement.style.display = shouldShow ? '' : 'none';
+            // Swap iframe vs placeholder without full card re-render
+            const iframe = viewerContainer.querySelector('.agent-viewer');
+            const placeholder = viewerContainer.querySelector('.viewer-placeholder');
+            if (iframe) iframe.style.display = shouldShow ? 'block' : 'none';
+            const toolbar = viewerContainer.querySelector('.viewer-toolbar');
+            if (toolbar) toolbar.style.display = shouldShow ? 'flex' : 'none';
+            if (placeholder) placeholder.style.display = shouldShow ? 'none' : 'flex';
+        }
+
+        function reloadViewer(name) {
+            const iframe = document.getElementById(`viewer-${name}`);
+            if (iframe) { iframe.src = iframe.src; }
         }
 
         discardBtn.addEventListener('click', () => {
@@ -999,7 +1049,28 @@
             const showViewer = agent.in_game && cfg.render_bot_view === true;
             const viewerPort = agent.viewerPort;
             const viewerHost = window.location.hostname || 'localhost';
-            const viewerHTML = showViewer ? `<div class="agent-view-container"><iframe class="agent-viewer" id="viewer-${agent.name}" src="http://${viewerHost}:${viewerPort}"></iframe></div>` : '';
+            const viewerURL = viewerPort ? `http://${viewerHost}:${viewerPort}` : null;
+            const placeholderMsg = !agent.in_game ? '🔴 Bot offline'
+                : !viewerPort ? '⚙ No viewer port'
+                : '⚙ Enable render_bot_view<br>in agent Settings';
+            const placeholderLink = viewerURL && agent.in_game
+                ? `<a href="${viewerURL}" target="_blank">Open viewer ↗</a>` : '';
+            const viewerHTML = viewerPort ? `
+                <div class="agent-view-container">
+                    <div class="viewer-toolbar" style="display:${showViewer ? 'flex' : 'none'}">
+                        <a class="viewer-btn" href="${viewerURL}" target="_blank" title="Open in new tab">↗ Open</a>
+                        <button class="viewer-btn" onclick="reloadViewer('${agent.name}')" title="Reload viewer">⟳</button>
+                    </div>
+                    <iframe class="agent-viewer" id="viewer-${agent.name}"
+                        src="${viewerURL}"
+                        style="display:${showViewer ? 'block' : 'none'}">
+                    </iframe>
+                    <div class="viewer-placeholder" style="display:${showViewer ? 'none' : 'flex'}">
+                        <span>${placeholderMsg}</span>
+                        ${placeholderLink}
+                    </div>
+                </div>` : '';
+            const viewerCell = viewerHTML ? `<div class="cell viewer-cell" style="grid-row: span 3;">${viewerHTML}</div>` : '';
             const lastMessage = agentLastMessage[agent.name] || '';
             const invOpen = inventoryOpen[agent.name] === true;
             const invStyle = invOpen ? '' : 'display:none;';
@@ -1018,7 +1089,7 @@
                                     <button class="gear-btn" title="Command Log" onclick="toggleCommandLog('${agent.name}')">Log</button>
                                 </span>
                             </div>
-                            ${showViewer ? `<div class="cell" style="grid-row: span 3; padding:0;">${viewerHTML}</div>` : ''}
+                            ${viewerCell}
                             <div class="cell" id="action-${agent.name}">action: -</div>
                             <div class="cell" id="mode-${agent.name}">gamemode: -</div>
                             <div class="hud-task-panel">

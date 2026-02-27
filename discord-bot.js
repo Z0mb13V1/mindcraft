@@ -985,15 +985,24 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!viewer': {
-                    const lines = [];
-                    for (const agent of knownAgents) {
-                        if (agent.viewerPort) {
-                            lines.push(`**${agent.name}**: http://${process.env.PUBLIC_HOST || 'localhost'}:${agent.viewerPort}`);
-                        }
+                    if (knownAgents.length === 0) {
+                        await message.reply('❌ No agents registered. Use `!start` to launch bots.');
+                        return;
                     }
-                    await message.reply(lines.length > 0
-                        ? `**Bot Camera Views:**\n${lines.join('\n')}`
-                        : 'No viewer ports active. Vision may be disabled.');
+                    const host = process.env.PUBLIC_HOST || 'localhost';
+                    const lines = knownAgents.map(agent => {
+                        const dot = agent.in_game ? '🟢' : (agent.socket_connected ? '🟡' : '🔴');
+                        if (!agent.viewerPort) return `${dot} **${agent.name}** — no viewer port assigned`;
+                        const url = `http://${host}:${agent.viewerPort}`;
+                        const state = agent.in_game ? '' : ' *(offline)*';
+                        return `${dot} **${agent.name}**${state} — <${url}>`;
+                    });
+                    let reply = `**Bot Camera Views** (host: \`${host}\`)\n${lines.join('\n')}`;
+                    if (!process.env.PUBLIC_HOST) {
+                        reply += '\n\n⚠️ `PUBLIC_HOST` not set — URLs use `localhost`. Set it to your server IP for remote access.';
+                    }
+                    reply += '\n\n💡 Viewer requires **render_bot_view = true** in the web UI agent settings (⚙).';
+                    await message.reply(reply);
                     return;
                 }
 
