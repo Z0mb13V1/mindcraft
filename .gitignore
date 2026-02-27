@@ -84,3 +84,4 @@ nvidia_gpu_exporter/
 
 # One-time admin/utility scripts (contain usernames, not part of project)
 go-public.ps1
+contribute-safe.ps1
