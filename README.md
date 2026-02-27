@@ -20,6 +20,8 @@ Do not connect this bot to public servers with coding enabled. This project allo
 
 ## This Fork: Hybrid Research Rig
 
+> Forked from [mindcraft-bots/mindcraft](https://github.com/mindcraft-bots/mindcraft) — the original Minecraft AI agent framework by [@kolbytn](https://github.com/kolbytn), [@MaxRobinsonTheGreat](https://github.com/MaxRobinsonTheGreat), and the Mindcraft team.
+
 This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybrid Research Rig** — two AI bots running simultaneously on AWS EC2, combining cloud ensemble intelligence with local GPU inference.
 
 > **Live deployment**: All services run on AWS EC2 via `docker-compose.aws.yml`. See the [Architecture wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Architecture) for full infrastructure diagrams.

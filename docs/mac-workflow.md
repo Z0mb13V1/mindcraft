@@ -7,6 +7,7 @@ Quick reference for operating the Mindcraft hybrid rig from your Mac.
 - SSH key: `~/.ssh/mindcraft-ec2.pem` (chmod 600)
 - AWS CLI configured: `aws configure --profile mindcraft` (use Mindcraft-AI-Bot-AdministratorAccess creds)
 - Git clone: `git clone git@github.com:Z0mb13V1/mindcraft-0.1.3.git`
+- Set your EC2 IP: `export EC2_PUBLIC_IP=your.ec2.ip.here` (or add to `.env`)
 
 ## Daily Commands
 
@@ -23,19 +24,19 @@ bash aws/ec2-go.sh --full
 
 ### Check bot status
 ```bash
-ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@54.152.239.117 \
+ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@${EC2_PUBLIC_IP} \
   'docker compose -f /app/docker-compose.aws.yml logs --tail 20 mindcraft'
 ```
 
 ### Restart just the bots
 ```bash
-ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@54.152.239.117 \
+ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@${EC2_PUBLIC_IP} \
   'cd /app && docker compose -f docker-compose.aws.yml restart mindcraft discord-bot'
 ```
 
 ### Restart everything
 ```bash
-ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@54.152.239.117 \
+ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@${EC2_PUBLIC_IP} \
   'cd /app && docker compose -f docker-compose.aws.yml up -d --force-recreate'
 ```
 
@@ -64,10 +65,10 @@ bash aws/ec2-go.sh --secrets
 
 | Service     | URL                              |
 |-------------|----------------------------------|
-| MindServer  | http://54.152.239.117:8080       |
-| Grafana     | http://54.152.239.117:3004       |
-| Prometheus  | http://54.152.239.117:9090       |
-| Minecraft   | 54.152.239.117:25565             |
+| MindServer  | http://${EC2_PUBLIC_IP}:8080       |
+| Grafana     | http://${EC2_PUBLIC_IP}:3004       |
+| Prometheus  | http://${EC2_PUBLIC_IP}:9090       |
+| Minecraft   | ${EC2_PUBLIC_IP}:25565             |
 
 ## Tailscale + Local 3090
 
@@ -76,7 +77,7 @@ The socat proxy on EC2 forwards `127.0.0.1:11435` → Tailscale → your 3090.
 
 To set up the proxy on EC2:
 ```bash
-ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@54.152.239.117 \
+ssh -i ~/.ssh/mindcraft-ec2.pem ubuntu@${EC2_PUBLIC_IP} \
   'sudo bash /app/aws/setup-ollama-proxy.sh'
 ```
 
