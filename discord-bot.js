@@ -16,11 +16,15 @@ const ACTIVE_PROFILES = ['cloud-persistent', 'local-research'];
 // Comma-separated Discord user IDs allowed to run destructive commands.
 // If empty, all users in the channel can run all commands.
 const ADMIN_USER_IDS = (process.env.DISCORD_ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+const DISCORD_ADMIN_ROLE = (process.env.DISCORD_ADMIN_ROLE || 'admin').toLowerCase();
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || '';
 
-function isAdmin(userId) {
-    // If no admin list is configured, restrict to nobody (fail-secure)
-    if (ADMIN_USER_IDS.length === 0) return false;
-    return ADMIN_USER_IDS.includes(userId);
+function isAdmin(userId, member) {
+    // Check explicit user ID list
+    if (ADMIN_USER_IDS.includes(userId)) return true;
+    // Check Discord server role (guild messages only)
+    if (member?.roles?.cache?.some(r => r.name.toLowerCase() === DISCORD_ADMIN_ROLE)) return true;
+    return false;
 }
 
 // ── Profile Name Validation ──────────────────────────────────
@@ -163,6 +167,138 @@ let agentStates = {};      // {agentName: {gameplay, action, inventory, nearby, 
 let replyChannel = null;   // cached Discord channel for fast replies
 const messageLimiter = new RateLimiter(5, 60000);  // 5 messages per 60 seconds per user
 
+// ── Gemini Helper (shared by auto-fix and direct chat) ────────
+async function callGemini(systemPrompt, userMessage, history = []) {
+    if (!GOOGLE_API_KEY) return null;
+    try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`;
+        const contents = [
+            ...history,
+            { role: 'user', parts: [{ text: userMessage }] }
+        ];
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                generationConfig: { maxOutputTokens: 600, temperature: 0.7 }
+            })
+        });
+        if (!res.ok) { console.error(`[Gemini] API error ${res.status}`); return null; }
+        const data = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    } catch (err) {
+        console.error('[Gemini] Error:', err.message);
+        return null;
+    }
+}
+
+// ── Chat Buffer (feeds auto-fix and direct chat context) ──────
+const chatBuffer = {};          // { agentName: [{speaker, text, timestamp}] }
+const CHAT_BUFFER_SIZE = 20;
+
+function addToChatBuffer(agentName, speaker, text) {
+    if (!chatBuffer[agentName]) chatBuffer[agentName] = [];
+    chatBuffer[agentName].push({ speaker, text, timestamp: Date.now() });
+    if (chatBuffer[agentName].length > CHAT_BUFFER_SIZE) chatBuffer[agentName].shift();
+}
+
+function buildChatBufferText(limit = 20) {
+    const all = [];
+    for (const msgs of Object.values(chatBuffer)) {
+        for (const m of msgs) all.push(m);
+    }
+    all.sort((a, b) => a.timestamp - b.timestamp);
+    return all.slice(-limit).map(m => `[${m.speaker}]: ${m.text}`).join('\n');
+}
+
+// ── Auto-Fix Monitor ─────────────────────────────────────────
+const AUTOFIX_ENABLED = process.env.AUTOFIX_ENABLED !== 'false';
+const AUTOFIX_COOLDOWN_MS = 60000;  // 1 min between fixes per bot
+const AUTOFIX_CHECK_EVERY = 5;      // analyse every N new chat messages
+let chatMessageCount = 0;
+const lastAutoFix = {};             // { botName: timestamp }
+
+const AUTOFIX_SYSTEM =
+`You monitor Minecraft AI bot coordination chat. Detect if a bot is stuck or failing.
+
+Issues to detect:
+- Death loop: bot repeatedly dying, health 0/20, starvation mentioned multiple times
+- Forgotten task: bot ignores an active delivery/collection request mid-task
+- Item loss loop: bot keeps losing the same items it collected (3+ times)
+- Stuck action: identical failure repeated 3+ times in a row
+- Context reset: bot re-introduces itself mid-task as if meeting another bot for the first time
+
+If an issue is found, respond ONLY with this exact JSON (no markdown, no extra text):
+{"issue":true,"bot":"ExactBotName","message":"corrective instruction under 80 words"}
+
+If no issue:
+{"issue":false}`;
+
+async function runAutoFix() {
+    if (!AUTOFIX_ENABLED || !GOOGLE_API_KEY || !mindServerConnected) return;
+    const bufferText = buildChatBufferText();
+    if (!bufferText) return;
+    try {
+        const raw = await callGemini(AUTOFIX_SYSTEM, bufferText);
+        if (!raw) return;
+        const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+        const result = JSON.parse(cleaned);
+        if (!result.issue || !result.bot || !result.message) return;
+        const now = Date.now();
+        if (lastAutoFix[result.bot] && (now - lastAutoFix[result.bot]) < AUTOFIX_COOLDOWN_MS) return;
+        const sent = sendToAgent(result.bot, result.message, 'AutoFix');
+        if (sent.sent) {
+            lastAutoFix[result.bot] = now;
+            await sendToDiscord(`🔧 **AutoFix → ${result.bot}**: "${result.message}"`);
+            console.log(`[AutoFix] Sent to ${result.bot}: ${result.message}`);
+        }
+    } catch (err) {
+        console.error('[AutoFix] Parse error:', err.message);
+    }
+}
+
+// ── Direct Bot Chat ──────────────────────────────────────────
+const directChatHistory = [];   // multi-turn conversation history
+const MAX_DIRECT_HISTORY = 20;
+
+const DIRECT_CHAT_SYSTEM_TEMPLATE =
+`You are MindcraftBot, the AI control interface for a Minecraft bot management system. Help the admin monitor and manage their bots.
+
+Bots:
+- CloudGrok: cloud ensemble (Gemini + Grok panel), persistent survival, maintains base
+- LocalAndy: research and exploration bot
+
+Respond concisely. Reference live state data when available. Suggest Discord commands where helpful (e.g. !freeze, !restart, !stats, !inv, !stop).
+
+Live agent states:
+$STATES
+
+Recent bot chat:
+$CHAT`;
+
+async function handleDirectChat(userMessage) {
+    if (!GOOGLE_API_KEY) return '❌ `GOOGLE_API_KEY` not configured — direct chat unavailable.';
+    const states = Object.entries(agentStates).map(([name, s]) => {
+        const gp = s?.gameplay || {};
+        const act = s?.action || {};
+        return `${name}: hp=${gp.health ?? '?'}/20 food=${gp.hunger ?? '?'}/20 pos=${formatPos(gp.position)} action=${act.current || (act.isIdle ? 'idle' : '?')}`;
+    }).join('\n') || 'No agents connected';
+    const recentChat = buildChatBufferText(15) || 'No recent chat';
+    const system = DIRECT_CHAT_SYSTEM_TEMPLATE
+        .replace('$STATES', states)
+        .replace('$CHAT', recentChat);
+    const history = directChatHistory.slice(-MAX_DIRECT_HISTORY);
+    const reply = await callGemini(system, userMessage, history);
+    if (reply) {
+        directChatHistory.push({ role: 'user', parts: [{ text: userMessage }] });
+        directChatHistory.push({ role: 'model', parts: [{ text: reply }] });
+        if (directChatHistory.length > MAX_DIRECT_HISTORY) directChatHistory.splice(0, 2);
+    }
+    return reply || '❌ No response from Gemini.';
+}
+
 // ── Help Text ───────────────────────────────────────────────
 const HELP_TEXT = `**MindcraftBot -- Command Center**
 
@@ -173,6 +309,10 @@ Target one bot: \`andy: go mine diamonds\` or \`cg: come here\`
 **Aliases:** \`cloud\` / \`cg\` / \`grok\` = CloudGrok | \`local\` / \`la\` / \`andy\` = LocalAndy
 **Groups:** \`all\`, \`cloud\`, \`local\`, \`research\` | Comma-separate: \`!stop cg, andy\`
 
+**Talk to MindcraftBot directly:**
+\`bot: <question>\` — Ask the bot anything (uses live agent state + recent chat)
+DM the bot — same as \`bot:\` prefix, works even when MindServer is offline
+
 **Monitoring:**
 \`!status\` — Overview with health, hunger, position
 \`!stats [bot]\` — Detailed gameplay stats (biome, weather, action)
@@ -180,6 +320,7 @@ Target one bot: \`andy: go mine diamonds\` or \`cg: come here\`
 \`!nearby [bot]\` — Nearby players, bots, and mobs
 \`!viewer\` — Bot camera view links (first-person POV)
 \`!usage [bot|all]\` — API costs and token usage
+\`!autofix\` — Show auto-fix monitor status and recent chat buffer
 
 **Controls:**
 \`!start <bot|group>\` — Start bot(s)
@@ -190,7 +331,9 @@ Target one bot: \`andy: go mine diamonds\` or \`cg: come here\`
 **System:**
 \`!mode [cloud|local|hybrid]\` — View or switch compute mode
 \`!reconnect\` — Reconnect to MindServer
-\`!ping\` — Pong`;
+\`!ping\` — Pong
+
+**Auto-Fix:** Monitors bot chat every 5 messages and auto-sends corrections for death loops, forgotten tasks, item loss, and context resets. Set \`AUTOFIX_ENABLED=false\` to disable.`;
 
 // ── MindServer Connection ───────────────────────────────────
 function connectToMindServer() {
@@ -231,6 +374,11 @@ function connectToMindServer() {
         console.log(`[Agent Chat] ${agentName}: ${JSON.stringify(json)}`);
         if (json && json.message) {
             await sendToDiscord(`💬 **${agentName}**: ${json.message}`);
+            addToChatBuffer(agentName, agentName, json.message);
+            chatMessageCount++;
+            if (chatMessageCount % AUTOFIX_CHECK_EVERY === 0) {
+                runAutoFix().catch(err => console.error('[AutoFix]', err.message));
+            }
         }
     });
 
@@ -575,7 +723,8 @@ client.on('ready', () => {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    const isTarget = message.channelId === BOT_DM_CHANNEL || message.channelId === BACKUP_CHAT_CHANNEL;
+    const isDM = !message.guild;
+    const isTarget = isDM || message.channelId === BOT_DM_CHANNEL || message.channelId === BACKUP_CHAT_CHANNEL;
     if (!isTarget) return;
 
     const content = message.content.trim();
@@ -607,6 +756,19 @@ client.on('messageCreate', async (message) => {
                     await message.reply('🏓 Pong!');
                     return;
 
+                case '!autofix': {
+                    const status = AUTOFIX_ENABLED ? '🟢 enabled' : '🔴 disabled';
+                    const fixes = Object.entries(lastAutoFix)
+                        .map(([bot, ts]) => `• **${bot}** — last fix ${Math.round((Date.now() - ts) / 1000)}s ago`);
+                    const bufTotal = Object.values(chatBuffer).reduce((s, a) => s + a.length, 0);
+                    const recent = buildChatBufferText(6) || 'empty';
+                    let reply = `**Auto-Fix Monitor** — ${status}\n`;
+                    reply += fixes.length > 0 ? fixes.join('\n') + '\n' : 'No fixes sent this session.\n';
+                    reply += `\n**Chat buffer** (${bufTotal} msgs):\n\`\`\`\n${recent}\n\`\`\``;
+                    await message.reply(reply.substring(0, 1990));
+                    return;
+                }
+
                 case '!status': {
                     const ms = mindServerConnected ? '✅ MindServer connected' : '❌ MindServer disconnected';
                     const agentCount = knownAgents.length;
@@ -631,13 +793,13 @@ client.on('messageCreate', async (message) => {
                     return;
 
                 case '!reconnect':
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     await message.reply('🔄 Reconnecting to MindServer...');
                     connectToMindServer();
                     return;
 
                 case '!start': {
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!arg) { await message.reply('Usage: `!start <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const { agents: startTargets } = resolveAgents(arg);
@@ -648,7 +810,7 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!stop': {
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const stopArg = arg || 'all';
                     const { agents: stopTargets } = resolveAgents(stopArg);
@@ -662,7 +824,7 @@ client.on('messageCreate', async (message) => {
                     // Sends "freeze" as an in-game chat message to bots.
                     // The hardcoded intercept in agent.js catches "freeze" and
                     // calls actions.stop() + shut_up — no LLM involved.
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const freezeArg = arg || 'all';
                     const { agents: freezeTargets } = resolveAgents(freezeArg);
@@ -679,7 +841,7 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!restart': {
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!arg) { await message.reply('Usage: `!restart <name|group>` — Groups: `all`, `gemini`, `grok`, `1`, `2`'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     const { agents: restartTargets } = resolveAgents(arg);
@@ -690,7 +852,7 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!startall':
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     for (const name of BOT_GROUPS.all) mindServerSocket.emit('start-agent', name);
                     await message.reply(`▶️ Starting all agents: **${BOT_GROUPS.all.join(', ')}**...`);
@@ -698,7 +860,7 @@ client.on('messageCreate', async (message) => {
                     return;
 
                 case '!stopall':
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     mindServerSocket.emit('stop-all-agents');
                     await message.reply('⏹️ Stopping all agents...');
@@ -706,7 +868,7 @@ client.on('messageCreate', async (message) => {
                     return;
 
                 case '!mode': {
-                    if (!isAdmin(message.author.id)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                    if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
                     const modeResult = await handleModeCommand(arg, message);
                     await message.reply(modeResult);
                     return;
@@ -841,6 +1003,18 @@ client.on('messageCreate', async (message) => {
                     await message.reply(`Unknown command: \`${cmd}\`. Type \`!help\` for commands.`);
                     return;
             }
+        }
+
+        // ── Direct chat with MindcraftBot (DM or "bot: <message>" prefix) ──
+        const botPrefixMatch = content.match(/^bot:\s*([\s\S]+)/i);
+        if (isDM || botPrefixMatch) {
+            const question = (botPrefixMatch ? botPrefixMatch[1] : content).trim();
+            if (!question) return;
+            await message.channel.sendTyping();
+            const reply = await handleDirectChat(question);
+            const chunks = reply.match(/[\s\S]{1,1990}/g) || [reply];
+            for (const chunk of chunks) await message.reply(chunk);
+            return;
         }
 
         // ── Chat relay to agent ──
