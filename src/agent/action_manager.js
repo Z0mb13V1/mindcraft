@@ -11,6 +11,8 @@ export class ActionManager {
         this.resume_name = '';
         this.last_action_time = 0;
         this.recent_action_counter = 0;
+        // Stuck detection: track repeated same-label calls within a time window
+        this._stuckTracker = {};   // { label: { count, firstSeen } }
     }
 
     async resumeAction(actionFn, timeout) {
@@ -104,6 +106,37 @@ export class ActionManager {
                     return { success: false, message: `Action loop detected (${reason}). Stopping to avoid infinite loop.`, interrupted: true, timedout: false };
                 }
             }
+            // ── Stuck detector: same action label ≥3 times within 15 s ──────────
+            const STUCK_WINDOW_MS = 15000;
+            const STUCK_THRESHOLD = 3;
+            const stuckLabels = ['goToPlayer', 'collectBlocks', 'goToBlock', 'moveAway', 'goToBed', 'goToNearestBlock'];
+            const isStuckable = stuckLabels.some(l => actionLabel.includes(l));
+            const now = Date.now();
+            if (isStuckable) {
+                const t = this._stuckTracker[actionLabel];
+                if (t && (now - t.firstSeen) < STUCK_WINDOW_MS) {
+                    t.count++;
+                    if (t.count >= STUCK_THRESHOLD) {
+                        console.warn(`[ActionManager] Stuck detected: "${actionLabel}" called ${t.count}x in ${Math.round((now - t.firstSeen)/1000)}s`);
+                        this._stuckTracker = {};
+                        this.cancelResume();
+                        return {
+                            success: false,
+                            message: `Action output:\nStuck detected — "${actionLabel}" failed ${t.count} times in a row. Switch to a different approach immediately: try !explore, !searchForBlock, or !newAction with an alternative strategy. Do NOT repeat the same command.`,
+                            interrupted: true,
+                            timedout: false
+                        };
+                    }
+                } else {
+                    // New action type — reset all stuck tracking
+                    this._stuckTracker = { [actionLabel]: { count: 1, firstSeen: now } };
+                }
+            } else {
+                // Non-stuckable action succeeded — reset tracker
+                this._stuckTracker = {};
+            }
+            // ────────────────────────────────────────────────────────────────────
+
             console.log('executing code...\n');
 
             // await current action to finish (executing=false), with 10 seconds timeout
