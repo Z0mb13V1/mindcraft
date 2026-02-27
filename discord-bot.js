@@ -319,7 +319,7 @@ DM the bot — same as \`bot:\`, works even when MindServer is offline
 \`!stats [bot]\` — Detailed gameplay stats (biome, weather, current action)
 \`!inv [bot]\` — Inventory contents and equipped gear
 \`!nearby [bot]\` — Nearby players, bots, and mobs
-\`!viewer\` — First-person camera links for each bot
+\`!viewer\` — MindServer dashboard link (bot cameras + stats)
 \`!usage [bot|all]\` — API token counts and cost breakdown
 \`!autofix\` — Auto-fix monitor status and buffered chat log
 
@@ -985,23 +985,12 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!viewer': {
-                    if (knownAgents.length === 0) {
-                        await message.reply('❌ No agents registered. Use `!start` to launch bots.');
-                        return;
-                    }
                     const host = process.env.PUBLIC_HOST || 'localhost';
-                    const lines = knownAgents.map(agent => {
-                        const dot = agent.in_game ? '🟢' : (agent.socket_connected ? '🟡' : '🔴');
-                        if (!agent.viewerPort) return `${dot} **${agent.name}** — no viewer port assigned`;
-                        const url = `http://${host}:${agent.viewerPort}`;
-                        const state = agent.in_game ? '' : ' *(offline)*';
-                        return `${dot} **${agent.name}**${state} — <${url}>`;
-                    });
-                    let reply = `**Bot Camera Views** (host: \`${host}\`)\n${lines.join('\n')}`;
+                    const url = `http://${host}:${MINDSERVER_PORT}`;
+                    let reply = `🖥️ **MindServer Dashboard**: <${url}>\nOpen in browser to view bot cameras, stats, and settings.`;
                     if (!process.env.PUBLIC_HOST) {
-                        reply += '\n\n⚠️ `PUBLIC_HOST` not set — URLs use `localhost`. Set it to your server IP for remote access.';
+                        reply += '\n\n⚠️ `PUBLIC_HOST` not set — URL uses `localhost`. Set it to your server IP for remote access.';
                     }
-                    reply += '\n\n💡 Viewer requires **render_bot_view = true** in the web UI agent settings (⚙).';
                     await message.reply(reply);
                     return;
                 }
