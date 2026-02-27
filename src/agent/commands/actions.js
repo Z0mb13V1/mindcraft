@@ -260,7 +260,7 @@ export const actionsList = [
             'num': { type: 'int', description: 'The number of blocks to collect.', domain: [1, Number.MAX_SAFE_INTEGER] }
         },
         perform: runAsAction(async (agent, type, num) => {
-            await skills.collectBlock(agent.bot, type, num);
+            return await skills.collectBlock(agent.bot, type, num);
         }, false, 10) // 10 minute timeout
     },
     {
