@@ -502,14 +502,17 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 await bot.dig(block);
                 await new Promise(r => setTimeout(r, 300));
                 await pickupNearbyItems(bot);
+                // Verify items actually entered inventory
+                const invAfter = world.getInventoryCounts(bot);
+                const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
+                const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
+                success = totalAfter > totalBefore;
             }
             else {
                 await bot.collectBlock.collect(block);
                 await new Promise(r => setTimeout(r, 300));
                 await pickupNearbyItems(bot);
-            }
-            // Verify items actually entered inventory
-            if (!isLiquid) {
+                // Verify items actually entered inventory
                 const invAfter = world.getInventoryCounts(bot);
                 const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
                 const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
