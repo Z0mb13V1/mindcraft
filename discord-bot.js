@@ -2,7 +2,7 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
 import { io } from 'socket.io-client';
 import { readFile, writeFile } from 'fs/promises';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { validateDiscordMessage } from './src/utils/message_validator.js';
@@ -14,10 +14,14 @@ const ACTIVE_PROFILES = ['cloud-persistent', 'local-research'];
 
 // ── Admin Authorization ──────────────────────────────────────
 // Comma-separated Discord user IDs allowed to run destructive commands.
-// If empty, all users in the channel can run all commands.
+// If empty, only users with the admin role (default "admin") are allowed.
 const ADMIN_USER_IDS = (process.env.DISCORD_ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
 const DISCORD_ADMIN_ROLE = (process.env.DISCORD_ADMIN_ROLE || 'admin').toLowerCase();
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || '';
+
+if (ADMIN_USER_IDS.length === 0) {
+    console.warn('[Auth] DISCORD_ADMIN_IDS is empty — only users with the admin role can run destructive commands.');
+}
 
 function isAdmin(userId, member) {
     // Check explicit user ID list
@@ -153,8 +157,7 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.DirectMessageTyping
+        GatewayIntentBits.DirectMessages
     ],
     partials: [Partials.Channel, Partials.Message]
 });
@@ -261,6 +264,7 @@ async function runAutoFix() {
     try {
         const raw = await callGemini(AUTOFIX_SYSTEM, contextText);
         if (!raw) return;
+        console.debug('[AutoFix] Raw:', raw);
         const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
         const result = JSON.parse(cleaned);
         if (!result.issue || !result.bot || !result.message) return;
@@ -411,7 +415,7 @@ function connectToMindServer() {
     });
 
     mindServerSocket.on('state-update', (states) => {
-        if (states) agentStates = states;
+        if (states) agentStates = { ...agentStates, ...states };
     });
 
     mindServerSocket.on('connect_error', (error) => {
@@ -478,16 +482,6 @@ function sendToAllAgents(message, fromUser = 'Discord') {
 const VALID_MODES = ['cloud', 'local', 'hybrid'];
 const MODE_EMOJI = { cloud: '☁️', local: '🖥️', hybrid: '🔀' };
 
-function readProfile(name) {
-    const filePath = safeProfilePath(name);
-    return JSON.parse(readFileSync(filePath, 'utf8'));
-}
-
-function _writeProfile(name, data) {
-    const filePath = safeProfilePath(name);
-    writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
-}
-
 async function readProfileAsync(name) {
     const filePath = safeProfilePath(name);
     const data = await readFile(filePath, 'utf8');
@@ -497,13 +491,6 @@ async function readProfileAsync(name) {
 async function writeProfileAsync(name, data) {
     const filePath = safeProfilePath(name);
     await writeFile(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
-}
-
-function _getActiveMode(name) {
-    try {
-        const p = readProfile(name);
-        return p._active_mode || 'unknown';
-    } catch { return 'unreadable'; }
 }
 
 async function getActiveModeAsync(name) {
@@ -617,10 +604,6 @@ function getAgentStatusText() {
         const status = a.in_game ? '🟢 in-game' : (a.socket_connected ? '🟡 connected' : '🔴 offline');
         return `• **${a.name}** — ${status}`;
     }).join('\n');
-}
-
-function _findBestAgent() {
-    return knownAgents.find(a => a.in_game) || knownAgents.find(a => a.socket_connected) || knownAgents[0];
 }
 
 function parseAgentPrefix(content) {
@@ -839,7 +822,7 @@ client.on('messageCreate', async (message) => {
                     const { agents: startTargets } = resolveAgents(arg);
                     for (const name of startTargets) mindServerSocket.emit('start-agent', name);
                     await message.reply(`▶️ Starting **${startTargets.join(', ')}**...`);
-                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
+                    setTimeout(() => { sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`).catch(console.error); }, 5000);
                     return;
                 }
 
@@ -850,7 +833,7 @@ client.on('messageCreate', async (message) => {
                     const { agents: stopTargets } = resolveAgents(stopArg);
                     for (const name of stopTargets) mindServerSocket.emit('stop-agent', name);
                     await message.reply(`⏹️ Stopping **${stopTargets.join(', ')}**...`);
-                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
+                    setTimeout(() => { sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`).catch(console.error); }, 5000);
                     return;
                 }
 
@@ -881,7 +864,7 @@ client.on('messageCreate', async (message) => {
                     const { agents: restartTargets } = resolveAgents(arg);
                     for (const name of restartTargets) mindServerSocket.emit('restart-agent', name);
                     await message.reply(`🔄 Restarting **${restartTargets.join(', ')}**...`);
-                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 8000);
+                    setTimeout(() => { sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`).catch(console.error); }, 8000);
                     return;
                 }
 
@@ -890,7 +873,7 @@ client.on('messageCreate', async (message) => {
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     for (const name of BOT_GROUPS.all) mindServerSocket.emit('start-agent', name);
                     await message.reply(`▶️ Starting all agents: **${BOT_GROUPS.all.join(', ')}**...`);
-                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
+                    setTimeout(() => { sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`).catch(console.error); }, 5000);
                     return;
 
                 case '!stopall':
@@ -898,7 +881,7 @@ client.on('messageCreate', async (message) => {
                     if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
                     mindServerSocket.emit('stop-all-agents');
                     await message.reply('⏹️ Stopping all agents...');
-                    setTimeout(async () => { await sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`); }, 5000);
+                    setTimeout(() => { sendToDiscord(`**Agent Status:**\n${getAgentStatusText()}`).catch(console.error); }, 5000);
                     return;
 
                 case '!mode': {
@@ -947,7 +930,7 @@ client.on('messageCreate', async (message) => {
                             if (replied) return;
                             replied = true;
                             clearTimeout(timeout);
-                            if (response.error) { await message.reply(`Error: ${response.error}`); return; }
+                            if (response.error) { console.error(`[Usage] Error for ${target}:`, response.error); await message.reply(`Error fetching usage for **${target}**.`); return; }
                             if (!response.usage) { await message.reply(`No usage data for **${target}**.`); return; }
                             const reply = '**API Usage Report**\n' + formatAgentUsage(target, response.usage);
                             await message.reply(reply);
@@ -1026,7 +1009,6 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!ui':
-                case '!local':
                 case '!mindserver':
                     await sendToDiscord('🖥️ **MindServer Backup UI**: http://localhost:8080\nOpen in browser for agent dashboard/viewer (docker-compose up mindcraft).');
                     return;
