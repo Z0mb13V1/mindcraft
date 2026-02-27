@@ -217,7 +217,7 @@ function buildChatBufferText(limit = 20) {
 }
 
 // ── Auto-Fix Monitor ─────────────────────────────────────────
-const AUTOFIX_ENABLED = process.env.AUTOFIX_ENABLED !== 'false';
+let autofixEnabled = process.env.AUTOFIX_ENABLED !== 'false';
 const AUTOFIX_COOLDOWN_MS = 60000;  // 1 min between fixes per bot
 const AUTOFIX_CHECK_EVERY = 5;      // analyse every N new chat messages
 let chatMessageCount = 0;
@@ -240,7 +240,7 @@ If no issue:
 {"issue":false}`;
 
 async function runAutoFix() {
-    if (!AUTOFIX_ENABLED || !GOOGLE_API_KEY || !mindServerConnected) return;
+    if (!autofixEnabled || !GOOGLE_API_KEY || !mindServerConnected) return;
 
     // Fetch last 10 Discord messages for context
     let recentChat = '';
@@ -343,7 +343,7 @@ DM the bot — same as \`bot:\`, works even when MindServer is offline
 \`!nearby [bot]\` — Nearby players, bots, and mobs
 \`!viewer\` — MindServer dashboard link (bot cameras + stats)
 \`!usage [bot|all]\` — API token counts and cost breakdown
-\`!autofix\` — Auto-fix monitor status and buffered chat log
+\`!autofix\` — Toggle auto-fix on/off 🔒 | \`!autofix status\` — monitor details
 
 **Controls:** 🔒
 \`!start <bot|group>\` — Start bot(s)
@@ -359,7 +359,7 @@ DM the bot — same as \`bot:\`, works even when MindServer is offline
 \`!ui\` / \`!mindserver\` — MindServer dashboard URL
 \`!ping\` — Latency check
 
-**Auto-Fix:** Watches bot chat every 5 messages, auto-corrects death loops, forgotten tasks, item loss, and context resets (60s cooldown per bot). Disable with \`AUTOFIX_ENABLED=false\`.`;
+**Auto-Fix:** Watches bot chat every 5 messages, auto-corrects death loops, forgotten tasks, item loss, and context resets (60s cooldown per bot). Toggle with \`!autofix\` or set \`AUTOFIX_ENABLED=false\` at startup.`;
 
 // ── MindServer Connection ───────────────────────────────────
 function connectToMindServer() {
@@ -762,27 +762,34 @@ client.on('messageCreate', async (message) => {
                     return;
 
                 case '!autofix': {
-                    const status = AUTOFIX_ENABLED ? '🟢 enabled' : '🔴 disabled';
-                    const fixes = Object.entries(lastAutoFix)
-                        .map(([bot, ts]) => `• **${bot}** — last fix ${Math.round((Date.now() - ts) / 1000)}s ago`);
+                    if (arg.toLowerCase() === 'status') {
+                        // Status view — open to all users
+                        const status = autofixEnabled ? '🟢 enabled' : '🔴 disabled';
+                        const fixes = Object.entries(lastAutoFix)
+                            .map(([bot, ts]) => `• **${bot}** — last fix ${Math.round((Date.now() - ts) / 1000)}s ago`);
 
-                    // Fetch last 10 messages from channel for auto-fix context
-                    let recent = 'empty';
-                    try {
-                        const msgs = await message.channel.messages.fetch({ limit: 10 });
-                        if (msgs.size > 0) {
-                            recent = msgs.reverse()
-                                .map(m => `${m.author.username}: ${m.content.substring(0, 80)}`)
-                                .join('\n');
+                        let recent = 'empty';
+                        try {
+                            const msgs = await message.channel.messages.fetch({ limit: 10 });
+                            if (msgs.size > 0) {
+                                recent = msgs.reverse()
+                                    .map(m => `${m.author.username}: ${m.content.substring(0, 80)}`)
+                                    .join('\n');
+                            }
+                        } catch (_e) {
+                            recent = '(could not fetch messages)';
                         }
-                    } catch (_e) {
-                        recent = '(could not fetch messages)';
-                    }
 
-                    let reply = `**Auto-Fix Monitor** — ${status}\n`;
-                    reply += fixes.length > 0 ? fixes.join('\n') + '\n' : 'No fixes sent this session.\n';
-                    reply += `\n**Last 10 messages** (monitored):\n\`\`\`\n${recent}\n\`\`\``;
-                    await message.reply(reply.substring(0, 1990));
+                        let reply = `**Auto-Fix Monitor** — ${status}\n`;
+                        reply += fixes.length > 0 ? fixes.join('\n') + '\n' : 'No fixes sent this session.\n';
+                        reply += `\n**Last 10 messages** (monitored):\n\`\`\`\n${recent}\n\`\`\``;
+                        await message.reply(reply.substring(0, 1990));
+                    } else {
+                        // Toggle — admin only
+                        if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
+                        autofixEnabled = !autofixEnabled;
+                        await message.reply(`🔧 Auto-Fix is now **${autofixEnabled ? 'enabled 🟢' : 'disabled 🔴'}**`);
+                    }
                     return;
                 }
 
