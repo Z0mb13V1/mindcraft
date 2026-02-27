@@ -34,7 +34,7 @@ services:
     command: sh -c "Xvfb :99 -screen 0 1024x768x24 &>/dev/null & export DISPLAY=:99 && sleep 2 && exec node main.js"
     environment:
       PROFILES: '["./profiles/cloud-persistent.json", "./profiles/local-research.json"]'
-      SETTINGS_JSON: '{"auto_open_ui": false, "host": "localhost", "mindserver_host_public": true, "allow_vision": true}'
+      SETTINGS_JSON: '{"auto_open_ui": false, "host": "localhost", "mindserver_host_public": true, "allow_vision": true, "render_bot_view": false}'
       LIBGL_ALWAYS_SOFTWARE: "1"
       CHROMADB_URL: "http://localhost:8000"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
