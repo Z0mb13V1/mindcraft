@@ -233,15 +233,16 @@ export class Agent {
                 this.history.add('system', init_message);
             }
             await this.self_prompter.handleLoad(save_data.self_prompt, save_data.self_prompting_state);
-        } else if (settings.self_prompt) {
+        } else if (this.prompter.profile.self_prompt) {
             // Fresh spawn with no saved state — auto-start from profile default goal
             if (init_message) {
                 this.history.add('system', init_message);
             }
+            const defaultGoal = this.prompter.profile.self_prompt;
             setTimeout(() => {
                 if (this.self_prompter.isStopped()) {
-                    console.log(`[AutoGoal] Starting default self-prompt for ${this.name}`);
-                    this.self_prompter.start(settings.self_prompt);
+                    console.log(`[AutoGoal] Starting default self-prompt for ${this.name}: "${defaultGoal}"`);
+                    this.self_prompter.start(defaultGoal);
                 }
             }, 3000);
         }
