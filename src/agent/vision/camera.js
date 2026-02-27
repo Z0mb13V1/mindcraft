@@ -37,11 +37,12 @@ export class Camera extends EventEmitter {
         const botPos = this.bot.entity.position;
         const center = new Vec3(botPos.x, botPos.y+this.bot.entity.height, botPos.z);
         this.viewer.setVersion(this.bot.version);
-        // Load world — init scene before listening to bot events,
-        // otherwise entity spawns crash when the scene isn't ready
+        // Init worldView and scene before hooking entity events —
+        // listenToBot immediately emits entitySpawn for existing entities,
+        // which crashes if the viewer scene isn't initialized yet
         const worldView = new WorldView(this.bot.world, this.viewDistance, center);
-        this.viewer.listen(worldView);
         await worldView.init(center);
+        this.viewer.listen(worldView);
         worldView.listenToBot(this.bot);
         this.worldView = worldView;
     }
