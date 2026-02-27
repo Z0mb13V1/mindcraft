@@ -156,7 +156,7 @@ export class EnsembleModel {
      * Embeddings are not supported by the ensemble — the Prompter uses
      * a separate embedding model configured in the profile.
      */
-    async embed(text) {
+    async embed(_text) {
         throw new Error('Embeddings not supported by EnsembleModel. Configure a separate embedding model in the profile.');
     }
 

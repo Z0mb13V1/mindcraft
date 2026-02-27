@@ -11,7 +11,7 @@ function loadKeysFile() {
         const data = readFileSync('./keys.json', 'utf8');
         keys = JSON.parse(data);
         console.warn('⚠️  WARNING: keys.json loaded into memory. Use environment variables instead for better security.');
-    } catch (err) {
+    } catch (_err) {
         // keys.json not found or unreadable — that's fine, use env vars
     }
     keysLoaded = true;

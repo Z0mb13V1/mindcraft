@@ -154,7 +154,7 @@ export class CookingTaskInitiator {
         //     // Place the chest
         //     await bot.chat(`/setblock ${x} ${y} ${z} chest`);
 
-            const cookingItems = [
+            const _cookingItems = [
                 ['minecraft:milk_bucket', 1],     // Non-stackable
                 ['minecraft:egg', 16],            // Stacks to 16
                 ['minecraft:dandelion', 64],    // Stacks to 64

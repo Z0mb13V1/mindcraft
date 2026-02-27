@@ -251,7 +251,7 @@ async function runAutoFix() {
                     .join('\n');
             }
         }
-    } catch (e) {
+    } catch (_e) {
         // Fallback to buffer if channel fetch fails
     }
 
@@ -483,7 +483,7 @@ function readProfile(name) {
     return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
-function writeProfile(name, data) {
+function _writeProfile(name, data) {
     const filePath = safeProfilePath(name);
     writeFileSync(filePath, JSON.stringify(data, null, 4) + '\n');
 }
@@ -499,7 +499,7 @@ async function writeProfileAsync(name, data) {
     await writeFile(filePath, JSON.stringify(data, null, 4) + '\n', 'utf8');
 }
 
-function getActiveMode(name) {
+function _getActiveMode(name) {
     try {
         const p = readProfile(name);
         return p._active_mode || 'unknown';
@@ -619,7 +619,7 @@ function getAgentStatusText() {
     }).join('\n');
 }
 
-function findBestAgent() {
+function _findBestAgent() {
     return knownAgents.find(a => a.in_game) || knownAgents.find(a => a.socket_connected) || knownAgents[0];
 }
 
@@ -792,7 +792,7 @@ client.on('messageCreate', async (message) => {
                                 .map(m => `${m.author.username}: ${m.content.substring(0, 80)}`)
                                 .join('\n');
                         }
-                    } catch (e) {
+                    } catch (_e) {
                         recent = '(could not fetch messages)';
                     }
 
@@ -1088,7 +1088,7 @@ client.on('messageCreate', async (message) => {
 
     } catch (error) {
         console.error('Message handler error:', error.message);
-        try { await message.reply('❌ Something went wrong.'); } catch (e) { /* ignore */ }
+        try { await message.reply('❌ Something went wrong.'); } catch (_e) { /* ignore */ }
     }
 });
 

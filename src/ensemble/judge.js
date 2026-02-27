@@ -40,7 +40,7 @@ export class LLMJudge {
         // Build a concise judgment prompt
         const lastUserMsg = [...turns].reverse().find(t => t.role === 'user')?.content || '';
 
-        const proposalText = proposals.map((p, i) =>
+        const proposalText = proposals.map((p, _i) =>
             `[${p.agentId}] (${p.modelName})\n${p.response}`
         ).join('\n\n---\n\n');
 

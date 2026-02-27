@@ -1,4 +1,4 @@
-import { containsCommand, commandExists } from '../agent/commands/index.js';
+import { commandExists } from '../agent/commands/index.js';
 
 export class Arbiter {
     /**

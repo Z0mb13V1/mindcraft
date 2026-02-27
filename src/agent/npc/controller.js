@@ -5,8 +5,6 @@ import { ItemGoal } from './item_goal.js';
 import { BuildGoal } from './build_goal.js';
 import { itemSatisfied, rotateXZ } from './utils.js';
 import * as skills from '../library/skills.js';
-import * as world from '../library/world.js';
-import * as mc from '../../utils/mcdata.js';
 
 
 export class NPCContoller {
@@ -49,7 +47,7 @@ export class NPCContoller {
                     this.constructions[file.slice(0, -5)] = JSON.parse(readFileSync(filePath, 'utf8'));
                 }
             }
-        } catch (e) {
+        } catch (_e) {
             console.log('Error reading construction file');
         }
 
@@ -174,7 +172,7 @@ export class NPCContoller {
             // Build construction goal
             else {
                 let res = null;
-                if (this.data.built.hasOwnProperty(goal.name)) {
+                if (Object.prototype.hasOwnProperty.call(this.data.built, goal.name)) {
                     res = await this.build_goal.executeNext(
                         this.constructions[goal.name],
                         this.data.built[goal.name].position,

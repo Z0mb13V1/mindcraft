@@ -54,7 +54,7 @@ const modes_list = [
                 if (waterBucket) {
                     await execute(this, agent, async () => {
                         let success = await skills.placeBlock(bot, 'water_bucket', block.position.x, block.position.y, block.position.z);
-                        if (success) say(agent, 'Placed some water, ahhhh that\'s better!');
+                        if (success) void say(agent, 'Placed some water, ahhhh that\'s better!');
                     });
                 }
                 else {
@@ -62,14 +62,14 @@ const modes_list = [
                         let waterBucket = bot.inventory.items().find(item => item.name === 'water_bucket');
                         if (waterBucket) {
                             let success = await skills.placeBlock(bot, 'water_bucket', block.position.x, block.position.y, block.position.z);
-                            if (success) say(agent, 'Placed some water, ahhhh that\'s better!');
+                            if (success) void say(agent, 'Placed some water, ahhhh that\'s better!');
                             return;
                         }
                         let nearestWater = world.getNearestBlock(bot, 'water', 20);
                         if (nearestWater) {
                             const pos = nearestWater.position;
                             let success = await skills.goToPosition(bot, pos.x, pos.y, pos.z, 0.2);
-                            if (success) say(agent, 'Found some water, ahhhh that\'s better!');
+                            if (success) void say(agent, 'Found some water, ahhhh that\'s better!');
                             return;
                         }
                         await skills.moveAway(bot, 5);
@@ -126,7 +126,7 @@ const modes_list = [
                     const crashTimeout = setTimeout(() => { agent.cleanKill("Got stuck and couldn't get unstuck") }, 10000);
                     await skills.moveAway(bot, 5);
                     clearTimeout(crashTimeout);
-                    say(agent, 'I\'m free.');
+                    void say(agent, 'I\'m free.');
                 });
             }
             this.last_time = Date.now();
@@ -179,7 +179,7 @@ const modes_list = [
             const huntable = world.getNearestEntityWhere(agent.bot, entity => mc.isHuntable(entity), 8);
             if (huntable && await world.isClearPath(agent.bot, huntable)) {
                 await execute(this, agent, async () => {
-                    say(agent, `Hunting ${huntable.name}!`);
+                    void say(agent, `Hunting ${huntable.name}!`);
                     await skills.attackEntity(agent.bot, huntable);
                 });
             }
@@ -299,7 +299,7 @@ const modes_list = [
         interrupts: [],
         on: false,
         active: false,
-        update: function (agent) { /* do nothing */ }
+        update: function (_agent) { /* do nothing */ }
     }
 ];
 

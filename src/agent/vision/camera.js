@@ -68,7 +68,7 @@ export class Camera extends EventEmitter {
         let stats;
         try {
             stats = await fs.stat(this.fp);
-        } catch (e) {
+        } catch (_e) {
             if (!stats?.isDirectory()) {
                 await fs.mkdir(this.fp);
             }

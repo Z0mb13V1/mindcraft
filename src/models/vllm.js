@@ -86,7 +86,7 @@ export class VLLM {
         return finalRes;
     }
 
-    async embed(text) {
+    async embed(_text) {
         throw new Error('vLLM embeddings not configured. Use Google gemini-embedding-001 instead.');
     }
 

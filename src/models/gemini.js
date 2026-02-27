@@ -129,7 +129,7 @@ export class Gemini {
     }
 }
 
-const sendAudioRequest = async (text, model, voice, url) => {
+const sendAudioRequest = async (text, model, voice, _url) => {
     const ai = new GoogleGenAI({apiKey: getKey('GEMINI_API_KEY')});
 
     const response = await ai.models.generateContent({

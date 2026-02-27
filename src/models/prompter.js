@@ -55,9 +55,9 @@ export class Prompter {
         this.awaiting_coding = false;
 
         // for backwards compatibility, move max_tokens to params
-        let max_tokens = null;
+        let _max_tokens = null;
         if (this.profile.max_tokens)
-            max_tokens = this.profile.max_tokens;
+            _max_tokens = this.profile.max_tokens;
 
         if (this.profile.ensemble) {
             this.chat_model = new EnsembleModel(this.profile.ensemble, this.profile);
@@ -87,7 +87,7 @@ export class Prompter {
         if (this.profile.embedding) {
             try {
                 embedding_model_profile = selectAPI(this.profile.embedding);
-            } catch (e) {
+            } catch {
                 embedding_model_profile = null;
             }
         }
@@ -114,8 +114,8 @@ export class Prompter {
           const wikiPath = path.join(__dirname, '../../data/minecraft_wiki.json');
           this.wikiData = JSON.parse(readFileSync(wikiPath, 'utf8'));
           console.log('Minecraft wiki data loaded.');
-        } catch (e) {
-          console.warn(`Minecraft wiki data not found: ${e.message}`);
+        } catch (_e) {
+          console.warn(`Minecraft wiki data not found: ${_e.message}`);
         }
 
         mkdirSync(`./bots/${name}`, { recursive: true });

@@ -61,7 +61,7 @@ async function processQueue() {
         return;
     }
     const item = speakingQueue.shift();
-    const { text: txt, model, audioData } = item;
+    const { text: txt, model, audioData: _audioData } = item;
     if (txt.trim() === '') {
         isSpeaking = false;
         await processQueue();

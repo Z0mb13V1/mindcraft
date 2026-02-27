@@ -1,5 +1,5 @@
 import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
-import { NPCData } from './npc/data.js';
+
 import settings from './settings.js';
 
 

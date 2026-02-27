@@ -1,7 +1,7 @@
 import mineflayer from 'mineflayer';
 import { worldToBlueprint, blueprintToTask } from '../../src/agent/tasks/construction_tasks.js';
 import fs from 'fs';
-import { start } from 'repl';
+import { start as _start } from 'repl';
 
 const bot = mineflayer.createBot({
     host: 'localhost', // Replace with your server IP or hostname

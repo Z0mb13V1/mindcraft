@@ -374,7 +374,7 @@ export class Task {
             // this.agent.bot.chat(`/clear @a`);
             return {"message": 'Task successful', "score": res.score};
         }
-        let other_names = this.available_agents.filter(n => n !== this.name);
+        let _other_names = this.available_agents.filter(n => n !== this.name);
         const elapsedTime = (Date.now() - this.taskStartTime) / 1000;
 
         if (elapsedTime >= 30 && this.available_agents.length !== this.data.agent_count) {
@@ -446,7 +446,6 @@ export class Task {
                 if (this.data.human_count !== this.data.usernames.length) {
                     console.log(`Number of human players ${this.human_count} does not match the number of usernames provided. ${this.data.usernames.length}`);
                     throw new Error(`Number of human players ${this.human_count} does not match the number of usernames provided. ${this.data.usernames.length}`);
-                    return;
                 }
                 
                 const starting_idx = this.data.agent_count;

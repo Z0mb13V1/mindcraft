@@ -140,7 +140,7 @@ export class Blueprint {
         return explanation;
     }
     check(bot) {
-        if (!bot || typeof bot !== 'object' || !bot.hasOwnProperty('blockAt')) {
+        if (!bot || typeof bot !== 'object' || !Object.prototype.hasOwnProperty.call(bot, 'blockAt')) {
             throw new Error('Invalid bot object. Expected a mineflayer bot.');
         }
         const levels = this.data.levels;
@@ -700,7 +700,7 @@ export function proceduralGeneration(m = 20,
         }
     }
 
-    function addLadder(matrix, x, y, z) {
+    function _addLadder(matrix, x, y, z) {
         let currentZ = z + 1;
 
         // turn the floor into air where person would go up
@@ -934,7 +934,7 @@ export function proceduralGeneration(m = 20,
  * for cutesy output
  * @param matrix
  */
-function printMatrix(matrix) {
+function _printMatrix(matrix) {
     matrix.forEach((layer, layerIndex) => {
         console.log(`Layer ${layerIndex}:`);
         layer.forEach(row => {

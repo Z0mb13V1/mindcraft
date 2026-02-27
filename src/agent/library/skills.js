@@ -16,7 +16,7 @@ async function autoLight(bot) {
         try {
             const pos = world.getPosition(bot);
             return await placeBlock(bot, 'torch', pos.x, pos.y, pos.z, 'bottom', true);
-        } catch (err) {return false;}
+        } catch (_err) {return false;}
     }
     return false;
 }
@@ -386,14 +386,14 @@ export async function defendSelf(bot, range=9) {
             try {
                 bot.pathfinder.setMovements(new pf.Movements(bot));
                 await bot.pathfinder.goto(new pf.goals.GoalFollow(enemy, 3.5), true);
-            } catch (err) {/* might error if entity dies, ignore */}
+            } catch (_err) {/* might error if entity dies, ignore */}
         }
         if (bot.entity.position.distanceTo(enemy.position) <= 2) {
             try {
                 bot.pathfinder.setMovements(new pf.Movements(bot));
                 let inverted_goal = new pf.goals.GoalInvert(new pf.goals.GoalFollow(enemy, 2));
                 await bot.pathfinder.goto(inverted_goal, true);
-            } catch (err) {/* might error if entity dies, ignore */}
+            } catch (_err) {/* might error if entity dies, ignore */}
         }
         bot.pvp.attack(enemy);
         attacked = true;
@@ -801,7 +801,7 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
             await new Promise(resolve => setTimeout(resolve, 200));
             return true;
         }
-    } catch (err) {
+    } catch (_err) {
         log(bot, `Failed to place ${blockType} at ${target_dest}.`);
         return false;
     }
@@ -1626,7 +1626,7 @@ export async function goToBed(bot) {
                     await bot.sleep(otherBed);
                     slept = true;
                     break;
-                } catch (e) {
+                } catch (_e) {
                     // continue trying other halves
                 }
             }

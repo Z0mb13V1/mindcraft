@@ -61,7 +61,7 @@ export class UsageTracker {
         try {
             const raw = readFileSync(this.filePath, 'utf8');
             this.data = JSON.parse(raw);
-        } catch (err) {
+        } catch (_err) {
             this.data = this._defaultData();
         }
         // Clear any existing interval to prevent double-timer leak

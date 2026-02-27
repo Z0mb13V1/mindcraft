@@ -44,7 +44,7 @@ export default [
       "no-undef": "error",              // Disallow the use of undeclared variables or functions.
       "semi": "off",                     // Allow flexible semicolon usage
       "curly": "off",                   // Do not enforce the use of curly braces around blocks of code.
-      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }], // Warn on unused vars (prefix with _ to ignore)
+      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }], // Warn on unused vars (prefix with _ to ignore)
       "no-unreachable": "warn",          // Warn on unreachable code
       "require-await": "off",           // Allow async functions without await (disabled for compatibility)
       "no-floating-promise/no-floating-promise": "warn", // Warn on unhandled promises

@@ -32,7 +32,7 @@ export const actionsList = [
         params: {
             'prompt': { type: 'string', description: 'A natural language prompt to guide code generation. Make a detailed step-by-step plan.' }
         },
-        perform: async function(agent, prompt) {
+        perform: async function(agent, _prompt) {
             // just ignore prompt - it is now in context in chat history
             if (!settings.allow_insecure_coding) { 
                 agent.openChat('newAction is disabled. Enable with allow_insecure_coding=true in settings.js');

@@ -108,7 +108,7 @@ export class Ollama {
                     res.on('data', chunk => raw += chunk);
                     res.on('end', () => {
                         try { resolve(JSON.parse(raw)); }
-                        catch (e) { reject(new Error(`Ollama parse error: ${raw.slice(0, 200)}`)); }
+                        catch { reject(new Error(`Ollama parse error: ${raw.slice(0, 200)}`)); }
                     });
                 });
                 req.on('error', reject);

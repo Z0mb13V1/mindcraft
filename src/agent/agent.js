@@ -84,7 +84,7 @@ export class Agent {
 
             // Log and Analyze
             // handleDisconnection handles logging to console and server
-            const { type } = handleDisconnection(this.name, reason);
+            const { type: _type } = handleDisconnection(this.name, reason);
      
             process.exit(1);
         };

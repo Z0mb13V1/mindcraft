@@ -5,7 +5,7 @@ import { Blueprint, ConstructionTaskValidator } from '../src/agent/tasks/constru
 import { CookingTaskInitiator } from '../src/agent/tasks/cooking_tasks.js';
 
 import fs from 'fs';
-import { start } from 'repl';
+import { start as _start } from 'repl';
 
 // add a mineflayer bot the world named Andy 
 const bot = mineflayer.createBot({
@@ -83,7 +83,7 @@ bot.on('spawn', async () => {
         } else {
             console.log(`No inventory found for user: ${user}`);
         }
-        let validator = null;
+        let _validator = null;
 
         if (task.type === "techtree" ) {
             bot.chat(`/tell ${user} You have the goal to ${task.goal}`);
@@ -94,7 +94,7 @@ bot.on('spawn', async () => {
             const blueprint = new Blueprint(task.blueprint);
             console.log(blueprint);
             const result = blueprint.autoDelete();
-            const commands = result.commands;
+            const _commands = result.commands;
             // for (const command of commands) {
             //     bot.chat(command);
             // }

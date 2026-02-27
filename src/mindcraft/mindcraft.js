@@ -3,7 +3,7 @@ import { AgentProcess } from '../process/agent_process.js';
 import { getServer } from './mcserver.js';
 import open from 'open';
 
-let mindserver;
+let _mindserver;
 let connected = false;
 let agent_processes = {};
 let agent_count = 0;
@@ -14,7 +14,7 @@ export async function init(host_public=false, port=8080, auto_open_ui=true) {
         console.error('Already initiliazed!');
         return;
     }
-    mindserver = createMindServer(host_public, port);
+    _mindserver = createMindServer(host_public, port);
     mindserver_port = port;
     connected = true;
     if (auto_open_ui) {
