@@ -23,8 +23,13 @@ export class Camera extends EventEmitter {
         this.canvas = createCanvas(this.width, this.height);
         this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas });
         this.viewer = new Viewer(this.renderer);
+        this.ready = false;
         this._init().then(() => {
+            this.ready = true;
             this.emit('ready');
+        }).catch((err) => {
+            console.warn(`[Camera] Async init failed: ${err.message}`);
+            this.emit('error', err);
         });
     }
   
@@ -32,12 +37,20 @@ export class Camera extends EventEmitter {
         const botPos = this.bot.entity.position;
         const center = new Vec3(botPos.x, botPos.y+this.bot.entity.height, botPos.z);
         this.viewer.setVersion(this.bot.version);
-        // Load world
+        // Load world — init scene before listening to bot events,
+        // otherwise entity spawns crash when the scene isn't ready
         const worldView = new WorldView(this.bot.world, this.viewDistance, center);
         this.viewer.listen(worldView);
-        worldView.listenToBot(this.bot);
         await worldView.init(center);
+        worldView.listenToBot(this.bot);
         this.worldView = worldView;
+    }
+
+    destroy() {
+        if (this.worldView) {
+            this.worldView.removeListenersFromBot(this.bot);
+            this.worldView = null;
+        }
     }
   
     async capture() {

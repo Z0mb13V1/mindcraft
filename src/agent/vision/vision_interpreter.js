@@ -10,6 +10,13 @@ export class VisionInterpreter {
         if (allow_vision) {
             try {
                 this.camera = new Camera(agent.bot, this.fp);
+                this.camera.on('error', (err) => {
+                    console.warn(`[Vision] Camera async init failed: ${err.message}`);
+                    console.warn('[Vision] Vision disabled — bots will continue without screenshot capability.');
+                    this.allow_vision = false;
+                    if (this.camera) this.camera.destroy();
+                    this.camera = null;
+                });
             } catch (err) {
                 console.warn(`[Vision] Camera init failed (WebGL not available): ${err.message}`);
                 console.warn('[Vision] Vision disabled — bots will continue without screenshot capability.');
