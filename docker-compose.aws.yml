@@ -13,7 +13,7 @@ services:
       EULA: "TRUE"
       TYPE: "PAPER"
       VERSION: "LATEST"       # Latest MC version — ensure mineflayer supports it
-      MEMORY: "3G"            # Paper + Geyser + ViaVersion need ≥3G JVM heap
+      MEMORY: "2G"            # 2G JVM heap — Aikar GC keeps it efficient
       USE_AIKAR_FLAGS: "true" # Optimized GC flags for Paper (reduces GC pauses)
       DIFFICULTY: "normal"
       MODE: "survival"
@@ -43,7 +43,7 @@ services:
       resources:
         limits:
           cpus: "1.5"
-          memory: 3500M       # 3G JVM heap + 500M metaspace/native for Paper+Geyser
+          memory: 3500M       # 2G heap + 1.5G for Geyser native/metaspace/GC
 
   # ── Mindcraft Agents ──────────────────────────────────────────────────────
   mindcraft:
