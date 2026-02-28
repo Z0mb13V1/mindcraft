@@ -1049,7 +1049,8 @@
             const showViewer = agent.in_game && cfg.render_bot_view === true;
             const viewerPort = agent.viewerPort;
             const viewerHost = window.location.hostname || 'localhost';
-            const viewerURL = viewerPort ? `http://${viewerHost}:${viewerPort}` : null;
+            const viewerProtocol = window.location.protocol;
+            const viewerURL = viewerPort ? `${viewerProtocol}//${viewerHost}:${viewerPort}` : null;
             const placeholderMsg = !agent.in_game ? '🔴 Bot offline'
                 : !viewerPort ? '⚙ No viewer port'
                 : '⚙ Enable render_bot_view<br>in agent Settings';

@@ -52,7 +52,7 @@ services:
     network_mode: host
     command: sh -c "Xvfb :99 -screen 0 1024x768x24 &>/dev/null & export DISPLAY=:99 && sleep 2 && exec node main.js"
     environment:
-      PROFILES: '["./profiles/cloud-persistent.json", "./profiles/claude-explorer.json", "./profiles/local-research.json"]'
+      PROFILES: '["./profiles/cloud-persistent.json", "./profiles/claude-explorer.json"]'
       SETTINGS_JSON: '{"auto_open_ui": false, "host": "localhost", "mindserver_host_public": true, "allow_vision": true, "render_bot_view": true}'
       LIBGL_ALWAYS_SOFTWARE: "1"
       CHROMADB_URL: "http://localhost:8000"
