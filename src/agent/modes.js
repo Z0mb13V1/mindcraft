@@ -160,8 +160,10 @@ const modes_list = [
         on: true,
         active: false,
         update: async function (agent) {
-            const enemy = world.getNearestEntityWhere(agent.bot, entity => mc.isHostile(entity), 8);
-            if (enemy && await world.isClearPath(agent.bot, enemy)) {
+            const bot = agent.bot;
+            if (Date.now() - (bot.respawnTime || 0) < 5000) return;
+            const enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), 8);
+            if (enemy && await world.isClearPath(bot, enemy)) {
                 await say(agent, `Fighting ${enemy.name}!`);
                 await execute(this, agent, async () => {
                     await skills.defendSelf(agent.bot, 8);
@@ -403,7 +405,12 @@ class ModeController {
         for (let mode of modes_list) {
             let interruptible = mode.interrupts.some(i => i === 'all') || mode.interrupts.some(i => i === _agent.actions.currentActionLabel);
             if (mode.on && !mode.paused && !mode.active && (_agent.isIdle() || interruptible)) {
-                await mode.update(_agent);
+                try {
+                    await mode.update(_agent);
+                } catch (err) {
+                    console.error(`Mode ${mode.name} error:`, err.message);
+                    mode.active = false;
+                }
             }
             if (mode.active) break;
         }

@@ -563,6 +563,7 @@ export class Agent {
         this.bot.on('death', () => {
             this.actions.cancelResume();
             this.actions.stop();
+            this.bot.respawnTime = Date.now();
         });
         this.bot.on('kicked', (reason) => {
             if (!this._disconnectHandled) {
