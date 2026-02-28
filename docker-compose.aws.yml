@@ -1,30 +1,47 @@
 services:
-  # ── Minecraft Server ──────────────────────────────────────────────────────
+  # ── Minecraft Server (Paper + Cross-Play) ──────────────────────────────────
+  # Paper server with ViaVersion suite (Java backward compat) and
+  # Geyser + Floodgate (Bedrock cross-play on UDP 19132).
+  # Migrated from vanilla 2025-02-27.  Backup: minecraft-data-backup-pre-paper-*
   minecraft:
     image: itzg/minecraft-server
     container_name: minecraft-server
     ports:
-      - "25565:25565"
+      - "25565:25565"         # Java Edition
+      - "19132:19132/udp"     # Bedrock Edition (Geyser)
     environment:
       EULA: "TRUE"
-      MEMORY: "2G"            # Reduced from 4G — fits t3.large comfortably
-      VERSION: "1.21.6"
+      TYPE: "PAPER"
+      VERSION: "LATEST"       # Latest MC version — ensure mineflayer supports it
+      MEMORY: "2G"
       DIFFICULTY: "normal"
       MODE: "survival"
       ENABLE_COMMAND_BLOCK: "true"
-      VIEW_DISTANCE: "6"      # Reduced from 10 — major RAM/CPU saver
+      VIEW_DISTANCE: "6"
       SIMULATION_DISTANCE: "4"
-      ONLINE_MODE: "FALSE"
+      ONLINE_MODE: "FALSE"    # Required for mineflayer bots (offline auth)
+      ENABLE_RCON: "true"
+      RCON_PASSWORD: "${RCON_PASSWORD:-mindcraft}"
+      # ── Plugin auto-download from Modrinth ──
+      # ViaVersion suite: lets older Java clients connect
+      # Geyser + Floodgate: lets Bedrock clients connect
+      MODRINTH_PROJECTS: "viaversion,viabackwards,viarewind,geyser,floodgate"
     volumes:
       - ./minecraft-data:/data
     restart: unless-stopped
     stdin_open: true
     tty: true
+    healthcheck:
+      test: ["CMD", "mc-health", "--host", "localhost", "--port", "25565"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s      # Paper + plugins need more startup time
     deploy:
       resources:
         limits:
           cpus: "1.5"
-          memory: 2200M
+          memory: 2500M       # Extra headroom for Paper + plugins
 
   # ── Mindcraft Agents ──────────────────────────────────────────────────────
   mindcraft:

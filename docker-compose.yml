@@ -14,16 +14,20 @@ services:
       - local
       - monitoring
 
-  # ── Minecraft Server (always starts — shared by all modes) ────────────────────
+  # ── Minecraft Server (Paper + Cross-Play) ────────────────────────────────────
+  # Paper server with ViaVersion suite (Java backward compat) and
+  # Geyser + Floodgate (Bedrock cross-play on UDP 19132).
   minecraft:
     image: itzg/minecraft-server
     container_name: minecraft-server
     ports:
-      - "25565:25565"
+      - "25565:25565"         # Java Edition
+      - "19132:19132/udp"     # Bedrock Edition (Geyser)
     environment:
       EULA: "TRUE"
+      TYPE: "PAPER"
+      VERSION: "LATEST"       # Latest MC version — ensure mineflayer supports it
       MEMORY: "4G"
-      VERSION: "1.21.6"
       DIFFICULTY: "normal"
       MODE: "survival"
       ENABLE_COMMAND_BLOCK: "true"
@@ -31,6 +35,10 @@ services:
       ONLINE_MODE: "FALSE"        # Required for mineflayer bots (offline auth)
       ENABLE_RCON: "true"         # Enables save-off/save-on for experiment backups
       RCON_PASSWORD: "${RCON_PASSWORD:-mindcraft}"  # Override via .env for production
+      # ── Plugin auto-download from Modrinth ──
+      # ViaVersion suite: lets older Java clients connect
+      # Geyser + Floodgate: lets Bedrock clients connect
+      MODRINTH_PROJECTS: "viaversion,viabackwards,viarewind,geyser,floodgate"
     volumes:
       - ./minecraft-data:/data
     restart: unless-stopped
