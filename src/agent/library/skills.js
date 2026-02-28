@@ -627,14 +627,12 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                         i--;  // retry this slot with a different block
                         continue;
                     }
-                    console.log(`[RC24] Digging ${freshBlock.name} stateId=${freshBlock.stateId} pos=(${freshBlock.position.x},${freshBlock.position.y},${freshBlock.position.z}) botPos=(${Math.round(bot.entity.position.x)},${Math.round(bot.entity.position.y)},${Math.round(bot.entity.position.z)})`);
+                    console.log(`[RC24] Digging ${freshBlock.name}`);
                     await withTimeout(
                         bot.dig(freshBlock),
                         10000,
                         () => { try { bot.stopDigging(); } catch(_e) {} }
                     );
-                    const afterDig = bot.blockAt(block.position);
-                    console.log(`[RC26] After dig: ${afterDig?.name ?? 'null'} stateId=${afterDig?.stateId ?? '?'}`);
                     console.log(`[RC24] Picking up items`);
                     await new Promise(r => setTimeout(r, 300));
                     await withTimeout(
