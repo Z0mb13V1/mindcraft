@@ -286,7 +286,7 @@ const directChatHistory = [];   // multi-turn conversation history
 const MAX_DIRECT_HISTORY = 20;
 
 const DIRECT_CHAT_SYSTEM_TEMPLATE =
-`You are MindcraftBot, the AI control interface for a Minecraft bot management system. Help the admin monitor and manage their bots.
+`You are Mindcraft Bot Manager, the AI control interface for a Minecraft bot management system. Help the admin monitor and manage their bots.
 
 Bots:
 - CloudGrok: cloud ensemble (Gemini + Grok panel), persistent survival, maintains base
@@ -322,7 +322,7 @@ async function handleDirectChat(userMessage) {
 }
 
 // ── Help Text ───────────────────────────────────────────────
-const HELP_TEXT = `**MindcraftBot — Command Center**
+const HELP_TEXT = `**Mindcraft Bot Manager — Command Center**
 🔒 = requires the \`admin\` Discord role (or your user ID in \`DISCORD_ADMIN_IDS\`)
 
 **Chat with bots:**
@@ -331,7 +331,7 @@ Target one: \`andy: go mine diamonds\` | \`cg: come here\`
 Aliases: \`cloud\`/\`cg\`/\`grok\` = CloudGrok | \`local\`/\`la\`/\`andy\` = LocalAndy
 Groups: \`all\` \`cloud\` \`local\` \`research\` | Comma-separate targets: \`cg, andy\`
 
-**Talk to MindcraftBot directly:**
+**Talk to Mindcraft Bot Manager directly:**
 \`bot: <question>\` — Chat with the bot itself (live agent state + recent chat context)
 DM the bot — same as \`bot:\`, works even when MindServer is offline
 
@@ -725,9 +725,16 @@ function formatAgentNearby(name, state) {
 }
 
 // ── Discord Events ──────────────────────────────────────────
-client.on('ready', () => {
+client.on('ready', async () => {
     console.log(`🤖 Logged in as ${client.user.tag}`);
     console.log(`📋 Channels: DM=${BOT_DM_CHANNEL}, Backup=${BACKUP_CHAT_CHANNEL}`);
+
+    // Set guild nickname to "Mindcraft Bot Manager"
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            await guild.members.me?.setNickname('Mindcraft Bot Manager');
+        } catch (_e) { /* may lack permission */ }
+    }
 });
 
 client.on('messageCreate', async (message) => {
@@ -1031,7 +1038,7 @@ client.on('messageCreate', async (message) => {
             }
         }
 
-        // ── Direct chat with MindcraftBot (DM or "bot: <message>" prefix) ──
+        // ── Direct chat with Mindcraft Bot Manager (DM or "bot: <message>" prefix) ──
         const botPrefixMatch = content.match(/^bot:\s*([\s\S]+)/i);
         if (isDM || botPrefixMatch) {
             const question = (botPrefixMatch ? botPrefixMatch[1] : content).trim();
@@ -1092,7 +1099,7 @@ client.on('error', (error) => {
 
 // ── Startup ─────────────────────────────────────────────────
 async function start() {
-    console.log('🚀 Starting MindcraftBot...');
+    console.log('🚀 Starting Mindcraft Bot Manager...');
     console.log(`   MindServer: ${MINDSERVER_HOST}:${MINDSERVER_PORT}`);
 
     try {
@@ -1103,7 +1110,7 @@ async function start() {
     }
 
     connectToMindServer();
-    console.log('✅ MindcraftBot running');
+    console.log('✅ Mindcraft Bot Manager running');
 }
 
 start().catch(err => { console.error('Fatal:', err); process.exit(1); });
