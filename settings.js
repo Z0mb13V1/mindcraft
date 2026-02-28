@@ -48,7 +48,7 @@ const settings = {
     "max_commands": 15, // max number of commands that can be used in consecutive responses. -1 for no limit
     "show_command_syntax": "shortened", // "full", "shortened", or "none"
     "narrate_behavior": false, // chat simple automatic actions ('Picking up item!')
-    "chat_bot_messages": true, // publicly chat messages to other bots
+    "chat_bot_messages": false, // publicly chat messages to other bots
 
     "spawn_timeout": 30, // num seconds allowed for the bot to spawn before throwing error. Increase when spawning takes a while.
     "block_place_delay": 0, // delay between placing blocks (ms) if using newAction. helps avoid bot being kicked by anti-cheat mechanisms on servers.

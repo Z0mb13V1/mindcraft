@@ -4,7 +4,7 @@
         "api": "google",
         "model": "gemini-2.5-flash"
     },
-    "cooldown": 1500,
+    "cooldown": 4000,
     "vision_model": {
         "api": "google",
         "model": "gemini-2.5-flash"

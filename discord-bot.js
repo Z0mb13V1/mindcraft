@@ -168,7 +168,7 @@ let mindServerConnected = false;
 let knownAgents = [];      // [{name, in_game, socket_connected, viewerPort}]
 let agentStates = {};      // {agentName: {gameplay, action, inventory, nearby, ...}}
 let replyChannel = null;   // cached Discord channel for fast replies
-const messageLimiter = new RateLimiter(5, 60000);  // 5 messages per 60 seconds per user
+const messageLimiter = new RateLimiter(3, 60000);  // 3 messages per 60 seconds per user
 
 // ── Gemini Helper (shared by auto-fix and direct chat) ────────
 async function callGemini(systemPrompt, userMessage, history = []) {
