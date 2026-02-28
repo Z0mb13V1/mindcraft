@@ -1554,6 +1554,9 @@ export async function explore(bot, distance=40) {
     const HOP_SIZE = 50; // max distance per pathfinding hop
     const numHops = Math.max(1, Math.ceil(distance / HOP_SIZE));
     
+    // Pause unstuck mode during multi-hop — pathfinding between hops can trigger false stuck detection
+    if (numHops > 1) bot.modes.pause('unstuck');
+    
     log(bot, `Exploring ${distance} blocks (${numHops} hops)...`);
     
     let totalMoved = 0;
@@ -1607,6 +1610,10 @@ export async function explore(bot, distance=40) {
     
     const finalPos = bot.entity.position;
     const directDistance = startPos.distanceTo(finalPos);
+    
+    // Resume unstuck mode
+    if (numHops > 1) bot.modes.unpause('unstuck');
+    
     log(bot, `Explored ${Math.round(directDistance)} blocks to (${Math.floor(finalPos.x)}, ${Math.floor(finalPos.y)}, ${Math.floor(finalPos.z)}). New chunks loaded — try gathering here.`);
     return directDistance > 10;
 }
