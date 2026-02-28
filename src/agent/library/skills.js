@@ -476,9 +476,19 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
     for (let i=0; i<num; i++) {
         let blocks = world.getNearestBlocksWhere(bot, block => {
-            if (!block.position || !blocktypes.includes(block.name)) {
+            // RC18 FIX: mineflayer's findBlocks has a section palette pre-filter
+            // (isBlockInSection) that creates blocks via Block.fromStateId() which
+            // sets position=null. We MUST check block name first and return true
+            // for palette pre-filter (position=null) to avoid skipping entire sections.
+            // Previously: `if (!block.position || !blocktypes.includes(block.name)) return false`
+            // caused ALL sections to be skipped because position is always null during palette check.
+            if (!blocktypes.includes(block.name)) {
                 return false;
             }
+            // If position is null, we're in the palette pre-filter — name matched,
+            // so tell mineflayer this section might contain our target block.
+            if (!block.position) return true;
+            
             if (exclude) {
                 for (let position of exclude) {
                     if (position && block.position.x === position.x && block.position.y === position.y && block.position.z === position.z) {
@@ -1585,11 +1595,12 @@ export async function explore(bot, distance=40) {
             totalMoved += moved;
             consecutiveFails = 0;
             
-            // RC17b: Water/ocean detection — if we dropped to sea level or below,
-            // the path is heading toward ocean. Change direction immediately.
+            // RC17b: Water/ocean detection — if we dropped below sea level (y<=62)
+            // or are standing on water, the path is heading toward ocean. Change direction.
+            // Note: y=63 is sea level and many valid forest areas exist there, so only trigger at y<=62.
             const postHopY = bot.entity.position.y;
             const feetBlock = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
-            const isNearWater = (feetBlock && (feetBlock.name === 'water' || feetBlock.name === 'kelp' || feetBlock.name === 'seagrass')) || postHopY <= 63;
+            const isNearWater = (feetBlock && (feetBlock.name === 'water' || feetBlock.name === 'kelp' || feetBlock.name === 'seagrass')) || postHopY <= 62;
             
             if (isNearWater && hop < numHops - 1) {
                 log(bot, `Heading toward water (y=${Math.round(postHopY)}), changing direction...`);
