@@ -420,7 +420,23 @@ export async function defendSelf(bot, range=9) {
     return attacked;
 }
 
-
+// RC24: Timeout helper for Paper server compatibility.
+// bot.pathfinder.goto() and bot.dig() have no built-in timeout and can hang
+// indefinitely on Paper due to event handling differences. This races the
+// operation against a timer and calls onTimeout (e.g. pathfinder.stop()) to
+// cancel if it exceeds the limit.
+function withTimeout(promise, ms, onTimeout) {
+    let timer;
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            timer = setTimeout(() => {
+                if (onTimeout) onTimeout();
+                reject(new Error(`Timed out after ${ms}ms`));
+            }, ms);
+        })
+    ]).finally(() => clearTimeout(timer));
+}
 
 export async function collectBlock(bot, blockType, num=1, exclude=null) {
     /**
@@ -542,32 +558,65 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 success = await useToolOnBlock(bot, 'bucket', block);
             }
             else if (mc.mustCollectManually(blockType)) {
-                await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
-                await bot.dig(block);
+                // RC24: Added timeout protection — goToPosition/dig can hang on Paper
+                console.log(`[RC24] Manual-collect ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z})`);
+                await withTimeout(
+                    goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
+                    15000,
+                    () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                );
+                console.log(`[RC24] Digging ${blockType} (manual)`);
+                await withTimeout(
+                    bot.dig(block),
+                    10000,
+                    () => { try { bot.stopDigging(); } catch(e) {} }
+                );
                 await new Promise(r => setTimeout(r, 300));
-                await pickupNearbyItems(bot);
+                await withTimeout(
+                    pickupNearbyItems(bot),
+                    8000,
+                    () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                );
                 // Verify items actually entered inventory
                 const invAfter = world.getInventoryCounts(bot);
                 const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
                 const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
                 success = totalAfter > totalBefore;
+                console.log(`[RC24] Manual-collect result: success=${success}`);
             }
             else {
-                // RC23: bot.collectBlock.collect() hangs indefinitely on Paper servers
-                // because mineflayer-collectblock's internal pathfinding + dig chain never
-                // resolves due to Paper's different event handling. Using manual dig
-                // (goToPosition + dig + pickup) is proven reliable on both Paper and vanilla.
+                // RC24: Manual dig with timeout protection for Paper servers.
+                // bot.collectBlock.collect() hangs indefinitely on Paper due to event
+                // handling differences. Manual dig also needs timeouts since
+                // pathfinder.goto() has no built-in timeout.
                 try {
-                    await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
-                    await bot.dig(block);
+                    console.log(`[RC24] Navigating to ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z})`);
+                    await withTimeout(
+                        goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
+                        15000,
+                        () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                    );
+                    console.log(`[RC24] Digging ${blockType}`);
+                    await withTimeout(
+                        bot.dig(block),
+                        10000,
+                        () => { try { bot.stopDigging(); } catch(e) {} }
+                    );
+                    console.log(`[RC24] Picking up items`);
                     await new Promise(r => setTimeout(r, 300));
-                    await pickupNearbyItems(bot);
+                    await withTimeout(
+                        pickupNearbyItems(bot),
+                        8000,
+                        () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                    );
                     const invAfter = world.getInventoryCounts(bot);
                     const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
                     const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
                     success = totalAfter > totalBefore;
+                    console.log(`[RC24] Result: success=${success}, items ${totalBefore}→${totalAfter}`);
                 } catch (_digErr) {
-                    console.log(`[RC23] Manual dig failed for ${blockType}: ${_digErr.message}`);
+                    console.log(`[RC24] Failed for ${blockType}: ${_digErr.message}`);
+                    try { bot.pathfinder.stop(); } catch(e) {}
                 }
                 if (!success) {
                     if (!exclude) exclude = [];
