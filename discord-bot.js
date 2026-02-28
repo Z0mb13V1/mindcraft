@@ -174,7 +174,7 @@ const messageLimiter = new RateLimiter(5, 60000);  // 5 messages per 60 seconds 
 async function callGemini(systemPrompt, userMessage, history = []) {
     if (!GOOGLE_API_KEY) return null;
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_API_KEY}`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
         const contents = [
             ...history,
             { role: 'user', parts: [{ text: userMessage }] }
