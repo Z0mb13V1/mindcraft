@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Mindcraft</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -475,12 +477,18 @@
         .hud-log .log-entry.action { color: #4fc3f7; }
         .hud-log .log-entry.chat { color: #aed581; }
         .hud-log .log-entry.system { color: #ffab40; }
+        .no-margin { margin: 0; }
+        .footer-buttons { display: flex; gap: 12px; }
+        .modal-status { margin: 6px 0; }
+        .error-text { color: #f44336; margin-top: 10px; }
+        .file-input-hidden { display: none; }
+        .discard-btn { background: #777; }
     </style>
 </head>
 <body>
     <div class="title-row">
         <div class="title-left">
-            <h1 style="margin: 0;">Mindcraft</h1>
+            <h1 class="no-margin">Mindcraft</h1>
             <span id="msStatus" class="status-badge offline">mindserver offline</span>
         </div>
         <div class="title-spacer"></div>
@@ -491,7 +499,7 @@
         <div>
             <button id="openCreateAgentBtn" class="start-btn">New Agent</button>
         </div>
-        <div style="display:flex; gap:12px;">
+        <div class="footer-buttons">
             <button class="stop-btn" onclick="disconnectAllAgents()">Disconnect All Agents</button>
             <button class="stop-btn" onclick="confirmShutdown()">Full Shutdown</button>
         </div>
@@ -501,15 +509,15 @@
     <div id="createAgentModal" class="modal-backdrop">
         <div class="modal">
             <div class="modal-header">
-                <h2 style="margin:0;">Create Agent</h2>
+                <h2 class="no-margin">Create Agent</h2>
                 <button id="closeCreateAgentBtn" class="modal-close-btn">Close</button>
             </div>
             <div class="modal-body">
                 <div id="createAgentSection">
-                    <div id="profileStatus" style="margin:6px 0;">Profile: Not uploaded</div>
+                    <div id="profileStatus" class="modal-status">Profile: Not uploaded</div>
                     <div id="settingsForm"></div>
-                    <div id="createError" style="color:#f44336;margin-top:10px;"></div>
-                    <input type="file" id="profileFileInput" accept=".json,application/json" style="display:none">
+                    <div id="createError" class="error-text"></div>
+                    <input type="file" id="profileFileInput" accept=".json,application/json" class="file-input-hidden">
                 </div>
             </div>
             <div class="modal-footer">
@@ -526,19 +534,19 @@
     <div id="agentSettingsModal" class="modal-backdrop">
         <div class="modal">
             <div class="modal-header">
-                <h2 id="agentSettingsTitle" style="margin:0;">Agent Settings</h2>
+                <h2 id="agentSettingsTitle" class="no-margin">Agent Settings</h2>
                 <button id="closeAgentSettingsBtn" class="modal-close-btn">Close</button>
             </div>
             <div class="modal-body">
                 <div id="agentSettingsSection">
                     <div id="agentSettingsForm"></div>
-                    <div id="agentSettingsError" style="color:#f44336;margin-top:10px;"></div>
+                    <div id="agentSettingsError" class="error-text"></div>
                 </div>
             </div>
             <div class="modal-footer">
                 <div class="footer-left" id="agentSettingsFooter">Modify settings then apply to restart the agent.</div>
                 <div class="footer-actions">
-                    <button id="discardAgentSettingsBtn" class="stop-btn" style="background:#777;">Discard Changes</button>
+                    <button id="discardAgentSettingsBtn" class="stop-btn discard-btn">Discard Changes</button>
                     <button id="applyAgentSettingsBtn" class="start-btn" disabled>Apply & Restart</button>
                 </div>
             </div>
