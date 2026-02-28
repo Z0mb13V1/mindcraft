@@ -1314,9 +1314,8 @@ export async function goToGoal(bot, goal) {
             if (!goalPos) return false;
             const dist = bot.entity.position.distanceTo(goalPos);
             const threshold = (goal.distance || 4) + 2;
-            console.log(`[RC25b] proximity: dist=${dist.toFixed(1)}, threshold=${threshold}, goal.distance=${goal.distance}`);
             return dist <= threshold;
-        } catch (e) { console.log(`[RC25b] proximity error: ${e.message}`); return false; }
+        } catch (_e) { return false; }
     };
 
     try {
@@ -1326,7 +1325,6 @@ export async function goToGoal(bot, goal) {
             bot.ashfinder.gotoSmart(goal),
             new Promise((resolve) => {
                 timeoutId = setTimeout(() => {
-                    console.log(`[RC25b] goToGoal timeout (${navTimeout}ms) — stopping nav`);
                     try { bot.ashfinder.stop(); } catch (_) {}
                     resolve({ status: 'timeout' });
                 }, navTimeout);
@@ -1765,7 +1763,7 @@ export async function explore(bot, distance=40) {
         } catch (_err) {
             consecutiveFails++;
             if (consecutiveFails >= 2) {
-                log(bot, `Exploration stuck after ${Math.round(totalMoved)} blocks — terrain blocked.`);
+                log(bot, `Exploration stuck after ${Math.round(totalMoved)} blocks. Move to a new area far away and try a different direction.`);
                 break;
             }
             // Try perpendicular direction on failure
