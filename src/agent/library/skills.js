@@ -492,11 +492,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             }
             
             return movements.safeToBreak(block) || unsafeBlocks.includes(block.name) || isNoGravityNaturalBlock;
-        }, 64, 1);
+        }, 128, 1);  // RC17: Increased from 64 to 128 to match searchForBlock range
 
         if (blocks.length === 0) {
             if (collected === 0)
-                log(bot, `No ${blockType} found within 64 blocks. Gathering system is working fine — this area simply has none. Use !explore(200) to travel far enough to find new resources, then retry. Do NOT use !searchForBlock — explore first to load fresh chunks.`);
+                log(bot, `No ${blockType} found within 128 blocks. Gathering system is working fine — this area simply has none. Use !explore(200) to travel far enough to find new resources, then retry. Do NOT use !searchForBlock — explore first to load fresh chunks.`);
             else
                 log(bot, `No more ${blockType} nearby to collect. Successfully collected ${collected} so far.`);
             break;
@@ -1364,7 +1364,13 @@ export async function goToNearestBlock(bot, blockType,  min_distance=2, range=64
         return false;
     }
     log(bot, `Found ${blockType} at ${block.position}. Navigating...`);
-    await goToPosition(bot, block.position.x, block.position.y, block.position.z, min_distance);
+    // RC17: Pause unstuck during navigation to prevent false stuck detection
+    bot.modes.pause('unstuck');
+    try {
+        await goToPosition(bot, block.position.x, block.position.y, block.position.z, min_distance);
+    } finally {
+        bot.modes.unpause('unstuck');
+    }
     return true;
 }
 
@@ -1608,8 +1614,56 @@ export async function explore(bot, distance=40) {
         }
     }
     
-    const finalPos = bot.entity.position;
-    const directDistance = startPos.distanceTo(finalPos);
+    let finalPos = bot.entity.position;
+    let directDistance = startPos.distanceTo(finalPos);
+    
+    // RC17: Smart explore — check if we landed near resources (any log type).
+    // If not, auto-retry in different directions before returning to the LLM.
+    const LOG_TYPES = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+    const MAX_DIRECTION_RETRIES = 2;
+    
+    for (let retry = 0; retry < MAX_DIRECTION_RETRIES; retry++) {
+        if (bot.interrupt_code) break;
+        
+        // Check for any log blocks within 128 blocks
+        let hasLogs = false;
+        for (const logType of LOG_TYPES) {
+            const logBlock = world.getNearestBlock(bot, logType, 128);
+            if (logBlock) {
+                hasLogs = true;
+                break;
+            }
+        }
+        
+        if (hasLogs) break; // Found logs nearby, good landing spot
+        
+        // Also check if we're in water (bad landing)
+        const feetBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+        const isInWater = feetBlock && (feetBlock.name === 'water' || feetBlock.name === 'ice' || feetBlock.name === 'blue_ice');
+        
+        if (!hasLogs) {
+            log(bot, `No trees in this area${isInWater ? ' (landed in water)' : ''}. Trying a different direction (attempt ${retry + 1}/${MAX_DIRECTION_RETRIES})...`);
+            
+            // Pick a direction roughly perpendicular to our original angle
+            const retryAngle = angle + Math.PI / 2 + (retry * Math.PI / 3) + (Math.random() - 0.5) * 0.5;
+            const retryDist = Math.min(100, distance);
+            const retryHops = Math.max(1, Math.ceil(retryDist / HOP_SIZE));
+            
+            for (let hop = 0; hop < retryHops; hop++) {
+                if (bot.interrupt_code) break;
+                const cp = bot.entity.position;
+                const hd = Math.min(HOP_SIZE, retryDist - (hop * HOP_SIZE));
+                const tx = Math.floor(cp.x + hd * Math.cos(retryAngle));
+                const tz = Math.floor(cp.z + hd * Math.sin(retryAngle));
+                try {
+                    await goToPosition(bot, tx, cp.y, tz, 3);
+                } catch (_e) { break; }
+            }
+            
+            finalPos = bot.entity.position;
+            directDistance = startPos.distanceTo(finalPos);
+        }
+    }
     
     // Resume unstuck mode
     if (numHops > 1) bot.modes.unpause('unstuck');
