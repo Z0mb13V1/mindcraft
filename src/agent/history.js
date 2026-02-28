@@ -38,12 +38,15 @@ export class History {
         // These are residual beliefs from past bugs that are no longer true.
         // The gathering system works correctly — the bots just need to move.
         const toxicPatterns = [
-            /\b(?:block |my )?gathering (?:is |remains? |still )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
+            /\b(?:block |my )?gathering(?:\/\w+)? (?:is |remains? |still )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b[^.;]*/gi,
             /\bcollect(?:Blocks?|ion)? (?:is |command )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
-            /\bwaiting for (?:the |an )?update\b/gi,
-            /\bneed(?:s)? (?:an? )?(?:fix|update|patch) (?:for|to fix) (?:gathering|collect(?:ion|Blocks?))\b/gi,
+            /\b(?:waiting|await(?:ing)?) (?:for )?(?:the |an )?(?:update|fix|patch)\b[^.;]*/gi,
+            /\bneed(?:s)? (?:an? )?(?:fix|update|patch) (?:for|to (?:fix|repair)) (?:\w+ )*(?:gathering|collect(?:ion|Blocks?)|core mechanics)\b/gi,
             /\bcannot gather (?:any )?resources\b/gi,
-            /\bgathering (?:commands? )?(?:are |is )?(?:still )?broken for both\b/gi,
+            /\bgathering(?:\/\w+)? (?:commands? )?(?:are |is )?(?:still )?(?:broken|non-?functional) for both\b[^.;]*/gi,
+            /\bcore (?:mechanics|systems?) (?:are |is )?(?:broken|non-?functional|bugged)\b[^.;]*/gi,
+            /\bcrafted items don'?t persist\b/gi,
+            /CRITICAL:[^.;]*(?:non-?functional|broken|bugged)[^.;]*/gi,
         ];
         for (const pattern of toxicPatterns) {
             this.memory = this.memory.replace(pattern, 'gathering works — relocate to find blocks');
@@ -125,12 +128,15 @@ export class History {
 
             // ── Sanitize stale false beliefs on load ──────────────────────
             const toxicPatterns = [
-                /\b(?:block |my )?gathering (?:is |remains? |still )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
+                /\b(?:block |my )?gathering(?:\/\w+)? (?:is |remains? |still )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b[^.;]*/gi,
                 /\bcollect(?:Blocks?|ion)? (?:is |command )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
-                /\bwaiting for (?:the |an )?update\b/gi,
-                /\bneed(?:s)? (?:an? )?(?:fix|update|patch) (?:for|to fix) (?:gathering|collect(?:ion|Blocks?))\b/gi,
+                /\b(?:waiting|await(?:ing)?) (?:for )?(?:the |an )?(?:update|fix|patch)\b[^.;]*/gi,
+                /\bneed(?:s)? (?:an? )?(?:fix|update|patch) (?:for|to (?:fix|repair)) (?:\w+ )*(?:gathering|collect(?:ion|Blocks?)|core mechanics)\b/gi,
                 /\bcannot gather (?:any )?resources\b/gi,
-                /\bgathering (?:commands? )?(?:are |is )?(?:still )?broken for both\b/gi,
+                /\bgathering(?:\/\w+)? (?:commands? )?(?:are |is )?(?:still )?(?:broken|non-?functional) for both\b[^.;]*/gi,
+                /\bcore (?:mechanics|systems?) (?:are |is )?(?:broken|non-?functional|bugged)\b[^.;]*/gi,
+                /\bcrafted items don'?t persist\b/gi,
+                /CRITICAL:[^.;]*(?:non-?functional|broken|bugged)[^.;]*/gi,
             ];
             const origLen = this.memory.length;
             for (const pattern of toxicPatterns) {
