@@ -69,6 +69,7 @@ services:
       BOT_DM_CHANNEL: "${BOT_DM_CHANNEL}"
       BACKUP_CHAT_CHANNEL: "${BACKUP_CHAT_CHANNEL}"
       DISCORD_ADMIN_IDS: "${DISCORD_ADMIN_IDS}"
+      GOOGLE_API_KEY: "${GEMINI_API_KEY}"
       MINDSERVER_HOST: "host.docker.internal"
       PUBLIC_HOST: "${EC2_PUBLIC_IP}"
     extra_hosts:
