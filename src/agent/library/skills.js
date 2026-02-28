@@ -553,32 +553,25 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 success = totalAfter > totalBefore;
             }
             else {
-                await bot.collectBlock.collect(block);
-                await new Promise(r => setTimeout(r, 300));
-                await pickupNearbyItems(bot);
-                // Verify items actually entered inventory
-                const invAfter = world.getInventoryCounts(bot);
-                const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
-                const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
-
-                success = totalAfter > totalBefore;
-                // Fallback: if collectBlock didn't work, try manual dig
+                // RC23: bot.collectBlock.collect() hangs indefinitely on Paper servers
+                // because mineflayer-collectblock's internal pathfinding + dig chain never
+                // resolves due to Paper's different event handling. Using manual dig
+                // (goToPosition + dig + pickup) is proven reliable on both Paper and vanilla.
+                try {
+                    await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
+                    await bot.dig(block);
+                    await new Promise(r => setTimeout(r, 300));
+                    await pickupNearbyItems(bot);
+                    const invAfter = world.getInventoryCounts(bot);
+                    const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
+                    const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
+                    success = totalAfter > totalBefore;
+                } catch (_digErr) {
+                    console.log(`[RC23] Manual dig failed for ${blockType}: ${_digErr.message}`);
+                }
                 if (!success) {
-                    try {
-                        await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
-                        await bot.dig(block);
-                        await new Promise(r => setTimeout(r, 300));
-                        await pickupNearbyItems(bot);
-                        const invRetry = world.getInventoryCounts(bot);
-                        const totalRetry = Object.values(invRetry).reduce((a, b) => a + b, 0);
-                        success = totalRetry > totalBefore;
-                    } catch (_digErr) {
-                        // Skip this block, will be excluded below
-                    }
-                    if (!success) {
-                        if (!exclude) exclude = [];
-                        exclude.push(block.position);
-                    }
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
                 }
             }
             if (success) {
