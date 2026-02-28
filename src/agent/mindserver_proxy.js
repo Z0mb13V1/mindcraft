@@ -29,7 +29,7 @@ class MindServerProxy {
 
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                reject(new Error(`MindServer connection timed out after 30s (port ${port})`));
+                reject(new Error(`MindServer connection timed out after 30s (${url})`));
             }, 30000);
             this.socket.on('connect', () => {
                 clearTimeout(timeout);

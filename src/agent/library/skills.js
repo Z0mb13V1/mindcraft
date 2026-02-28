@@ -569,19 +569,19 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 await withTimeout(
                     goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
                     navTimeout,
-                    () => { try { bot.ashfinder.stop(); } catch(e) {} }
+                    () => { try { bot.ashfinder.stop(); } catch(_e) {} }
                 );
                 console.log(`[RC24] Digging ${blockType} (manual)`);
                 await withTimeout(
                     bot.dig(block),
                     10000,
-                    () => { try { bot.stopDigging(); } catch(e) {} }
+                    () => { try { bot.stopDigging(); } catch(_e) {} }
                 );
                 await new Promise(r => setTimeout(r, 300));
                 await withTimeout(
                     pickupNearbyItems(bot),
                     8000,
-                    () => { try { bot.ashfinder.stop(); } catch(e) {} }
+                    () => { try { bot.ashfinder.stop(); } catch(_e) {} }
                 );
                 // Verify items actually entered inventory
                 const invAfter = world.getInventoryCounts(bot);
@@ -604,20 +604,20 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                     await withTimeout(
                         goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
                         navTimeout,
-                        () => { try { bot.ashfinder.stop(); } catch(e) {} }
+                        () => { try { bot.ashfinder.stop(); } catch(_e) {} }
                     );
                     console.log(`[RC24] Digging ${blockType}`);
                     await withTimeout(
                         bot.dig(block),
                         10000,
-                        () => { try { bot.stopDigging(); } catch(e) {} }
+                        () => { try { bot.stopDigging(); } catch(_e) {} }
                     );
                     console.log(`[RC24] Picking up items`);
                     await new Promise(r => setTimeout(r, 300));
                     await withTimeout(
                         pickupNearbyItems(bot),
                         8000,
-                        () => { try { bot.ashfinder.stop(); } catch(e) {} }
+                        () => { try { bot.ashfinder.stop(); } catch(_e) {} }
                     );
                     const invAfter = world.getInventoryCounts(bot);
                     const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
@@ -631,7 +631,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                         throw _digErr;
                     }
                     console.log(`[RC24] Failed for ${blockType}: ${_digErr.message}`);
-                    try { bot.ashfinder.stop(); } catch(e) {}
+                    try { bot.ashfinder.stop(); } catch(_e) {}
                 }
                 if (!success) {
                     if (!exclude) exclude = [];
@@ -1853,7 +1853,7 @@ export async function avoidEnemies(bot, distance=16) {
         if (!bot.ashfinder.stopped) bot.ashfinder.stop();
         try {
             await bot.ashfinder.gotoSmart(avoidGoal);
-        } catch (e) { /* best-effort flee */ }
+        } catch (_e) { /* best-effort flee */ }
         await new Promise(resolve => setTimeout(resolve, 500));
         enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), distance);
         if (bot.interrupt_code) {
