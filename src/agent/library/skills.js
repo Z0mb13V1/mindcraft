@@ -1170,7 +1170,7 @@ export async function goToGoal(bot, goal) {
 
     let final_movements = destructiveMovements;
 
-    const pathfind_timeout = 1000;
+    const pathfind_timeout = 3000;
     if (await bot.pathfinder.getPathTo(nonDestructiveMovements, goal, pathfind_timeout).status === 'success') {
         final_movements = nonDestructiveMovements;
         log(bot, `Found non-destructive path.`);
@@ -1542,37 +1542,73 @@ export async function moveAwayFromEntity(bot, entity, distance=16) {
 export async function explore(bot, distance=40) {
     /**
      * Move to a random position to explore new terrain and find fresh resources.
+     * Uses multi-hop navigation for distances > 60 blocks to avoid pathfinder timeouts.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {number} distance, the approximate distance to explore. Defaults to 40.
      * @returns {Promise<boolean>} true if exploration succeeded, false otherwise.
      * @example
-     * await skills.explore(bot, 60);
+     * await skills.explore(bot, 200);
      **/
-    const pos = bot.entity.position;
+    const startPos = bot.entity.position.clone();
     const angle = Math.random() * 2 * Math.PI;
-    const tx = Math.floor(pos.x + distance * Math.cos(angle));
-    const tz = Math.floor(pos.z + distance * Math.sin(angle));
-    // Use current Y; goToPosition will handle terrain
-    log(bot, `Exploring toward (${tx}, ~, ${tz})...`);
-    try {
-        await goToPosition(bot, tx, pos.y, tz, 3);
-    } catch (_err) {
-        // Try a second random direction if first fails
-        const angle2 = angle + Math.PI / 2;
-        const tx2 = Math.floor(pos.x + (distance * 0.7) * Math.cos(angle2));
-        const tz2 = Math.floor(pos.z + (distance * 0.7) * Math.sin(angle2));
-        log(bot, `First direction blocked, trying (${tx2}, ~, ${tz2})...`);
+    const HOP_SIZE = 50; // max distance per pathfinding hop
+    const numHops = Math.max(1, Math.ceil(distance / HOP_SIZE));
+    
+    log(bot, `Exploring ${distance} blocks (${numHops} hops)...`);
+    
+    let totalMoved = 0;
+    let consecutiveFails = 0;
+    
+    for (let hop = 0; hop < numHops; hop++) {
+        if (bot.interrupt_code) break;
+        
+        const currentPos = bot.entity.position;
+        const hopDist = Math.min(HOP_SIZE, distance - totalMoved);
+        
+        // Add slight random angle variation per hop to avoid obstacles
+        const hopAngle = angle + (Math.random() - 0.5) * 0.4;
+        const tx = Math.floor(currentPos.x + hopDist * Math.cos(hopAngle));
+        const tz = Math.floor(currentPos.z + hopDist * Math.sin(hopAngle));
+        
         try {
-            await goToPosition(bot, tx2, pos.y, tz2, 3);
-        } catch (_err2) {
-            log(bot, `Exploration failed — terrain may be blocked. Try a different distance.`);
-            return false;
+            await goToPosition(bot, tx, currentPos.y, tz, 3);
+            const moved = currentPos.distanceTo(bot.entity.position);
+            totalMoved += moved;
+            consecutiveFails = 0;
+            
+            if (moved < 5 && hop > 0) {
+                // Barely moved — try a perpendicular direction
+                const perpAngle = angle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+                const px = Math.floor(bot.entity.position.x + hopDist * Math.cos(perpAngle));
+                const pz = Math.floor(bot.entity.position.z + hopDist * Math.sin(perpAngle));
+                log(bot, `Path blocked, trying perpendicular direction...`);
+                try {
+                    await goToPosition(bot, px, bot.entity.position.y, pz, 3);
+                    totalMoved += bot.entity.position.distanceTo(currentPos);
+                } catch (_e) { /* continue with next hop */ }
+            }
+        } catch (_err) {
+            consecutiveFails++;
+            if (consecutiveFails >= 2) {
+                log(bot, `Exploration stuck after ${Math.round(totalMoved)} blocks — terrain blocked.`);
+                break;
+            }
+            // Try perpendicular direction on failure
+            const perpAngle = angle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+            const px = Math.floor(currentPos.x + hopDist * Math.cos(perpAngle));
+            const pz = Math.floor(currentPos.z + hopDist * Math.sin(perpAngle));
+            try {
+                await goToPosition(bot, px, currentPos.y, pz, 3);
+                totalMoved += currentPos.distanceTo(bot.entity.position);
+                consecutiveFails = 0;
+            } catch (_e2) { /* will try next hop */ }
         }
     }
-    const newPos = bot.entity.position;
-    const moved = pos.distanceTo(newPos);
-    log(bot, `Explored ${Math.round(moved)} blocks to (${Math.floor(newPos.x)}, ${Math.floor(newPos.y)}, ${Math.floor(newPos.z)}). New chunks loaded — try gathering here.`);
-    return true;
+    
+    const finalPos = bot.entity.position;
+    const directDistance = startPos.distanceTo(finalPos);
+    log(bot, `Explored ${Math.round(directDistance)} blocks to (${Math.floor(finalPos.x)}, ${Math.floor(finalPos.y)}, ${Math.floor(finalPos.z)}). New chunks loaded — try gathering here.`);
+    return directDistance > 10;
 }
 
 export async function avoidEnemies(bot, distance=16) {
