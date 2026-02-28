@@ -394,6 +394,11 @@ function connectToMindServer() {
     mindServerSocket.on('bot-output', async (agentName, message) => {
         console.log(`[Agent ${agentName}] ${message}`);
         await sendToDiscord(`🟢 **${agentName}**: ${message}`);
+        addToChatBuffer(agentName, agentName, message);
+        chatMessageCount++;
+        if (chatMessageCount % AUTOFIX_CHECK_EVERY === 0) {
+            runAutoFix().catch(err => console.error('[AutoFix]', err.message));
+        }
     });
 
     mindServerSocket.on('chat-message', async (agentName, json) => {
