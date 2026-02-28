@@ -140,8 +140,12 @@ export function createMindServer(host_public = false, port = 8080) {
                 return;
             }
             if (agent_connections[name]) {
-                // Already registered (reconnect) — just return its settings
+                // Already registered — update settings from remote agent
+                // (remote agent may have different host/port than the server's own)
+                agent_connections[name].setSettings(agentSettings);
+                console.log(`Remote agent '${name}' re-registered (settings updated)`);
                 callback({ settings: agent_connections[name].settings });
+                agentsStatusUpdate();
                 return;
             }
             const viewerPort = 3000 + Object.keys(agent_connections).length;
