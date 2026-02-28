@@ -1306,16 +1306,17 @@ export async function goToGoal(bot, goal) {
 
     // RC25b: Helper — check if bot is close enough to goal to count as success.
     // Paper's position corrections prevent the executor from passing its tight
-    // reach threshold (0.35 blocks), but the bot is often within 1-2 blocks.
+    // reach threshold (0.35 blocks), but the bot is often within 2-4 blocks.
+    // Use generous threshold: goal.distance + 2 (or 5 as fallback).
     const isCloseEnough = () => {
         try {
             const goalPos = goal.pos || (goal.getPosition ? goal.getPosition() : null);
             if (!goalPos) return false;
             const dist = bot.entity.position.distanceTo(goalPos);
-            const threshold = (goal.distance || 2) + 1;
-            console.log(`[RC25b] proximity check: dist=${dist.toFixed(1)}, threshold=${threshold}`);
+            const threshold = (goal.distance || 4) + 2;
+            console.log(`[RC25b] proximity: dist=${dist.toFixed(1)}, threshold=${threshold}, goal.distance=${goal.distance}`);
             return dist <= threshold;
-        } catch (e) { console.log(`[RC25b] proximity check error: ${e.message}`); return false; }
+        } catch (e) { console.log(`[RC25b] proximity error: ${e.message}`); return false; }
     };
 
     try {
