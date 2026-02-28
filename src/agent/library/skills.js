@@ -496,7 +496,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
         if (blocks.length === 0) {
             if (collected === 0)
-                log(bot, `No ${blockType} found within 64 blocks. Gathering system is working fine — this area simply has none. Use !searchForBlock("${blockType}", 128) or !explore 80 to reach a new area, then retry.`);
+                log(bot, `No ${blockType} found within 64 blocks. Gathering system is working fine — this area simply has none. Use !explore(200) to travel far enough to find new resources, then retry. Do NOT use !searchForBlock — explore first to load fresh chunks.`);
             else
                 log(bot, `No more ${blockType} nearby to collect. Successfully collected ${collected} so far.`);
             break;
@@ -567,7 +567,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             } else {
                 consecutiveFails++;
                 if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
-                    log(bot, `Failed to collect ${blockType} ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Try moving to a new area with !moveAway or !searchForBlock.`);
+                    log(bot, `Failed to collect ${blockType} ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Use !explore(200) to travel to a completely new area, then retry.`);
                     break;
                 }
             }
@@ -587,7 +587,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 }
                 consecutiveFails++;
                 if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
-                    log(bot, `Failed ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Try !moveAway or !searchForBlock to find accessible blocks.`);
+                    log(bot, `Failed ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Use !explore(200) to travel to a completely new area, then retry.`);
                     break;
                 }
                 continue;
@@ -598,7 +598,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             break;  
     }
     if (collected === 0 && num > 0) {
-        log(bot, `Collected 0 ${blockType}. There are no ${blockType} blocks in this area (commands are working correctly). Move to a new area first: !explore 80 or !searchForBlock("${blockType}", 128). Do NOT say gathering is broken — it works fine, you just need to relocate.`);
+        log(bot, `Collected 0 ${blockType}. There are no ${blockType} blocks in this area (commands are working correctly). You MUST relocate far away: !explore(200) to reach a completely new area with fresh resources. Do NOT say gathering is broken — it works fine, you just need to travel farther.`);
     } else {
         log(bot, `Collected ${collected} ${blockType}.`);
     }

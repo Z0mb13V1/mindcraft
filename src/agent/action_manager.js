@@ -195,7 +195,7 @@ export class ActionManager {
                         tracker[blockType] = { count: 0, lastSeen: 0 }; // reset
                         console.warn(`[ActionManager] Gather loop: collected 0 ${blockType} ${failCount} times`);
                         this.cancelResume();
-                        output += `\n\n⚠️ CRITICAL: You have failed to collect ${blockType} ${failCount} times in a row across multiple attempts. The area is depleted or blocks are unreachable. You MUST: (1) !moveAway 60 to relocate, (2) then !searchForBlock("${blockType}", 128) to find new sources. Do NOT issue !collectBlocks("${blockType}") again until you have moved.`;
+                        output += `\n\n⚠️ CRITICAL: You have failed to collect ${blockType} ${failCount} times in a row across multiple attempts. The area is depleted or blocks are unreachable. You MUST: (1) !explore(200) to travel far away to a completely new area with trees, (2) THEN !collectBlocks("${blockType}", 10) to gather. Do NOT use !searchForBlock or !moveAway — explore 200 blocks first to load fresh chunks with resources.`;
                     }
                 } else if (successMatch && parseInt(successMatch[1]) > 0) {
                     // Success — reset tracker for this block type
