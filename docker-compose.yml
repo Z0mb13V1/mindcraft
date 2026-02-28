@@ -38,7 +38,8 @@ services:
       # ── Plugin auto-download from Modrinth ──
       # ViaVersion suite: lets older Java clients connect
       # Geyser + Floodgate: lets Bedrock clients connect
-      MODRINTH_PROJECTS: "viaversion,viabackwards,viarewind,geyser,floodgate"
+      MODRINTH_PROJECTS: "viaversion,viabackwards,viarewind,geyser"
+      # Note: Floodgate omitted — not needed with ONLINE_MODE=FALSE
     volumes:
       - ./minecraft-data:/data
     restart: unless-stopped
