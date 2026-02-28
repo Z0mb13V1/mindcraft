@@ -558,11 +558,13 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 success = await useToolOnBlock(bot, 'bucket', block);
             }
             else if (mc.mustCollectManually(blockType)) {
-                // RC24: Added timeout protection — goToPosition/dig can hang on Paper
-                console.log(`[RC24] Manual-collect ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z})`);
+                // RC24c: Distance-adaptive timeout for manual collection
+                const dist = bot.entity.position.distanceTo(block.position);
+                const navTimeout = Math.max(20000, Math.round(dist * 1000) + 10000);
+                console.log(`[RC24] Manual-collect ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z}) dist=${Math.round(dist)} timeout=${navTimeout}ms`);
                 await withTimeout(
                     goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
-                    15000,
+                    navTimeout,
                     () => { try { bot.pathfinder.stop(); } catch(e) {} }
                 );
                 console.log(`[RC24] Digging ${blockType} (manual)`);
@@ -590,10 +592,14 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 // handling differences. Manual dig also needs timeouts since
                 // pathfinder.goto() has no built-in timeout.
                 try {
-                    console.log(`[RC24] Navigating to ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z})`);
+                    // RC24c: Scale nav timeout by distance — bot walks ~4 blocks/sec,
+                    // plus overhead for path computation and terrain navigation.
+                    const dist = bot.entity.position.distanceTo(block.position);
+                    const navTimeout = Math.max(20000, Math.round(dist * 1000) + 10000);
+                    console.log(`[RC24] Navigating to ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z}) dist=${Math.round(dist)} timeout=${navTimeout}ms`);
                     await withTimeout(
                         goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
-                        15000,
+                        navTimeout,
                         () => { try { bot.pathfinder.stop(); } catch(e) {} }
                     );
                     console.log(`[RC24] Digging ${blockType}`);
