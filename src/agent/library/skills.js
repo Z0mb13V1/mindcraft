@@ -446,6 +446,14 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         blocktypes.push('grass_block');
     if (blockType === 'cobblestone')
         blocktypes.push('stone');
+    // RC13: If requesting any log type, also accept other log variants as fallback
+    // This prevents bots from starving for wood when oak isn't available but birch/spruce is
+    if (blockType.endsWith('_log')) {
+        const allLogs = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+        for (const logType of allLogs) {
+            if (!blocktypes.includes(logType)) blocktypes.push(logType);
+        }
+    }
     const isLiquid = blockType === 'lava' || blockType === 'water';
 
     let collected = 0;
@@ -458,6 +466,13 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
     // Blocks to ignore safety for, usually next to lava/water
     const unsafeBlocks = ['obsidian'];
+
+    // RC13 fix: Log/wood blocks have no gravity and are always safe to break.
+    // mineflayer-pathfinder's safeToBreak() is overly conservative for tree logs,
+    // causing searchForBlock to find logs that collectBlock then filters out.
+    const isNoGravityNaturalBlock = blockType.endsWith('_log') || blockType.endsWith('_wood') ||
+        blockType.endsWith('_stem') || blockType === 'mushroom_stem' ||
+        blockType.endsWith('leaves') || blockType.endsWith('_planks');
 
     for (let i=0; i<num; i++) {
         let blocks = world.getNearestBlocksWhere(bot, block => {
@@ -476,7 +491,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 return block.metadata === 0;
             }
             
-            return movements.safeToBreak(block) || unsafeBlocks.includes(block.name);
+            return movements.safeToBreak(block) || unsafeBlocks.includes(block.name) || isNoGravityNaturalBlock;
         }, 64, 1);
 
         if (blocks.length === 0) {
@@ -1330,6 +1345,19 @@ export async function goToNearestBlock(bot, blockType,  min_distance=2, range=64
     }
     else {
         block = world.getNearestBlock(bot, blockType, range);
+        // RC13: If searching for a log type and none found, try any log type as fallback
+        if (!block && blockType.endsWith('_log')) {
+            const allLogs = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+            for (const logType of allLogs) {
+                if (logType !== blockType) {
+                    block = world.getNearestBlock(bot, logType, range);
+                    if (block) {
+                        log(bot, `No ${blockType} found, but found ${logType} instead.`);
+                        break;
+                    }
+                }
+            }
+        }
     }
     if (!block) {
         log(bot, `Could not find any ${blockType} in ${range} blocks.`);
