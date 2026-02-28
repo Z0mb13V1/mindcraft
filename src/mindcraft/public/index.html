@@ -497,11 +497,11 @@
 
     <div class="page-footer">
         <div>
-            <button id="openCreateAgentBtn" class="start-btn">New Agent</button>
+            <button type="button" id="openCreateAgentBtn" class="start-btn">New Agent</button>
         </div>
         <div class="footer-buttons">
-            <button class="stop-btn" onclick="disconnectAllAgents()">Disconnect All Agents</button>
-            <button class="stop-btn" onclick="confirmShutdown()">Full Shutdown</button>
+            <button type="button" class="stop-btn" onclick="disconnectAllAgents()">Disconnect All Agents</button>
+            <button type="button" class="stop-btn" onclick="confirmShutdown()">Full Shutdown</button>
         </div>
     </div>
 
@@ -510,7 +510,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h2 class="no-margin">Create Agent</h2>
-                <button id="closeCreateAgentBtn" class="modal-close-btn">Close</button>
+                <button type="button" id="closeCreateAgentBtn" class="modal-close-btn">Close</button>
             </div>
             <div class="modal-body">
                 <div id="createAgentSection">
@@ -523,8 +523,8 @@
             <div class="modal-footer">
                 <div class="footer-left" id="footerStatus">Configure settings, then upload a profile and create the agent.</div>
                 <div class="footer-actions">
-                    <button id="uploadProfileBtn" class="start-btn">Upload Profile</button>
-                    <button id="submitCreateAgentBtn" class="start-btn" disabled>Create Agent</button>
+                    <button type="button" id="uploadProfileBtn" class="start-btn">Upload Profile</button>
+                    <button type="button" id="submitCreateAgentBtn" class="start-btn" disabled>Create Agent</button>
                 </div>
             </div>
         </div>
@@ -535,7 +535,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h2 id="agentSettingsTitle" class="no-margin">Agent Settings</h2>
-                <button id="closeAgentSettingsBtn" class="modal-close-btn">Close</button>
+                <button type="button" id="closeAgentSettingsBtn" class="modal-close-btn">Close</button>
             </div>
             <div class="modal-body">
                 <div id="agentSettingsSection">
@@ -546,8 +546,8 @@
             <div class="modal-footer">
                 <div class="footer-left" id="agentSettingsFooter">Modify settings then apply to restart the agent.</div>
                 <div class="footer-actions">
-                    <button id="discardAgentSettingsBtn" class="stop-btn discard-btn">Discard Changes</button>
-                    <button id="applyAgentSettingsBtn" class="start-btn" disabled>Apply & Restart</button>
+                    <button type="button" id="discardAgentSettingsBtn" class="stop-btn discard-btn">Discard Changes</button>
+                    <button type="button" id="applyAgentSettingsBtn" class="start-btn" disabled>Apply & Restart</button>
                 </div>
             </div>
         </div>
