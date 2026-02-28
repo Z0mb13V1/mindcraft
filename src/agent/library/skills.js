@@ -437,6 +437,12 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         log(bot, `Invalid number of blocks to collect: ${num}.`);
         return false;
     }
+    
+    // RC18b: Pause unstuck mode during collection. Mining/navigating to blocks
+    // causes the bot to appear "stuck" (moving slowly or pausing while digging),
+    // triggering false unstuck interruptions that abort the collection.
+    bot.modes.pause('unstuck');
+    
     let blocktypes = [blockType];
     if (blockType === 'coal' || blockType === 'diamond' || blockType === 'emerald' || blockType === 'iron' || blockType === 'gold' || blockType === 'lapis_lazuli' || blockType === 'redstone')
         blocktypes.push(blockType+'_ore');
@@ -607,6 +613,9 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         if (bot.interrupt_code)
             break;  
     }
+    // RC18b: Resume unstuck mode after collection is done
+    bot.modes.unpause('unstuck');
+    
     if (collected === 0 && num > 0) {
         log(bot, `Collected 0 ${blockType}. There are no ${blockType} blocks in this area (commands are working correctly). You MUST relocate far away: !explore(200) to reach a completely new area with fresh resources. Do NOT say gathering is broken — it works fine, you just need to travel farther.`);
     } else {
