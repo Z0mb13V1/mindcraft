@@ -1556,7 +1556,7 @@ export async function explore(bot, distance=40) {
      * await skills.explore(bot, 200);
      **/
     const startPos = bot.entity.position.clone();
-    const angle = Math.random() * 2 * Math.PI;
+    let angle = Math.random() * 2 * Math.PI;  // RC17b: let (mutable) — water avoidance changes direction
     const HOP_SIZE = 50; // max distance per pathfinding hop
     const numHops = Math.max(1, Math.ceil(distance / HOP_SIZE));
     
@@ -1584,6 +1584,18 @@ export async function explore(bot, distance=40) {
             const moved = currentPos.distanceTo(bot.entity.position);
             totalMoved += moved;
             consecutiveFails = 0;
+            
+            // RC17b: Water/ocean detection — if we dropped to sea level or below,
+            // the path is heading toward ocean. Change direction immediately.
+            const postHopY = bot.entity.position.y;
+            const feetBlock = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
+            const isNearWater = (feetBlock && (feetBlock.name === 'water' || feetBlock.name === 'kelp' || feetBlock.name === 'seagrass')) || postHopY <= 63;
+            
+            if (isNearWater && hop < numHops - 1) {
+                log(bot, `Heading toward water (y=${Math.round(postHopY)}), changing direction...`);
+                // Reverse + perpendicular to move away from water
+                angle = angle + Math.PI * 0.75 + (Math.random() - 0.5) * 0.5;
+            }
             
             if (moved < 5 && hop > 0) {
                 // Barely moved — try a perpendicular direction
