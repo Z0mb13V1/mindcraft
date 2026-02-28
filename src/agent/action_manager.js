@@ -174,16 +174,20 @@ export class ActionManager {
             this.currentActionFn = null;
             clearTimeout(TIMEOUT);
 
-            // get bot activity summary
+            // Capture raw output BEFORE truncation for reliable regex matching
+            const rawOutput = this.agent.bot.output || '';
+
+            // get bot activity summary (may truncate)
             let output = this.getBotOutputSummary();
             let interrupted = this.agent.bot.interrupt_code;
             let timedout = this.timedout;
             this.agent.clearBotLogs();
 
             // ── Cross-invocation zero-collect detection ──────────────────────
-            if (actionLabel.includes('collectBlocks') && output) {
-                const zeroMatch = output.match(/Collected 0 (\w+)/);
-                const successMatch = output.match(/Collected (\d+) (\w+)/);
+            // Use rawOutput for regex matching to avoid truncation issues
+            if (actionLabel.includes('collectBlocks') && rawOutput) {
+                const zeroMatch = rawOutput.match(/Collected 0 (\w+)/);
+                const successMatch = rawOutput.match(/Collected (\d+) (\w+)/);
                 if (zeroMatch) {
                     const blockType = zeroMatch[1];
                     const tracker = this._collectFailTracker;
