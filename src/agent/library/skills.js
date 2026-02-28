@@ -525,6 +525,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             break;
         }
         const block = blocks[0];
+        console.log(`[RC19 DEBUG] Attempting to collect ${block.name} at ${block.position}, canHarvest=${block.canHarvest(bot.heldItem?.type ?? null)}, mustCollectManually=${mc.mustCollectManually(blockType)}`);
         await bot.tool.equipForBlock(block);
         if (isLiquid) {
             const bucket = bot.inventory.items().find(item => item.name === 'bucket');
@@ -564,6 +565,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 const invAfter = world.getInventoryCounts(bot);
                 const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
                 const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
+                console.log(`[RC19 DEBUG] collectBlock.collect done: invBefore=${totalBefore}, invAfter=${totalAfter}`);
                 success = totalAfter > totalBefore;
                 // Fallback: if collectBlock didn't work, try manual dig
                 if (!success) {
@@ -585,9 +587,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 }
             }
             if (success) {
+                console.log(`[RC19 DEBUG] SUCCESS: collected 1 ${block.name} at ${block.position}`);
                 collected++;
                 consecutiveFails = 0;
             } else {
+                console.log(`[RC19 DEBUG] FAIL: collection failed for ${block.name} at ${block.position}`);
                 consecutiveFails++;
                 if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
                     log(bot, `Failed to collect ${blockType} ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Use !explore(200) to travel to a completely new area, then retry.`);
@@ -597,6 +601,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             await autoLight(bot);
         }
         catch (err) {
+            console.log(`[RC19 DEBUG] EXCEPTION collecting ${block?.name}: ${err.name}: ${err.message}`);
             if (err.name === 'NoChests') {
                 log(bot, `Failed to collect ${blockType}: Inventory full, no place to deposit.`);
                 break;
