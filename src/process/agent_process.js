@@ -20,7 +20,7 @@ export class AgentProcess {
             args.push('-m', init_message);
         args.push('-p', this.port);
 
-        const agentProcess = spawn('node', args, {
+        const agentProcess = spawn(process.execPath, args, {
             stdio: 'inherit',
             stderr: 'inherit',
         });

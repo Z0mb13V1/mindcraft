@@ -1,6 +1,6 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
-    "host": "minecraft-server", // Docker service name
+    "host": "54.152.239.117", // EC2 public IP (local dev) — Docker overrides via SETTINGS_JSON
     "port": 25565, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
@@ -11,9 +11,9 @@ const settings = {
 
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
-        "./profiles/ensemble.json",
+        "./profiles/local-research.json",
+        // "./profiles/ensemble.json",
         // "./profiles/cloud-persistent.json",
-        // "./profiles/local-research.json",
         // "./profiles/gemini.json",
         // "./profiles/gemini2.json",
         // "./profiles/grok.json",
