@@ -615,6 +615,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                     success = totalAfter > totalBefore;
                     console.log(`[RC24] Result: success=${success}, items ${totalBefore}→${totalAfter}`);
                 } catch (_digErr) {
+                    // RC24b: Re-throw "aborted" errors so the outer RC20 handler
+                    // can retry them (self_defense/combat interruption recovery)
+                    if (_digErr.message && _digErr.message.includes('aborted')) {
+                        throw _digErr;
+                    }
                     console.log(`[RC24] Failed for ${blockType}: ${_digErr.message}`);
                     try { bot.pathfinder.stop(); } catch(e) {}
                 }
