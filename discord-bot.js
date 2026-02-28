@@ -231,6 +231,7 @@ Issues to detect:
 - Forgotten task: bot ignores an active delivery/collection request mid-task
 - Item loss loop: bot keeps losing the same items it collected (3+ times)
 - Stuck action: identical failure repeated 3+ times in a row
+- Gathering loop: bot reports "Collected 0" or "No <item> nearby" multiple times, or keeps retrying !collectBlocks for the same resource. Fix: tell bot to use !explore 60 to move to a new area first, then retry
 - Context reset: bot re-introduces itself mid-task as if meeting another bot for the first time
 
 If an issue is found, respond ONLY with this exact JSON (no markdown, no extra text):

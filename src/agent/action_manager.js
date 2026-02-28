@@ -13,6 +13,9 @@ export class ActionManager {
         this.recent_action_counter = 0;
         // Stuck detection: track repeated same-label calls within a time window
         this._stuckTracker = {};   // { label: { count, firstSeen } }
+        // Cross-invocation zero-collect tracker for gathering actions
+        this._collectFailTracker = {}; // { blockType: { count, lastSeen } }
+        this._COLLECT_FAIL_THRESHOLD = 3; // after 3 zero-collect results, force intervention
     }
 
     async resumeAction(actionFn, timeout) {
@@ -106,15 +109,19 @@ export class ActionManager {
                     return { success: false, message: `Action loop detected (${reason}). Stopping to avoid infinite loop.`, interrupted: true, timedout: false };
                 }
             }
-            // ── Stuck detector: same action label ≥3 times within 15 s ──────────
+            // ── Stuck detector: same action label ≥3 times within window ──────────
             const STUCK_WINDOW_MS = 15000;
+            const STUCK_WINDOW_LONG_MS = 120000; // longer window for slow actions like collectBlocks
             const STUCK_THRESHOLD = 3;
             const stuckLabels = ['goToPlayer', 'collectBlocks', 'goToBlock', 'moveAway', 'goToBed', 'goToNearestBlock'];
+            const slowLabels = ['collectBlocks']; // actions that take a long time
             const isStuckable = stuckLabels.some(l => actionLabel.includes(l));
+            const isSlow = slowLabels.some(l => actionLabel.includes(l));
+            const windowMs = isSlow ? STUCK_WINDOW_LONG_MS : STUCK_WINDOW_MS;
             const now = Date.now();
             if (isStuckable) {
                 const t = this._stuckTracker[actionLabel];
-                if (t && (now - t.firstSeen) < STUCK_WINDOW_MS) {
+                if (t && (now - t.firstSeen) < windowMs) {
                     t.count++;
                     if (t.count >= STUCK_THRESHOLD) {
                         console.warn(`[ActionManager] Stuck detected: "${actionLabel}" called ${t.count}x in ${Math.round((now - t.firstSeen)/1000)}s`);
@@ -122,7 +129,7 @@ export class ActionManager {
                         this.cancelResume();
                         return {
                             success: false,
-                            message: `Action output:\nStuck detected — "${actionLabel}" failed ${t.count} times in a row. Switch to a different approach immediately: try !explore, !searchForBlock, or !newAction with an alternative strategy. Do NOT repeat the same command.`,
+                            message: `Action output:\nStuck detected — "${actionLabel}" failed ${t.count} times in a row. Switch to a different approach immediately: try !searchForBlock with a range of 128+, !moveAway 50, or !newAction with an alternative strategy. Do NOT repeat the same command.`,
                             interrupted: true,
                             timedout: false
                         };
@@ -172,6 +179,33 @@ export class ActionManager {
             let interrupted = this.agent.bot.interrupt_code;
             let timedout = this.timedout;
             this.agent.clearBotLogs();
+
+            // ── Cross-invocation zero-collect detection ──────────────────────
+            if (actionLabel.includes('collectBlocks') && output) {
+                const zeroMatch = output.match(/Collected 0 (\w+)/);
+                const successMatch = output.match(/Collected (\d+) (\w+)/);
+                if (zeroMatch) {
+                    const blockType = zeroMatch[1];
+                    const tracker = this._collectFailTracker;
+                    if (!tracker[blockType]) tracker[blockType] = { count: 0, lastSeen: 0 };
+                    tracker[blockType].count++;
+                    tracker[blockType].lastSeen = Date.now();
+                    if (tracker[blockType].count >= this._COLLECT_FAIL_THRESHOLD) {
+                        const failCount = tracker[blockType].count;
+                        tracker[blockType] = { count: 0, lastSeen: 0 }; // reset
+                        console.warn(`[ActionManager] Gather loop: collected 0 ${blockType} ${failCount} times`);
+                        this.cancelResume();
+                        output += `\n\n⚠️ CRITICAL: You have failed to collect ${blockType} ${failCount} times in a row across multiple attempts. The area is depleted or blocks are unreachable. You MUST: (1) !moveAway 60 to relocate, (2) then !searchForBlock("${blockType}", 128) to find new sources. Do NOT issue !collectBlocks("${blockType}") again until you have moved.`;
+                    }
+                } else if (successMatch && parseInt(successMatch[1]) > 0) {
+                    // Success — reset tracker for this block type
+                    const blockType = successMatch[2];
+                    if (this._collectFailTracker[blockType]) {
+                        this._collectFailTracker[blockType] = { count: 0, lastSeen: 0 };
+                    }
+                }
+            }
+            // ────────────────────────────────────────────────────────────────
 
             // if not interrupted and not generating, emit idle event
             if (!interrupted) {

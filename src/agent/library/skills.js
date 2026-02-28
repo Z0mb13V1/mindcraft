@@ -449,6 +449,8 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     const isLiquid = blockType === 'lava' || blockType === 'water';
 
     let collected = 0;
+    let consecutiveFails = 0;
+    const MAX_CONSECUTIVE_FAILS = 3; // break out after 3 consecutive failed attempts
 
     const movements = new pf.Movements(bot);
     movements.dontMineUnderFallingBlock = false;
@@ -479,7 +481,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
         if (blocks.length === 0) {
             if (collected === 0)
-                log(bot, `No ${blockType} nearby to collect.`);
+                log(bot, `No ${blockType} nearby to collect. Try !searchForBlock to find a new area, or !moveAway then retry.`);
             else
                 log(bot, `No more ${blockType} nearby to collect.`);
             break;
@@ -544,8 +546,16 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                     }
                 }
             }
-            if (success)
+            if (success) {
                 collected++;
+                consecutiveFails = 0;
+            } else {
+                consecutiveFails++;
+                if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+                    log(bot, `Failed to collect ${blockType} ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Try moving to a new area with !moveAway or !searchForBlock.`);
+                    break;
+                }
+            }
             await autoLight(bot);
         }
         catch (err) {
@@ -555,6 +565,16 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             }
             else {
                 log(bot, `Failed to collect ${blockType}: ${err}.`);
+                // Exclude this block position so we don't retry it
+                if (block && block.position) {
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                }
+                consecutiveFails++;
+                if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+                    log(bot, `Failed ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Try !moveAway or !searchForBlock to find accessible blocks.`);
+                    break;
+                }
                 continue;
             }
         }
@@ -562,7 +582,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         if (bot.interrupt_code)
             break;  
     }
-    log(bot, `Collected ${collected} ${blockType}.`);
+    if (collected === 0 && num > 0) {
+        log(bot, `Collected 0 ${blockType}. All nearby blocks may be unreachable or require better tools. STOP retrying the same command — move to a new area first.`);
+    } else {
+        log(bot, `Collected ${collected} ${blockType}.`);
+    }
     return collected > 0;
 }
 
@@ -1484,6 +1508,42 @@ export async function moveAwayFromEntity(bot, entity, distance=16) {
     let inverted_goal = new pf.goals.GoalInvert(goal);
     bot.pathfinder.setMovements(new pf.Movements(bot));
     await bot.pathfinder.goto(inverted_goal);
+}
+
+
+export async function explore(bot, distance=40) {
+    /**
+     * Move to a random position to explore new terrain and find fresh resources.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} distance, the approximate distance to explore. Defaults to 40.
+     * @returns {Promise<boolean>} true if exploration succeeded, false otherwise.
+     * @example
+     * await skills.explore(bot, 60);
+     **/
+    const pos = bot.entity.position;
+    const angle = Math.random() * 2 * Math.PI;
+    const tx = Math.floor(pos.x + distance * Math.cos(angle));
+    const tz = Math.floor(pos.z + distance * Math.sin(angle));
+    // Use current Y; goToPosition will handle terrain
+    log(bot, `Exploring toward (${tx}, ~, ${tz})...`);
+    try {
+        await goToPosition(bot, tx, pos.y, tz, 3);
+    } catch (_err) {
+        // Try a second random direction if first fails
+        const angle2 = angle + Math.PI / 2;
+        const tx2 = Math.floor(pos.x + (distance * 0.7) * Math.cos(angle2));
+        const tz2 = Math.floor(pos.z + (distance * 0.7) * Math.sin(angle2));
+        log(bot, `First direction blocked, trying (${tx2}, ~, ${tz2})...`);
+        try {
+            await goToPosition(bot, tx2, pos.y, tz2, 3);
+        } catch (_err2) {
+            log(bot, `Exploration failed — terrain may be blocked. Try a different distance.`);
+            return false;
+        }
+    }
+    const newPos = bot.entity.position;
+    const moved = pos.distanceTo(newPos);
+    log(bot, `Explored ${Math.round(moved)} blocks to (${Math.floor(newPos.x)}, ${Math.floor(newPos.y)}, ${Math.floor(newPos.z)}). New chunks loaded — try gathering here.`);
     return true;
 }
 

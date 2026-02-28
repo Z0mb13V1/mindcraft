@@ -158,6 +158,14 @@ export const actionsList = [
         })
     },
     {
+        name: '!explore',
+        description: 'Move to a random location in a new direction to find fresh resources. Use when current area is depleted or you keep collecting 0.',
+        params: {'distance': { type: 'float', description: 'The distance to explore. Default 40. Use 60-100 if nearby areas are empty.', domain: [10, 200] }},
+        perform: runAsAction(async (agent, distance) => {
+            await skills.explore(agent.bot, distance);
+        })
+    },
+    {
         name: '!rememberHere',
         description: 'Save the current location with a given name.',
         params: {'name': { type: 'string', description: 'The name to remember the location as.' }},
