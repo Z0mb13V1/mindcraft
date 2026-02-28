@@ -483,8 +483,6 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         blockType.endsWith('leaves') || blockType.endsWith('_planks');
 
     for (let i=0; i<num; i++) {
-        // RC19 DEBUG: Track predicate calls to diagnose findBlocks behavior
-        let _dbgPaletteHits = 0, _dbgPaletteMisses = 0, _dbgFullHits = 0, _dbgFullMisses = 0;
         let blocks = world.getNearestBlocksWhere(bot, block => {
             // RC18 FIX: mineflayer's findBlocks has a section palette pre-filter
             // (isBlockInSection) that creates blocks via Block.fromStateId() which
@@ -493,14 +491,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             // Previously: `if (!block.position || !blocktypes.includes(block.name)) return false`
             // caused ALL sections to be skipped because position is always null during palette check.
             if (!blocktypes.includes(block.name)) {
-                if (!block.position) _dbgPaletteMisses++;
-                else _dbgFullMisses++;
                 return false;
             }
             // If position is null, we're in the palette pre-filter — name matched,
             // so tell mineflayer this section might contain our target block.
-            if (!block.position) { _dbgPaletteHits++; return true; }
-            _dbgFullHits++;
+            if (!block.position) return true;
             
             if (exclude) {
                 for (let position of exclude) {
@@ -516,8 +511,6 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             
             return movements.safeToBreak(block) || unsafeBlocks.includes(block.name) || isNoGravityNaturalBlock;
         }, 128, 1);  // RC17: Increased from 64 to 128 to match searchForBlock range
-        console.log(`[RC19 DEBUG] collectBlock(${blockType}): findBlocks returned ${blocks.length} blocks | palette: ${_dbgPaletteHits} hits, ${_dbgPaletteMisses} misses | full: ${_dbgFullHits} hits, ${_dbgFullMisses} misses`);
-        if (blocks.length > 0) console.log(`[RC19 DEBUG] first block: name=${blocks[0].name} pos=${blocks[0].position}`);
 
         if (blocks.length === 0) {
             if (collected === 0)
@@ -527,7 +520,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             break;
         }
         const block = blocks[0];
-        console.log(`[RC19 DEBUG] Attempting to collect ${block.name} at ${block.position}, canHarvest=${block.canHarvest(bot.heldItem?.type ?? null)}, mustCollectManually=${mc.mustCollectManually(blockType)}`);
+
         await bot.tool.equipForBlock(block);
         if (isLiquid) {
             const bucket = bot.inventory.items().find(item => item.name === 'bucket');
@@ -567,7 +560,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 const invAfter = world.getInventoryCounts(bot);
                 const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
                 const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
-                console.log(`[RC19 DEBUG] collectBlock.collect done: invBefore=${totalBefore}, invAfter=${totalAfter}`);
+
                 success = totalAfter > totalBefore;
                 // Fallback: if collectBlock didn't work, try manual dig
                 if (!success) {
@@ -589,11 +582,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 }
             }
             if (success) {
-                console.log(`[RC19 DEBUG] SUCCESS: collected 1 ${block.name} at ${block.position}`);
+
                 collected++;
                 consecutiveFails = 0;
             } else {
-                console.log(`[RC19 DEBUG] FAIL: collection failed for ${block.name} at ${block.position}`);
+
                 // Exclude this position so we don't keep retrying the same unreachable block
                 if (block && block.position) {
                     if (!exclude) exclude = [];
@@ -608,7 +601,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             await autoLight(bot);
         }
         catch (err) {
-            console.log(`[RC19 DEBUG] EXCEPTION collecting ${block?.name}: ${err.name}: ${err.message}`);
+
             if (err.name === 'NoChests') {
                 log(bot, `Failed to collect ${blockType}: Inventory full, no place to deposit.`);
                 break;
