@@ -7,7 +7,9 @@ import { plugin as pvp } from 'mineflayer-pvp';
 import { plugin as collectblock } from 'mineflayer-collectblock';
 import { loader as autoEat } from 'mineflayer-auto-eat';
 import plugin from 'mineflayer-armor-manager';
+import baritoneModule from '@miner-org/mineflayer-baritone';
 const armorManager = plugin;
+const baritone = baritoneModule.loader;
 let mc_version = settings.minecraft_version;
 let mcdata = null;
 let Item = null;
@@ -71,6 +73,7 @@ export function initBot(username) {
     bot.loadPlugin(collectblock);
     bot.loadPlugin(autoEat);
     bot.loadPlugin(armorManager); // auto equip armor
+    bot.loadPlugin(baritone); // RC25: Baritone A* pathfinding via bot.ashfinder
     bot.once('resourcePack', () => {
         bot.acceptResourcePack();
     });
@@ -79,6 +82,19 @@ export function initBot(username) {
         mc_version = bot.version;
         mcdata = minecraftData(mc_version);
         Item = prismarine_items(mc_version);
+    });
+
+    // RC25: Configure Baritone pathfinding defaults after spawn
+    bot.once('spawn', () => {
+        if (bot.ashfinder) {
+            bot.ashfinder.config.thinkTimeout = 10000; // 10s path compute timeout
+            bot.ashfinder.config.breakBlocks = true;   // allow breaking obstacles
+            bot.ashfinder.config.placeBlocks = true;   // allow placing bridge blocks
+            bot.ashfinder.config.parkour = false;       // disable parkour (can get stuck)
+            bot.ashfinder.config.swimming = true;       // allow swimming
+            bot.ashfinder.config.maxFallDist = 4;       // safe fall distance
+            bot.ashfinder.config.maxWaterDist = 256;    // water travel limit
+        }
     });
 
     return bot;

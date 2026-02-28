@@ -37,7 +37,7 @@ const modes_list = [
             if (!blockAbove) blockAbove = {name: 'air'};
             if (blockAbove.name === 'water') {
                 // does not call execute so does not interrupt other actions
-                if (!bot.pathfinder.goal) {
+                if (bot.ashfinder.stopped) { // RC25: baritone — jump only when not navigating
                     bot.setControlState('jump', true);
                 }
             }

@@ -1,8 +1,12 @@
 import * as mc from "../../utils/mcdata.js";
 import * as world from "./world.js";
-import pf from 'mineflayer-pathfinder';
+import baritoneModule from '@miner-org/mineflayer-baritone';
+import pf from 'mineflayer-pathfinder'; // RC25: retained ONLY for Movements.safeToBreak() in collectBlock
 import Vec3 from 'vec3';
 import settings from "../../../settings.js";
+
+// RC25: Baritone A* pathfinding goals (replaces mineflayer-pathfinder goals)
+const baritoneGoals = baritoneModule.goals;
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -392,15 +396,16 @@ export async function defendSelf(bot, range=9) {
         await equipHighestAttack(bot);
         if (bot.entity.position.distanceTo(enemy.position) >= 4 && enemy.name !== 'creeper' && enemy.name !== 'phantom') {
             try {
-                bot.pathfinder.setMovements(new pf.Movements(bot));
-                await bot.pathfinder.goto(new pf.goals.GoalFollow(enemy, 3.5), true);
+                // RC25: Baritone chase to melee range
+                if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+                await bot.ashfinder.gotoSmart(new baritoneGoals.GoalNear(enemy.position, 3.5));
             } catch (_err) {/* might error if entity dies, ignore */}
         }
         if (bot.entity.position.distanceTo(enemy.position) <= 2) {
             try {
-                bot.pathfinder.setMovements(new pf.Movements(bot));
-                let inverted_goal = new pf.goals.GoalInvert(new pf.goals.GoalFollow(enemy, 2));
-                await bot.pathfinder.goto(inverted_goal, true);
+                // RC25: Baritone retreat from too-close enemy
+                if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+                await bot.ashfinder.gotoSmart(new baritoneGoals.GoalAvoid(enemy.position, 4, bot));
             } catch (_err) {/* might error if entity dies, ignore */}
         }
         bot.pvp.attack(enemy);
@@ -421,10 +426,9 @@ export async function defendSelf(bot, range=9) {
 }
 
 // RC24: Timeout helper for Paper server compatibility.
-// bot.pathfinder.goto() and bot.dig() have no built-in timeout and can hang
-// indefinitely on Paper due to event handling differences. This races the
-// operation against a timer and calls onTimeout (e.g. pathfinder.stop()) to
-// cancel if it exceeds the limit.
+// bot.ashfinder.gotoSmart() and bot.dig() can hang indefinitely on Paper due
+// to event handling differences. This races the operation against a timer and
+// calls onTimeout (e.g. ashfinder.stop()) to cancel if it exceeds the limit.
 function withTimeout(promise, ms, onTimeout) {
     let timer;
     return Promise.race([
@@ -565,7 +569,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 await withTimeout(
                     goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
                     navTimeout,
-                    () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                    () => { try { bot.ashfinder.stop(); } catch(e) {} }
                 );
                 console.log(`[RC24] Digging ${blockType} (manual)`);
                 await withTimeout(
@@ -577,7 +581,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 await withTimeout(
                     pickupNearbyItems(bot),
                     8000,
-                    () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                    () => { try { bot.ashfinder.stop(); } catch(e) {} }
                 );
                 // Verify items actually entered inventory
                 const invAfter = world.getInventoryCounts(bot);
@@ -600,7 +604,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                     await withTimeout(
                         goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
                         navTimeout,
-                        () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                        () => { try { bot.ashfinder.stop(); } catch(e) {} }
                     );
                     console.log(`[RC24] Digging ${blockType}`);
                     await withTimeout(
@@ -613,7 +617,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                     await withTimeout(
                         pickupNearbyItems(bot),
                         8000,
-                        () => { try { bot.pathfinder.stop(); } catch(e) {} }
+                        () => { try { bot.ashfinder.stop(); } catch(e) {} }
                     );
                     const invAfter = world.getInventoryCounts(bot);
                     const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
@@ -627,7 +631,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                         throw _digErr;
                     }
                     console.log(`[RC24] Failed for ${blockType}: ${_digErr.message}`);
-                    try { bot.pathfinder.stop(); } catch(e) {}
+                    try { bot.ashfinder.stop(); } catch(e) {}
                 }
                 if (!success) {
                     if (!exclude) exclude = [];
@@ -715,10 +719,14 @@ export async function pickupNearbyItems(bot) {
     while (nearestItem && attempts < maxAttempts) {
         attempts++;
         const invBefore = bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
-        let movements = new pf.Movements(bot);
-        movements.canDig = false;
-        bot.pathfinder.setMovements(movements);
-        await goToGoal(bot, new pf.goals.GoalFollow(nearestItem, 0));
+        // RC25: Navigate to item without breaking blocks
+        const prevBreak = bot.ashfinder.config.breakBlocks;
+        bot.ashfinder.config.breakBlocks = false;
+        try {
+            await goToGoal(bot, new baritoneGoals.GoalNear(nearestItem.position, 1));
+        } finally {
+            bot.ashfinder.config.breakBlocks = prevBreak;
+        }
         // Wait for item pickup with increasing delays
         for (let wait = 0; wait < 5; wait++) {
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -759,12 +767,14 @@ export async function breakBlockAt(bot, x, y, z) {
         }
 
         if (bot.entity.position.distanceTo(block.position) > 4.5) {
-            let pos = block.position;
-            let movements = new pf.Movements(bot);
-            movements.canPlaceOn = false;
-            movements.allow1by1towers = false;
-            bot.pathfinder.setMovements(movements);
-            await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+            // RC25: Navigate to block with baritone (no placing for breakBlockAt)
+            const prevPlace = bot.ashfinder.config.placeBlocks;
+            bot.ashfinder.config.placeBlocks = false;
+            try {
+                await goToGoal(bot, new baritoneGoals.GoalNear(block.position, 4));
+            } finally {
+                bot.ashfinder.config.placeBlocks = prevPlace;
+            }
         }
         if (bot.game.gameMode !== 'creative') {
             await bot.tool.equipForBlock(block);
@@ -932,18 +942,13 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
     const dont_move_for = ['torch', 'redstone_torch', 'redstone', 'lever', 'button', 'rail', 'detector_rail', 
         'powered_rail', 'activator_rail', 'tripwire_hook', 'tripwire', 'water_bucket', 'string'];
     if (!dont_move_for.includes(item_name) && (pos.distanceTo(targetBlock.position) < 1.1 || pos_above.distanceTo(targetBlock.position) < 1.1)) {
-        // too close
-        let goal = new pf.goals.GoalNear(targetBlock.position.x, targetBlock.position.y, targetBlock.position.z, 2);
-        let inverted_goal = new pf.goals.GoalInvert(goal);
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        await bot.pathfinder.goto(inverted_goal);
+        // RC25: Too close — move away using baritone GoalAvoid
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        await bot.ashfinder.gotoSmart(new baritoneGoals.GoalAvoid(targetBlock.position, 2, bot));
     }
     if (bot.entity.position.distanceTo(targetBlock.position) > 4.5) {
-        // too far
-        let pos = targetBlock.position;
-        let movements = new pf.Movements(bot);
-        bot.pathfinder.setMovements(movements);
-        await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+        // RC25: Too far — navigate closer with baritone
+        await goToGoal(bot, new baritoneGoals.GoalNear(targetBlock.position, 4));
     }
 
     // will throw error if an entity is in the way, and sometimes even if the block was placed
@@ -1246,45 +1251,48 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
 
 export async function goToGoal(bot, goal) {
     /**
-     * Navigate to the given goal. Use doors and attempt minimally destructive movements.
+     * RC25: Navigate to the given goal using Baritone A* pathfinding.
+     * Uses bot.ashfinder.gotoSmart() which auto-chooses between direct A*
+     * and waypoint navigation based on distance. Keeps the door-check interval
+     * for stuck detection since Baritone doesn't handle all door types.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
-     * @param {pf.goals.Goal} goal, the goal to navigate to.
+     * @param {Goal} goal, a baritone goal to navigate to.
      **/
 
-    const nonDestructiveMovements = new pf.Movements(bot);
-    const dontBreakBlocks = ['glass', 'glass_pane'];
-    for (let block of dontBreakBlocks) {
-        nonDestructiveMovements.blocksCantBreak.add(mc.getBlockId(block));
-    }
-    nonDestructiveMovements.placeCost = 2;
-    nonDestructiveMovements.digCost = 10;
+    // Ensure any previous navigation is stopped before starting new one
+    if (!bot.ashfinder.stopped) bot.ashfinder.stop();
 
-    const destructiveMovements = new pf.Movements(bot);
-
-    let final_movements = destructiveMovements;
-
-    const pathfind_timeout = 3000;
-    if (await bot.pathfinder.getPathTo(nonDestructiveMovements, goal, pathfind_timeout).status === 'success') {
-        final_movements = nonDestructiveMovements;
-        log(bot, `Found non-destructive path.`);
-    }
-    else if (await bot.pathfinder.getPathTo(destructiveMovements, goal, pathfind_timeout).status === 'success') {
-        log(bot, `Found destructive path.`);
-    }
-    else {
-        log(bot, `Path not found, but attempting to navigate anyway using destructive movements.`);
+    // Add glass types to blocksToAvoid so baritone prefers non-destructive paths
+    const blocksToAvoid = bot.ashfinder.config.blocksToAvoid || [];
+    const glassList = ['glass', 'glass_pane'];
+    const addedBlocks = [];
+    for (const name of glassList) {
+        if (!blocksToAvoid.includes(name)) {
+            blocksToAvoid.push(name);
+            addedBlocks.push(name);
+        }
     }
 
     const doorCheckInterval = startDoorInterval(bot);
 
-    bot.pathfinder.setMovements(final_movements);
     try {
-        await bot.pathfinder.goto(goal);
+        const result = await bot.ashfinder.gotoSmart(goal);
         clearInterval(doorCheckInterval);
-        return true;
+        // Restore blocksToAvoid
+        for (const name of addedBlocks) {
+            const idx = blocksToAvoid.indexOf(name);
+            if (idx !== -1) blocksToAvoid.splice(idx, 1);
+        }
+        if (result && result.status === 'success') return true;
+        // gotoSmart returns { status: "failed" } on failure — throw so callers can handle
+        throw new Error(result?.error?.message || 'Navigation failed');
     } catch (err) {
         clearInterval(doorCheckInterval);
-        // we need to catch so we can clean up the door check interval, then rethrow the error
+        // Restore blocksToAvoid
+        for (const name of addedBlocks) {
+            const idx = blocksToAvoid.indexOf(name);
+            if (idx !== -1) blocksToAvoid.splice(idx, 1);
+        }
         throw err;
     }
 }
@@ -1384,7 +1392,7 @@ export async function goToPosition(bot, x, y, z, min_distance=2) {
             const itemId = bot.heldItem ? bot.heldItem.type : null;
             if (!targetBlock.canHarvest(itemId)) {
                 log(bot, `Pathfinding stopped: Cannot break ${targetBlock.name} with current tools.`);
-                bot.pathfinder.stop();
+                bot.ashfinder.stop();
                 bot.stopDigging();
             }
         }
@@ -1393,7 +1401,7 @@ export async function goToPosition(bot, x, y, z, min_distance=2) {
     const progressInterval = setInterval(checkDigProgress, 1000);
     
     try {
-        await goToGoal(bot, new pf.goals.GoalNear(x, y, z, min_distance));
+        await goToGoal(bot, new baritoneGoals.GoalNear(new Vec3(x, y, z), min_distance));
         clearInterval(progressInterval);
         const distance = bot.entity.position.distanceTo(new Vec3(x, y, z));
         if (distance <= min_distance+1) {
@@ -1516,9 +1524,10 @@ export async function goToPlayer(bot, username, distance=3) {
     }
 
     distance = Math.max(distance, 0.5);
-    const goal = new pf.goals.GoalFollow(player, distance);
+    // RC25: Baritone — use GoalNear with player's current position instead of GoalFollow
+    const goal = new baritoneGoals.GoalNear(player.position, distance);
 
-    await goToGoal(bot, goal, true);
+    await goToGoal(bot, goal);
 
     log(bot, `You have reached ${username}.`);
 }
@@ -1537,12 +1546,10 @@ export async function followPlayer(bot, username, distance=4) {
     if (!player)
         return false;
 
-    const move = new pf.Movements(bot);
-    move.digCost = 10;
-    bot.pathfinder.setMovements(move);
+    // RC25: Baritone followEntity for continuous following
+    if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+    bot.ashfinder.followEntity(player, { distance: distance, updateInterval: 500 });
     let doorCheckInterval = startDoorInterval(bot);
-
-    bot.pathfinder.setGoal(new pf.goals.GoalFollow(player, distance), true);
     log(bot, `You are now actively following player ${username}.`);
 
 
@@ -1585,6 +1592,7 @@ export async function followPlayer(bot, username, distance=4) {
             bot.modes.unpause('elbow_room');
         }
     }
+    bot.ashfinder.stopFollowing(); // RC25: stop baritone entity following
     clearInterval(doorCheckInterval);
     return true;
 }
@@ -1600,15 +1608,14 @@ export async function moveAway(bot, distance) {
      * await skills.moveAway(bot, 8);
      **/
     const pos = bot.entity.position;
-    let goal = new pf.goals.GoalNear(pos.x, pos.y, pos.z, distance);
-    let inverted_goal = new pf.goals.GoalInvert(goal);
-    bot.pathfinder.setMovements(new pf.Movements(bot));
+    // RC25: Baritone GoalAvoid moves away from a position
+    let avoidGoal = new baritoneGoals.GoalAvoid(pos, distance, bot);
 
     if (bot.modes.isOn('cheat')) {
-        const move = new pf.Movements(bot);
-        const path = await bot.pathfinder.getPathTo(move, inverted_goal, 10000);
-        let last_move = path.path[path.path.length-1];
-        if (last_move) {
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        const pathResult = await bot.ashfinder.generatePath(avoidGoal);
+        if (pathResult && pathResult.path && pathResult.path.length > 0) {
+            let last_move = pathResult.path[pathResult.path.length-1];
             let x = Math.floor(last_move.x);
             let y = Math.floor(last_move.y);
             let z = Math.floor(last_move.z);
@@ -1617,7 +1624,7 @@ export async function moveAway(bot, distance) {
         }
     }
 
-    await goToGoal(bot, inverted_goal);
+    await goToGoal(bot, avoidGoal);
     let new_pos = bot.entity.position;
     log(bot, `Moved away from ${pos.floored()} to ${new_pos.floored()}.`);
     return true;
@@ -1631,10 +1638,9 @@ export async function moveAwayFromEntity(bot, entity, distance=16) {
      * @param {number} distance, the distance to move away.
      * @returns {Promise<boolean>} true if the bot moved away, false otherwise.
      **/
-    let goal = new pf.goals.GoalFollow(entity, distance);
-    let inverted_goal = new pf.goals.GoalInvert(goal);
-    bot.pathfinder.setMovements(new pf.Movements(bot));
-    await bot.pathfinder.goto(inverted_goal);
+    // RC25: Baritone GoalAvoid to move away from entity
+    let avoidGoal = new baritoneGoals.GoalAvoid(entity.position, distance, bot);
+    await goToGoal(bot, avoidGoal);
 }
 
 
@@ -1790,10 +1796,12 @@ export async function avoidEnemies(bot, distance=16) {
     bot.modes.pause('self_preservation'); // prevents damage-on-low-health from interrupting the bot
     let enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), distance);
     while (enemy) {
-        const follow = new pf.goals.GoalFollow(enemy, distance+1); // move a little further away
-        const inverted_goal = new pf.goals.GoalInvert(follow);
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        bot.pathfinder.setGoal(inverted_goal, true);
+        // RC25: Baritone GoalAvoid to flee from enemy
+        const avoidGoal = new baritoneGoals.GoalAvoid(enemy.position, distance + 1, bot);
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        try {
+            await bot.ashfinder.gotoSmart(avoidGoal);
+        } catch (e) { /* best-effort flee */ }
         await new Promise(resolve => setTimeout(resolve, 500));
         enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), distance);
         if (bot.interrupt_code) {
@@ -1803,7 +1811,7 @@ export async function avoidEnemies(bot, distance=16) {
             await attackEntity(bot, enemy, false);
         }
     }
-    bot.pathfinder.stop();
+    bot.ashfinder.stop();
     log(bot, `Moved ${distance} away from enemies.`);
     return true;
 }
@@ -1857,11 +1865,9 @@ export async function useDoor(bot, door_pos=null) {
     }
 
     try {
-        bot.pathfinder.setGoal(new pf.goals.GoalNear(door_pos.x, door_pos.y, door_pos.z, 1));
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        while (bot.pathfinder.isMoving()) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+        // RC25: Baritone gotoSmart replaces pathfinder.setGoal + isMoving poll
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        await bot.ashfinder.gotoSmart(new baritoneGoals.GoalNear(door_pos, 1));
         
         let door_block = bot.blockAt(door_pos);
         if (!door_block) {
@@ -2010,8 +2016,8 @@ export async function tillAndSow(bot, x, y, z, seedType=null) {
     // if distance is too far, move to the block
     if (bot.entity.position.distanceTo(block.position) > 4.5) {
         let pos = block.position;
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+        // RC25: Baritone GoalNear
+        await goToGoal(bot, new baritoneGoals.GoalNear(pos, 4));
     }
     if (block.name !== 'farmland') {
         let hoe = bot.inventory.items().find(item => item.name.includes('hoe'));
@@ -2055,8 +2061,8 @@ export async function activateNearestBlock(bot, type) {
     }
     if (bot.entity.position.distanceTo(block.position) > 4.5) {
         let pos = block.position;
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+        // RC25: Baritone GoalNear
+        await goToGoal(bot, new baritoneGoals.GoalNear(pos, 4));
     }
     await bot.activateBlock(block);
     log(bot, `Activated ${type} at x:${block.position.x.toFixed(1)}, y:${block.position.y.toFixed(1)}, z:${block.position.z.toFixed(1)}.`);
@@ -2110,7 +2116,8 @@ async function findAndGoToVillager(bot, id) {
         log(bot, `Villager is ${distance.toFixed(1)} blocks away, moving closer...`);
         try {
             bot.modes.pause('unstuck');
-            const goal = new pf.goals.GoalFollow(entity, 2);
+            // RC25: Baritone GoalNear replaces GoalFollow for villager approach
+            const goal = new baritoneGoals.GoalNear(entity.position, 2);
             await goToGoal(bot, goal);
             
             
@@ -2505,11 +2512,9 @@ export async function enterMinecart(bot, minecart_pos=null) {
         }
         
         // Go to the minecart
-        bot.pathfinder.setGoal(new pf.goals.GoalNear(minecart_pos.x, minecart_pos.y, minecart_pos.z, 1));
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        while (bot.pathfinder.isMoving()) {
-            await new Promise((resolve) => setTimeout(resolve, 100));
-        }
+        // RC25: Baritone gotoSmart replaces pathfinder.setGoal + isMoving poll
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        await bot.ashfinder.gotoSmart(new baritoneGoals.GoalNear(minecart_pos, 1));
         
         // Right-click to enter
         await bot.lookAt(minecart_pos.offset(0.5, 0.5, 0.5));

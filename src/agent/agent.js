@@ -309,7 +309,7 @@ export class Agent {
         this.bot.interrupt_code = true;
         this.bot.stopDigging();
         this.bot.collectBlock.cancelTask();
-        this.bot.pathfinder.stop();
+        this.bot.ashfinder.stop(); // RC25: baritone replaces pathfinder
         this.bot.pvp.stop();
     }
 
@@ -585,7 +585,7 @@ export class Agent {
         });
         this.bot.on('idle', () => {
             this.bot.clearControlStates();
-            this.bot.pathfinder.stop(); // clear any lingering pathfinder
+            this.bot.ashfinder.stop(); // RC25: clear any lingering baritone navigation
             this.bot.modes.unPauseAll();
             setTimeout(() => {
                 if (this.isIdle()) {
