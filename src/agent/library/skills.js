@@ -464,7 +464,9 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
     let collected = 0;
     let consecutiveFails = 0;
+    let interruptRetries = 0;  // RC20: track retries from mode interruptions (e.g., self_defense)
     const MAX_CONSECUTIVE_FAILS = 3; // break out after 3 consecutive failed attempts
+    const MAX_INTERRUPT_RETRIES = 8; // RC20: max total retries from combat/mode interruptions
 
     const movements = new pf.Movements(bot);
     movements.dontMineUnderFallingBlock = false;
@@ -592,6 +594,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 consecutiveFails = 0;
             } else {
                 console.log(`[RC19 DEBUG] FAIL: collection failed for ${block.name} at ${block.position}`);
+                // Exclude this position so we don't keep retrying the same unreachable block
+                if (block && block.position) {
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                }
                 consecutiveFails++;
                 if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
                     log(bot, `Failed to collect ${blockType} ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Use !explore(200) to travel to a completely new area, then retry.`);
@@ -605,6 +612,15 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             if (err.name === 'NoChests') {
                 log(bot, `Failed to collect ${blockType}: Inventory full, no place to deposit.`);
                 break;
+            }
+            // RC20: "Digging aborted" comes from self_defense/self_preservation interrupting the dig.
+            // Don't count this as a real failure — wait for the mode to finish, then retry the same block.
+            else if (err.message && err.message.includes('aborted') && interruptRetries < MAX_INTERRUPT_RETRIES) {
+                interruptRetries++;
+                console.log(`[RC20] Dig interrupted (retry ${interruptRetries}/${MAX_INTERRUPT_RETRIES}), waiting for mode to finish...`);
+                await new Promise(r => setTimeout(r, 2000));  // Wait 2s for combat/mode to finish
+                i--;  // Retry the same block on next loop iteration
+                continue;
             }
             else {
                 log(bot, `Failed to collect ${blockType}: ${err}.`);
