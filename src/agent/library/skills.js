@@ -571,9 +571,18 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                     navTimeout,
                     () => { try { bot.ashfinder.stop(); } catch(_e) {} }
                 );
-                console.log(`[RC24] Digging ${blockType} (manual)`);
+                // RC26: Re-fetch block after navigation (see RC26 comment above)
+                const freshBlockManual = bot.blockAt(block.position);
+                if (!freshBlockManual || !blocktypes.includes(freshBlockManual.name)) {
+                    console.log(`[RC26] Manual block at (${block.position.x}, ${block.position.y}, ${block.position.z}) changed to ${freshBlockManual?.name ?? 'null'}, skipping`);
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                    i--;  // retry this slot with a different block
+                    continue;
+                }
+                console.log(`[RC24] Digging ${freshBlockManual.name} (manual)`);
                 await withTimeout(
-                    bot.dig(block),
+                    bot.dig(freshBlockManual),
                     10000,
                     () => { try { bot.stopDigging(); } catch(_e) {} }
                 );
@@ -606,9 +615,21 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                         navTimeout,
                         () => { try { bot.ashfinder.stop(); } catch(_e) {} }
                     );
-                    console.log(`[RC24] Digging ${blockType}`);
+                    // RC26: Re-fetch block at position after navigation.
+                    // The original block reference can go stale if chunks
+                    // unloaded/reloaded during pathfinding, causing bot.dig()
+                    // to silently no-op (items 0→0).
+                    const freshBlock = bot.blockAt(block.position);
+                    if (!freshBlock || !blocktypes.includes(freshBlock.name)) {
+                        console.log(`[RC26] Block at (${block.position.x}, ${block.position.y}, ${block.position.z}) changed to ${freshBlock?.name ?? 'null'}, skipping`);
+                        if (!exclude) exclude = [];
+                        exclude.push(block.position);
+                        i--;  // retry this slot with a different block
+                        continue;
+                    }
+                    console.log(`[RC24] Digging ${freshBlock.name}`);
                     await withTimeout(
-                        bot.dig(block),
+                        bot.dig(freshBlock),
                         10000,
                         () => { try { bot.stopDigging(); } catch(_e) {} }
                     );
