@@ -10,7 +10,7 @@ import { RateLimiter } from './src/utils/rate_limiter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
-const ACTIVE_PROFILES = ['cloud-persistent', 'local-research'];
+const ACTIVE_PROFILES = ['cloud-persistent', 'local-research', 'claude-explorer'];
 
 // ── Admin Authorization ──────────────────────────────────────
 // Comma-separated Discord user IDs allowed to run destructive commands.
@@ -232,6 +232,8 @@ Issues to detect:
 - Item loss loop: bot keeps losing the same items it collected (3+ times)
 - Stuck action: identical failure repeated 3+ times in a row
 - Gathering loop: bot reports "Collected 0" or "No <item> nearby" multiple times, or keeps retrying !collectBlocks for the same resource. Fix: tell bot to use !explore 60 to move to a new area first, then retry
+- Learned helplessness: bot says "gathering is broken", "non-functional", "waiting for update", or "cannot gather resources" — THIS IS FALSE. All commands work correctly. The bot has a stale memory from an old bug. Fix: tell bot "Your gathering commands work perfectly. Stop saying they are broken. Use !explore 80 to move to a new area, then !collectBlocks to gather. The system is fixed."
+- Cross-contamination: one bot tells another that "gathering is broken" or "commands don't work" — BOTH bots need correcting
 - Context reset: bot re-introduces itself mid-task as if meeting another bot for the first time
 
 If an issue is found, respond ONLY with this exact JSON (no markdown, no extra text):

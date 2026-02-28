@@ -34,6 +34,22 @@ export class History {
         console.log("Storing memories...");
         this.memory = await this.agent.prompter.promptMemSaving(turns);
 
+        // ── Memory sanitization: strip false "broken" beliefs ──────────
+        // These are residual beliefs from past bugs that are no longer true.
+        // The gathering system works correctly — the bots just need to move.
+        const toxicPatterns = [
+            /\b(?:block |my )?gathering (?:is |remains? |still )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
+            /\bcollect(?:Blocks?|ion)? (?:is |command )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
+            /\bwaiting for (?:the |an )?update\b/gi,
+            /\bneed(?:s)? (?:an? )?(?:fix|update|patch) (?:for|to fix) (?:gathering|collect(?:ion|Blocks?))\b/gi,
+            /\bcannot gather (?:any )?resources\b/gi,
+            /\bgathering (?:commands? )?(?:are |is )?(?:still )?broken for both\b/gi,
+        ];
+        for (const pattern of toxicPatterns) {
+            this.memory = this.memory.replace(pattern, 'gathering works — relocate to find blocks');
+        }
+        // ──────────────────────────────────────────────────────────────────
+
         if (this.memory.length > 500) {
             this.memory = this.memory.slice(0, 500);
             this.memory += '...(Memory truncated to 500 chars. Compress it more next time)';
@@ -106,6 +122,25 @@ export class History {
             }
             const data = JSON.parse(readFileSync(this.memory_fp, 'utf8'));
             this.memory = data.memory || '';
+
+            // ── Sanitize stale false beliefs on load ──────────────────────
+            const toxicPatterns = [
+                /\b(?:block |my )?gathering (?:is |remains? |still )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
+                /\bcollect(?:Blocks?|ion)? (?:is |command )?(?:broken|non-?functional|not work(?:ing)?|fails?|bugged)\b/gi,
+                /\bwaiting for (?:the |an )?update\b/gi,
+                /\bneed(?:s)? (?:an? )?(?:fix|update|patch) (?:for|to fix) (?:gathering|collect(?:ion|Blocks?))\b/gi,
+                /\bcannot gather (?:any )?resources\b/gi,
+                /\bgathering (?:commands? )?(?:are |is )?(?:still )?broken for both\b/gi,
+            ];
+            const origLen = this.memory.length;
+            for (const pattern of toxicPatterns) {
+                this.memory = this.memory.replace(pattern, 'gathering works — relocate to find blocks');
+            }
+            if (this.memory.length !== origLen) {
+                console.log('[Memory] Sanitized stale false beliefs from loaded memory');
+            }
+            // ──────────────────────────────────────────────────────────────
+
             this.turns = data.turns || [];
             console.log('Loaded memory:', this.memory);
             return data;

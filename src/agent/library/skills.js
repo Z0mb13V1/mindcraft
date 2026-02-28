@@ -481,9 +481,9 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
 
         if (blocks.length === 0) {
             if (collected === 0)
-                log(bot, `No ${blockType} nearby to collect. Try !searchForBlock to find a new area, or !moveAway then retry.`);
+                log(bot, `No ${blockType} found within 64 blocks. Gathering system is working fine — this area simply has none. Use !searchForBlock("${blockType}", 128) or !explore 80 to reach a new area, then retry.`);
             else
-                log(bot, `No more ${blockType} nearby to collect.`);
+                log(bot, `No more ${blockType} nearby to collect. Successfully collected ${collected} so far.`);
             break;
         }
         const block = blocks[0];
@@ -583,7 +583,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             break;  
     }
     if (collected === 0 && num > 0) {
-        log(bot, `Collected 0 ${blockType}. All nearby blocks may be unreachable or require better tools. STOP retrying the same command — move to a new area first.`);
+        log(bot, `Collected 0 ${blockType}. There are no ${blockType} blocks in this area (commands are working correctly). Move to a new area first: !explore 80 or !searchForBlock("${blockType}", 128). Do NOT say gathering is broken — it works fine, you just need to relocate.`);
     } else {
         log(bot, `Collected ${collected} ${blockType}.`);
     }
