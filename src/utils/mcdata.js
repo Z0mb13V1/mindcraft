@@ -84,16 +84,17 @@ export function initBot(username) {
         Item = prismarine_items(mc_version);
     });
 
-    // RC25: Configure Baritone pathfinding defaults after spawn
+    // RC25b: Configure Baritone pathfinding defaults after spawn
     bot.once('spawn', () => {
         if (bot.ashfinder) {
             bot.ashfinder.config.thinkTimeout = 10000; // 10s path compute timeout
             bot.ashfinder.config.breakBlocks = true;   // allow breaking obstacles
-            bot.ashfinder.config.placeBlocks = true;   // allow placing bridge blocks
+            bot.ashfinder.config.placeBlocks = false;  // RC25b: DISABLED — Paper rejects client-side placements, creating ghost blocks
             bot.ashfinder.config.parkour = false;       // disable parkour (can get stuck)
             bot.ashfinder.config.swimming = true;       // allow swimming
             bot.ashfinder.config.maxFallDist = 4;       // safe fall distance
             bot.ashfinder.config.maxWaterDist = 256;    // water travel limit
+            bot.ashfinder.config.stuckTimeout = 2000;   // RC25b: detect stuck faster (default 5000)
         }
     });
 

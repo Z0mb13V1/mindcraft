@@ -1251,10 +1251,17 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
 
 export async function goToGoal(bot, goal) {
     /**
-     * RC25: Navigate to the given goal using Baritone A* pathfinding.
+     * RC25b: Navigate to the given goal using Baritone A* pathfinding.
      * Uses bot.ashfinder.gotoSmart() which auto-chooses between direct A*
-     * and waypoint navigation based on distance. Keeps the door-check interval
-     * for stuck detection since Baritone doesn't handle all door types.
+     * and waypoint navigation based on distance.
+     *
+     * CRITICAL: gotoSmart() awaits the PathExecutor's completionPromise, but
+     * executor.stop() only rejects currentPromise — NOT completionPromise.
+     * This means gotoSmart() hangs forever if stopped externally. We MUST wrap
+     * it with Promise.race + timeout. After timeout, we check proximity to goal
+     * since Paper server position corrections prevent the executor's tight reach
+     * check (0.35 blocks) from passing even when the bot is very close.
+     *
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {Goal} goal, a baritone goal to navigate to.
      **/
@@ -1273,26 +1280,71 @@ export async function goToGoal(bot, goal) {
         }
     }
 
+    // RC25b: Calculate timeout based on distance to goal
+    // Paper server's movement corrections make executor reach checks unreliable,
+    // so we need our own timeout to prevent infinite hangs.
+    let navTimeout = 30000; // default 30s
+    try {
+        const goalPos = goal.getPosition();
+        if (goalPos) {
+            const dist = bot.entity.position.distanceTo(goalPos);
+            navTimeout = Math.max(12000, Math.round(dist * 1200) + 5000);
+        }
+    } catch (_) {}
+
     const doorCheckInterval = startDoorInterval(bot);
+    let timeoutId = null;
+
+    const restoreConfig = () => {
+        clearInterval(doorCheckInterval);
+        if (timeoutId) clearTimeout(timeoutId);
+        for (const name of addedBlocks) {
+            const idx = blocksToAvoid.indexOf(name);
+            if (idx !== -1) blocksToAvoid.splice(idx, 1);
+        }
+    };
+
+    // RC25b: Helper — check if bot is close enough to goal to count as success.
+    // Paper's position corrections prevent the executor from passing its tight
+    // reach threshold (0.35 blocks), but the bot is often within 1-2 blocks.
+    const isCloseEnough = () => {
+        try {
+            const goalPos = goal.getPosition();
+            if (!goalPos) return false;
+            const dist = bot.entity.position.distanceTo(goalPos);
+            const threshold = (goal.distance || 2) + 1;
+            return dist <= threshold;
+        } catch (_) { return false; }
+    };
 
     try {
-        const result = await bot.ashfinder.gotoSmart(goal);
-        clearInterval(doorCheckInterval);
-        // Restore blocksToAvoid
-        for (const name of addedBlocks) {
-            const idx = blocksToAvoid.indexOf(name);
-            if (idx !== -1) blocksToAvoid.splice(idx, 1);
-        }
+        // RC25b: Wrap gotoSmart with Promise.race because the PathExecutor's
+        // stop() doesn't reject completionPromise, causing gotoSmart to hang forever.
+        const result = await Promise.race([
+            bot.ashfinder.gotoSmart(goal),
+            new Promise((resolve) => {
+                timeoutId = setTimeout(() => {
+                    console.log(`[RC25b] goToGoal timeout (${navTimeout}ms) — stopping nav`);
+                    try { bot.ashfinder.stop(); } catch (_) {}
+                    resolve({ status: 'timeout' });
+                }, navTimeout);
+            })
+        ]);
+
+        restoreConfig();
+
+        // Check proximity first — if close enough, it's success regardless of executor status
+        if (isCloseEnough()) return true;
+
         if (result && result.status === 'success') return true;
-        // gotoSmart returns { status: "failed" } on failure — throw so callers can handle
+        if (result && result.status === 'timeout') {
+            throw new Error(`Navigation timed out after ${Math.round(navTimeout/1000)}s`);
+        }
         throw new Error(result?.error?.message || 'Navigation failed');
     } catch (err) {
-        clearInterval(doorCheckInterval);
-        // Restore blocksToAvoid
-        for (const name of addedBlocks) {
-            const idx = blocksToAvoid.indexOf(name);
-            if (idx !== -1) blocksToAvoid.splice(idx, 1);
-        }
+        restoreConfig();
+        // Even on error, if we're close enough, consider it success
+        if (isCloseEnough()) return true;
         throw err;
     }
 }
