@@ -1,7 +1,7 @@
 services:
   # ── Minecraft Server (Paper + Cross-Play) ──────────────────────────────────
   # Paper server with ViaVersion suite (Java backward compat) and
-  # Geyser + Floodgate (Bedrock cross-play on UDP 19132).
+  # Geyser (Bedrock cross-play on UDP 19132).
   # Migrated from vanilla 2025-02-27.  Backup: minecraft-data-backup-pre-paper-*
   minecraft:
     image: itzg/minecraft-server
@@ -13,7 +13,8 @@ services:
       EULA: "TRUE"
       TYPE: "PAPER"
       VERSION: "LATEST"       # Latest MC version — ensure mineflayer supports it
-      MEMORY: "2G"
+      MEMORY: "3G"            # Paper + Geyser + ViaVersion need ≥3G JVM heap
+      USE_AIKAR_FLAGS: "true" # Optimized GC flags for Paper (reduces GC pauses)
       DIFFICULTY: "normal"
       MODE: "survival"
       ENABLE_COMMAND_BLOCK: "true"
@@ -24,9 +25,8 @@ services:
       RCON_PASSWORD: "${RCON_PASSWORD:-mindcraft}"
       # ── Plugin auto-download from Modrinth ──
       # ViaVersion suite: lets older Java clients connect
-      # Geyser + Floodgate: lets Bedrock clients connect
+      # Geyser: lets Bedrock clients connect (Floodgate not needed w/ ONLINE_MODE=FALSE)
       MODRINTH_PROJECTS: "viaversion,viabackwards,viarewind,geyser:beta"
-      # Note: Floodgate omitted — not needed with ONLINE_MODE=FALSE
       # Geyser uses :beta because no stable release exists on Modrinth yet
     volumes:
       - ./minecraft-data:/data
@@ -43,7 +43,7 @@ services:
       resources:
         limits:
           cpus: "1.5"
-          memory: 2500M       # Extra headroom for Paper + plugins
+          memory: 3500M       # 3G JVM heap + 500M metaspace/native for Paper+Geyser
 
   # ── Mindcraft Agents ──────────────────────────────────────────────────────
   mindcraft:

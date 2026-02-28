@@ -16,7 +16,7 @@ services:
 
   # ── Minecraft Server (Paper + Cross-Play) ────────────────────────────────────
   # Paper server with ViaVersion suite (Java backward compat) and
-  # Geyser + Floodgate (Bedrock cross-play on UDP 19132).
+  # Geyser (Bedrock cross-play on UDP 19132).
   minecraft:
     image: itzg/minecraft-server
     container_name: minecraft-server
@@ -28,6 +28,7 @@ services:
       TYPE: "PAPER"
       VERSION: "LATEST"       # Latest MC version — ensure mineflayer supports it
       MEMORY: "4G"
+      USE_AIKAR_FLAGS: "true" # Optimized GC flags for Paper (reduces GC pauses)
       DIFFICULTY: "normal"
       MODE: "survival"
       ENABLE_COMMAND_BLOCK: "true"
@@ -37,9 +38,8 @@ services:
       RCON_PASSWORD: "${RCON_PASSWORD:-mindcraft}"  # Override via .env for production
       # ── Plugin auto-download from Modrinth ──
       # ViaVersion suite: lets older Java clients connect
-      # Geyser + Floodgate: lets Bedrock clients connect
+      # Geyser: lets Bedrock clients connect (Floodgate not needed w/ ONLINE_MODE=FALSE)
       MODRINTH_PROJECTS: "viaversion,viabackwards,viarewind,geyser:beta"
-      # Note: Floodgate omitted — not needed with ONLINE_MODE=FALSE
       # Geyser uses :beta because no stable release exists on Modrinth yet
     volumes:
       - ./minecraft-data:/data
