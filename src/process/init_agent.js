@@ -1,6 +1,7 @@
 import { Agent } from '../agent/agent.js';
 import { serverProxy } from '../agent/mindserver_proxy.js';
 import yargs from 'yargs';
+import { readFileSync } from 'fs';
 
 const args = process.argv.slice(2);
 if (args.length < 1) {
@@ -35,12 +36,28 @@ const argv = yargs(args)
         type: 'number',
         description: 'port of mindserver'
     })
+    .option('url', {
+        alias: 'u',
+        type: 'string',
+        description: 'remote mindserver URL (e.g. http://host:8080)'
+    })
+    .option('settings_file', {
+        alias: 's',
+        type: 'string',
+        description: 'path to settings JSON file (required for remote mode)'
+    })
     .argv;
 
 await (async () => {
     try {
-        console.log('Connecting to MindServer');
-        await serverProxy.connect(argv.name, argv.port);
+        if (argv.url && argv.settings_file) {
+            console.log(`Connecting to remote MindServer at ${argv.url}`);
+            const remoteSettings = JSON.parse(readFileSync(argv.settings_file, 'utf8'));
+            await serverProxy.connect(argv.name, argv.url, remoteSettings);
+        } else {
+            console.log('Connecting to MindServer');
+            await serverProxy.connect(argv.name, argv.port);
+        }
         console.log('Starting agent');
         const agent = new Agent();
         serverProxy.setAgent(agent);

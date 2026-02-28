@@ -7,6 +7,7 @@ const settings = {
     // the mindserver manages all agents and hosts the UI
     "mindserver_port": 8080,
     "mindserver_host_public": false, // true binds to 0.0.0.0 (all interfaces, required for Docker multi-container setups); false binds to localhost only
+    "mindserver_url": "http://54.152.239.117:8080", // connect to a remote MindServer (e.g. "http://54.152.239.117:8080"). When set, no local MindServer is started — agents register themselves on the remote one.
     "auto_open_ui": true, // opens UI in browser on startup
 
     "base_profile": "assistant", // survival, assistant, creative, or god_mode

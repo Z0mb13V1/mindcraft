@@ -18,11 +18,14 @@ class MindServerProxy {
         MindServerProxy.instance = this;
     }
 
-    async connect(name, port) {
+    async connect(name, urlOrPort, remoteSettings = null) {
         if (this.connected) return;
 
         this.name = name;
-        this.socket = io(`http://localhost:${port}`);
+        const url = (typeof urlOrPort === 'string' && urlOrPort.startsWith('http'))
+            ? urlOrPort
+            : `http://localhost:${urlOrPort}`;
+        this.socket = io(url);
 
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
@@ -96,22 +99,35 @@ class MindServerProxy {
             }
         });
 
-        // Request settings and wait for response
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('Settings request timed out after 5 seconds'));
-            }, 5000);
-
-            this.socket.emit('get-settings', name, (response) => {
-                clearTimeout(timeout);
-                if (response.error) {
-                    return reject(new Error(response.error));
-                }
-                setSettings(response.settings);
-                this.socket.emit('connect-agent-process', name);
-                resolve();
+        if (remoteSettings) {
+            // Remote mode: register ourselves on the remote MindServer
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Remote agent registration timed out after 10s'));
+                }, 10000);
+                this.socket.emit('register-remote-agent', remoteSettings, (response) => {
+                    clearTimeout(timeout);
+                    if (response.error) return reject(new Error(response.error));
+                    setSettings(response.settings);
+                    this.socket.emit('connect-agent-process', name);
+                    resolve();
+                });
             });
-        });
+        } else {
+            // Local mode: request settings from MindServer
+            await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Settings request timed out after 5 seconds'));
+                }, 5000);
+                this.socket.emit('get-settings', name, (response) => {
+                    clearTimeout(timeout);
+                    if (response.error) return reject(new Error(response.error));
+                    setSettings(response.settings);
+                    this.socket.emit('connect-agent-process', name);
+                    resolve();
+                });
+            });
+        }
     }
 
     setAgent(agent) {

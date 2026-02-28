@@ -131,6 +131,26 @@ export function createMindServer(host_public = false, port = 8080) {
             }
         });
 
+        // Remote agent registration: allows an agent process running on another
+        // machine to register itself and appear in the MindServer UI.
+        socket.on('register-remote-agent', (agentSettings, callback) => {
+            const name = agentSettings?.profile?.name;
+            if (!name) {
+                callback({ error: 'Agent name is required in profile' });
+                return;
+            }
+            if (agent_connections[name]) {
+                // Already registered (reconnect) — just return its settings
+                callback({ settings: agent_connections[name].settings });
+                return;
+            }
+            const viewerPort = 3000 + Object.keys(agent_connections).length;
+            registerAgent(agentSettings, viewerPort);
+            console.log(`Remote agent '${name}' registered on MindServer`);
+            callback({ settings: agent_connections[name].settings });
+            agentsStatusUpdate();
+        });
+
         socket.on('login-agent', (agentName) => {
             if (agent_connections[agentName]) {
                 agent_connections[agentName].socket = socket;

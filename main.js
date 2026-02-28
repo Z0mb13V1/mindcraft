@@ -83,7 +83,11 @@ if (process.env.LOG_ALL) {
     settings.log_all_prompts = process.env.LOG_ALL === 'true' || process.env.LOG_ALL === '1';
 }
 
-Mindcraft.init(settings.mindserver_host_public === true, settings.mindserver_port, settings.auto_open_ui);
+if (settings.mindserver_url) {
+    console.log(`Remote MindServer mode: agents will connect to ${settings.mindserver_url}`);
+} else {
+    Mindcraft.init(settings.mindserver_host_public === true, settings.mindserver_port, settings.auto_open_ui);
+}
 
 for (let profile of settings.profiles) {
     if (!existsSync(profile)) {
@@ -93,7 +97,11 @@ for (let profile of settings.profiles) {
     try {
         const profile_json = safeJsonParse(readFileSync(profile, 'utf8'), `profile "${profile}"`);
         settings.profile = profile_json;
-        Mindcraft.createAgent(settings);
+        if (settings.mindserver_url) {
+            await Mindcraft.createRemoteAgent(settings, settings.mindserver_url);
+        } else {
+            Mindcraft.createAgent(settings);
+        }
     } catch (err) {
         console.error(`Failed to load profile "${profile}": ${err.message}`);
     }
