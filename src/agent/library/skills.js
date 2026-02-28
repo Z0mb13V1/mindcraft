@@ -481,6 +481,8 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         blockType.endsWith('leaves') || blockType.endsWith('_planks');
 
     for (let i=0; i<num; i++) {
+        // RC19 DEBUG: Track predicate calls to diagnose findBlocks behavior
+        let _dbgPaletteHits = 0, _dbgPaletteMisses = 0, _dbgFullHits = 0, _dbgFullMisses = 0;
         let blocks = world.getNearestBlocksWhere(bot, block => {
             // RC18 FIX: mineflayer's findBlocks has a section palette pre-filter
             // (isBlockInSection) that creates blocks via Block.fromStateId() which
@@ -489,11 +491,14 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             // Previously: `if (!block.position || !blocktypes.includes(block.name)) return false`
             // caused ALL sections to be skipped because position is always null during palette check.
             if (!blocktypes.includes(block.name)) {
+                if (!block.position) _dbgPaletteMisses++;
+                else _dbgFullMisses++;
                 return false;
             }
             // If position is null, we're in the palette pre-filter — name matched,
             // so tell mineflayer this section might contain our target block.
-            if (!block.position) return true;
+            if (!block.position) { _dbgPaletteHits++; return true; }
+            _dbgFullHits++;
             
             if (exclude) {
                 for (let position of exclude) {
@@ -509,6 +514,8 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             
             return movements.safeToBreak(block) || unsafeBlocks.includes(block.name) || isNoGravityNaturalBlock;
         }, 128, 1);  // RC17: Increased from 64 to 128 to match searchForBlock range
+        console.log(`[RC19 DEBUG] collectBlock(${blockType}): findBlocks returned ${blocks.length} blocks | palette: ${_dbgPaletteHits} hits, ${_dbgPaletteMisses} misses | full: ${_dbgFullHits} hits, ${_dbgFullMisses} misses`);
+        if (blocks.length > 0) console.log(`[RC19 DEBUG] first block: name=${blocks[0].name} pos=${blocks[0].position}`);
 
         if (blocks.length === 0) {
             if (collected === 0)
