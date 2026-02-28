@@ -1285,7 +1285,7 @@ export async function goToGoal(bot, goal) {
     // so we need our own timeout to prevent infinite hangs.
     let navTimeout = 30000; // default 30s
     try {
-        const goalPos = goal.getPosition();
+        const goalPos = goal.pos || (goal.getPosition ? goal.getPosition() : null);
         if (goalPos) {
             const dist = bot.entity.position.distanceTo(goalPos);
             navTimeout = Math.max(12000, Math.round(dist * 1200) + 5000);
@@ -1309,12 +1309,13 @@ export async function goToGoal(bot, goal) {
     // reach threshold (0.35 blocks), but the bot is often within 1-2 blocks.
     const isCloseEnough = () => {
         try {
-            const goalPos = goal.getPosition();
+            const goalPos = goal.pos || (goal.getPosition ? goal.getPosition() : null);
             if (!goalPos) return false;
             const dist = bot.entity.position.distanceTo(goalPos);
             const threshold = (goal.distance || 2) + 1;
+            console.log(`[RC25b] proximity check: dist=${dist.toFixed(1)}, threshold=${threshold}`);
             return dist <= threshold;
-        } catch (_) { return false; }
+        } catch (e) { console.log(`[RC25b] proximity check error: ${e.message}`); return false; }
     };
 
     try {
