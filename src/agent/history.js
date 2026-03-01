@@ -80,9 +80,9 @@ export class History {
         }
         // ──────────────────────────────────────────────────────────────────
 
-        if (this.memory.length > 500) {
-            this.memory = this.memory.slice(0, 500);
-            this.memory += '...(Memory truncated to 500 chars. Compress it more next time)';
+        if (this.memory.length > 800) {
+            this.memory = this.memory.slice(0, 800);
+            this.memory += '...(Memory truncated to 800 chars. Compress it more next time)';
         }
 
         console.log("Memory updated to: ", this.memory);
