@@ -35,11 +35,24 @@ const modes_list = [
             let blockAbove = bot.blockAt(bot.entity.position.offset(0, 1, 0));
             if (!block) block = {name: 'air'}; // hacky fix when blocks are not loaded
             if (!blockAbove) blockAbove = {name: 'air'};
-            if (blockAbove.name === 'water') {
-                // does not call execute so does not interrupt other actions
-                if (bot.ashfinder.stopped) { // RC25: baritone — jump only when not navigating
-                    bot.setControlState('jump', true);
+            // Drowning prevention: swim up when underwater or low on air
+            const isSubmerged = blockAbove.name === 'water';
+            const oxygenLevel = bot.oxygenLevel != null ? bot.oxygenLevel : 20;
+            if (isSubmerged && oxygenLevel < 12) {
+                // Low on air — interrupt everything and swim to surface
+                bot.setControlState('jump', true);
+                bot.setControlState('sprint', false);
+                if (oxygenLevel < 6) {
+                    // Critical — also try to navigate up
+                    await execute(this, agent, async () => {
+                        const pos = bot.entity.position;
+                        await skills.goToPosition(bot, pos.x, pos.y + 10, pos.z, 1);
+                    });
                 }
+            }
+            else if (isSubmerged) {
+                // Underwater but air is okay — keep jumping to stay afloat
+                bot.setControlState('jump', true);
             }
             else if (this.fall_blocks.some(name => blockAbove.name.includes(name))) {
                 await execute(this, agent, async () => {
@@ -123,10 +136,25 @@ const modes_list = [
                 await say(agent, 'I\'m stuck!');
                 this.stuck_time = 0;
                 await execute(this, agent, async () => {
-                    const crashTimeout = setTimeout(() => { agent.cleanKill("Got stuck and couldn't get unstuck") }, 10000);
-                    await skills.moveAway(bot, 5);
-                    clearTimeout(crashTimeout);
-                    void say(agent, 'I\'m free.');
+                    const crashTimeout = setTimeout(() => { agent.cleanKill("Got stuck and couldn't get unstuck") }, 30000);
+                    try {
+                        await skills.moveAway(bot, 5);
+                        clearTimeout(crashTimeout);
+                        void say(agent, 'I\'m free.');
+                    } catch (moveErr) {
+                        console.warn(`[Unstuck] moveAway failed: ${moveErr.message}. Brute-force walking...`);
+                        // Brute-force fallback: random yaw + forward + jump for 3s
+                        const randomYaw = Math.random() * Math.PI * 2;
+                        const randomPitch = 0;
+                        bot.look(randomYaw, randomPitch, true);
+                        bot.setControlState('forward', true);
+                        bot.setControlState('jump', true);
+                        bot.setControlState('sprint', true);
+                        await new Promise(resolve => setTimeout(resolve, 3000));
+                        bot.clearControlStates();
+                        clearTimeout(crashTimeout);
+                        void say(agent, 'Broke free by brute force.');
+                    }
                 });
             }
             this.last_time = Date.now();
@@ -293,6 +321,64 @@ const modes_list = [
                 }
                 this.next_change = Date.now() + Math.random() * 10000 + 2000;
             }
+        }
+    },
+    {
+        name: 'auto_eat',
+        description: 'Automatically eat food when hunger drops below 14. Interrupts non-critical actions.',
+        interrupts: ['all'],
+        on: true,
+        active: false,
+        lastEat: 0,
+        update: async function (agent) {
+            const bot = agent.bot;
+            if (bot.food >= 14) return;
+            if (Date.now() - this.lastEat < 10000) return; // 10s cooldown
+
+            const foodPriority = [
+                'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_chicken',
+                'cooked_salmon', 'cooked_cod', 'cooked_rabbit', 'bread', 'baked_potato',
+                'golden_apple', 'apple', 'carrot', 'melon_slice', 'sweet_berries',
+                'beef', 'porkchop', 'mutton', 'chicken', 'dried_kelp', 'rotten_flesh'
+            ];
+
+            const inv = world.getInventoryCounts(bot);
+            let foodItem = null;
+            for (const f of foodPriority) {
+                if ((inv[f] || 0) > 0) { foodItem = f; break; }
+            }
+
+            if (foodItem) {
+                this.lastEat = Date.now();
+                await say(agent, `Eating ${foodItem} (hunger: ${bot.food}).`);
+                await execute(this, agent, async () => {
+                    await skills.consume(agent.bot, foodItem);
+                });
+            }
+        }
+    },
+    {
+        name: 'panic_defense',
+        description: 'Build emergency cobblestone shelter when health is critically low (< 6) and under attack.',
+        interrupts: ['all'],
+        on: true,
+        active: false,
+        lastPanic: 0,
+        update: async function (agent) {
+            const bot = agent.bot;
+            if (bot.health >= 6) return;
+            if (Date.now() - this.lastPanic < 60000) return; // 60s cooldown
+            if (Date.now() - bot.lastDamageTime > 5000) return; // only if recently damaged
+
+            const inv = world.getInventoryCounts(bot);
+            const cobble = (inv['cobblestone'] || 0);
+            if (cobble < 12) return; // not enough to bother
+
+            this.lastPanic = Date.now();
+            await say(agent, 'Critical health! Building emergency shelter!');
+            await execute(this, agent, async () => {
+                await skills.buildPanicRoom(agent.bot);
+            });
         }
     },
     {

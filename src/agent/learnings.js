@@ -1,7 +1,23 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, promises as fs } from 'fs';
 import path from 'path';
 
 const MAX_ENTRIES = 100;
+
+// Helper function to safely write files with retry logic for Windows EBADF issues
+async function safeWriteFile(filepath, content, retries = 3, delay = 100) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            await fs.writeFile(filepath, content, 'utf8');
+            return;
+        } catch (error) {
+            if (error.code === 'EBADF' && i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                continue;
+            }
+            throw error;
+        }
+    }
+}
 
 export class Learnings {
     constructor(agentName) {
@@ -24,12 +40,12 @@ export class Learnings {
         }
     }
 
-    save() {
+    async save() {
         if (!this._dirty) return;
         try {
             const dir = path.dirname(this.filePath);
             mkdirSync(dir, { recursive: true });
-            writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2));
+            await safeWriteFile(this.filePath, JSON.stringify(this.entries, null, 2));
             this._dirty = false;
         } catch (err) {
             console.error(`[Learnings] Save failed for ${this.agentName}:`, err.message);

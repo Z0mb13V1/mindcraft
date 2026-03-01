@@ -198,9 +198,11 @@ export class ActionManager {
                     if (tracker[blockType].count >= this._COLLECT_FAIL_THRESHOLD) {
                         const failCount = tracker[blockType].count;
                         tracker[blockType] = { count: 0, lastSeen: 0 }; // reset
-                        console.warn(`[ActionManager] Gather loop: collected 0 ${blockType} ${failCount} times`);
+                        console.warn(`[ActionManager] Gather loop: collected 0 ${blockType} ${failCount} times — forcing explore`);
                         this.cancelResume();
-                        output += `\n\n⚠️ CRITICAL: You have failed to collect ${blockType} ${failCount} times in a row across multiple attempts. The area is depleted or blocks are unreachable. You MUST: (1) !explore(200) to travel far away to a completely new area with trees, (2) THEN !collectBlocks("${blockType}", 10) to gather. Do NOT use !searchForBlock or !moveAway — explore 200 blocks first to load fresh chunks with resources.`;
+                        // Set flag so agent.js auto-executes !explore(200) bypassing the LLM
+                        this.agent._forceExplore = { distance: 200, blockType };
+                        output += `\n\nArea depleted: collected 0 ${blockType} ${failCount} times. Auto-exploring 200 blocks to find fresh resources.`;
                     }
                 } else if (successMatch && parseInt(successMatch[1]) > 0) {
                     // Success — reset tracker for this block type

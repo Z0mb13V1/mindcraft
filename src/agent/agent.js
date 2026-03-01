@@ -236,6 +236,17 @@ export class Agent {
             bannedFood: ["rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chicken"]
         };
 
+        // Log inventory on every load so the bot (and LLM) knows what it has
+        const inv = this.bot.inventory.items();
+        if (inv.length > 0) {
+            const invStr = inv.map(i => `${i.name}: ${i.count}`).join(', ');
+            console.log(`[Startup] ${this.name} inventory: ${invStr}`);
+            this.history.add('system', `Inventory on load: ${invStr}`);
+        } else {
+            console.log(`[Startup] ${this.name} inventory is empty.`);
+            this.history.add('system', 'Inventory on load: empty.');
+        }
+
         if (save_data?.self_prompt) {
             if (init_message) {
                 this.history.add('system', init_message);
@@ -476,6 +487,18 @@ export class Agent {
                     this.history.add('system', execute_res);
                 else
                     break;
+
+                // Auto-explore: if action_manager detected repeated collect failures,
+                // bypass the LLM and directly execute !explore(200) to relocate
+                if (this._forceExplore) {
+                    const { distance, blockType } = this._forceExplore;
+                    this._forceExplore = null;
+                    console.log(`[AutoExplore] Forcing explore(${distance}) after repeated ${blockType} collect failures`);
+                    const exploreRes = await executeCommand(this, `!explore(${distance})`);
+                    if (exploreRes) {
+                        this.history.add('system', exploreRes);
+                    }
+                }
             }
             else { // conversation response
                 this.history.add(this.name, res);

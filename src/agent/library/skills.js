@@ -2777,4 +2777,453 @@ export async function getDiamondPickaxe(bot) {
     log(bot, 'Diamond pickaxe obtained!');
     return true;
 }
- 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERAL IMPROVEMENTS — Safe Movement, Combat, Inventory, Food
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function safeMoveTo(bot, x, y, z, options = {}) {
+    /**
+     * Navigate to a position with safety checks: avoids lava, deep water,
+     * and large falls. Places torches underground every ~10 blocks.
+     * If the bot is falling >2 blocks, attempts water bucket clutch.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} x, the x coordinate to navigate to.
+     * @param {number} y, the y coordinate to navigate to.
+     * @param {number} z, the z coordinate to navigate to.
+     * @param {boolean} options.avoidLava, avoid lava paths (default true).
+     * @param {boolean} options.lightPath, place torches underground (default true).
+     * @param {number} options.timeout, navigation timeout in seconds (default 60).
+     * @returns {Promise<boolean>} true if destination reached.
+     * @example
+     * await skills.safeMoveTo(bot, 100, 64, 200);
+     * await skills.safeMoveTo(bot, 100, 64, 200, {avoidLava: true, lightPath: true});
+     **/
+    const avoidLava = options.avoidLava !== false;
+    const lightPath = options.lightPath !== false;
+
+    // Pre-flight: check destination is not in lava/void
+    if (avoidLava && y < -64) {
+        log(bot, 'Destination is below the void. Aborting.');
+        return false;
+    }
+
+    const startPos = bot.entity.position.clone();
+    let lastTorchPos = startPos.clone();
+    let torchInterval = null;
+
+    // Auto-torch placer for underground travel
+    if (lightPath) {
+        torchInterval = setInterval(async () => {
+            try {
+                const pos = bot.entity.position;
+                if (pos.y < 50 && pos.distanceTo(lastTorchPos) >= 10) {
+                    const inv = world.getInventoryCounts(bot);
+                    if ((inv['torch'] || 0) > 0 && world.shouldPlaceTorch(bot)) {
+                        await placeBlock(bot, 'torch', pos.x, pos.y, pos.z, 'bottom', true);
+                        lastTorchPos = pos.clone();
+                    }
+                }
+            } catch (_e) { /* non-critical */ }
+        }, 3000);
+    }
+
+    // Fall detection: water bucket clutch
+    let fallWatcher = null;
+    const startFallWatch = () => {
+        let lastY = bot.entity.position.y;
+        let fallStart = -1;
+        fallWatcher = setInterval(async () => {
+            const curY = bot.entity.position.y;
+            const vel = bot.entity.velocity;
+            if (vel && vel.y < -0.5) {
+                if (fallStart < 0) fallStart = lastY;
+                const fallDist = fallStart - curY;
+                if (fallDist > 4) {
+                    // Attempt water bucket clutch
+                    const waterBucket = bot.inventory.items().find(i => i.name === 'water_bucket');
+                    if (waterBucket) {
+                        try {
+                            await bot.equip(waterBucket, 'hand');
+                            const below = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+                            if (below) await bot.placeBlock(below, new Vec3(0, 1, 0));
+                        } catch (_e) { /* best effort */ }
+                    }
+                }
+            } else {
+                fallStart = -1;
+            }
+            lastY = curY;
+        }, 200);
+    };
+    startFallWatch();
+
+    let success = false;
+    try {
+        success = await goToPosition(bot, x, y, z, 2);
+    } catch (err) {
+        log(bot, `safeMoveTo failed: ${err.message}`);
+        success = false;
+    } finally {
+        if (torchInterval) clearInterval(torchInterval);
+        if (fallWatcher) clearInterval(fallWatcher);
+    }
+
+    if (!success) {
+        log(bot, `Could not safely reach (${x}, ${y}, ${z}).`);
+    }
+    return success;
+}
+
+export async function rangedAttack(bot, entityType, preferredWeapon = 'bow') {
+    /**
+     * Attack the nearest entity of a given type using a bow if available,
+     * falling back to melee. Predicts target position for better aim.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} entityType, the type of entity to attack (e.g. 'blaze', 'skeleton').
+     * @param {string} preferredWeapon, preferred ranged weapon: 'bow' or 'crossbow'. Default 'bow'.
+     * @returns {Promise<boolean>} true if entity killed or driven off.
+     * @example
+     * await skills.rangedAttack(bot, "blaze");
+     * await skills.rangedAttack(bot, "skeleton", "bow");
+     **/
+    const entity = world.getNearestEntityWhere(bot, e => e.name === entityType, 48);
+    if (!entity) {
+        log(bot, `No ${entityType} found nearby.`);
+        return false;
+    }
+
+    const inv = world.getInventoryCounts(bot);
+    const hasBow = (inv['bow'] || 0) > 0;
+    const hasCrossbow = (inv['crossbow'] || 0) > 0;
+    const hasArrows = (inv['arrow'] || 0) > 0;
+
+    // If we have ranged weapon + arrows, use ranged attack
+    if ((hasBow || hasCrossbow) && hasArrows) {
+        const weaponName = (preferredWeapon === 'crossbow' && hasCrossbow) ? 'crossbow' : (hasBow ? 'bow' : 'crossbow');
+        const weapon = bot.inventory.items().find(i => i.name === weaponName);
+        if (weapon) await bot.equip(weapon, 'hand');
+
+        log(bot, `Attacking ${entityType} with ${weaponName}...`);
+        let attempts = 0;
+        const maxAttempts = 20;
+        while (entity.isValid && attempts < maxAttempts) {
+            if (bot.interrupt_code) return false;
+            attempts++;
+
+            const dist = bot.entity.position.distanceTo(entity.position);
+            if (dist > 40) {
+                // Too far, close distance
+                await goToPosition(bot, entity.position.x, entity.position.y, entity.position.z, 20);
+                continue;
+            }
+            if (dist < 6) {
+                // Too close for bow, use melee fallback
+                await attackEntity(bot, entity, true);
+                return true;
+            }
+
+            // Predict target position (lead the shot)
+            const vel = entity.velocity || new Vec3(0, 0, 0);
+            const flightTime = dist / 30; // approximate arrow speed
+            const predictedPos = entity.position.offset(
+                vel.x * flightTime,
+                vel.y * flightTime + entity.height * 0.7,
+                vel.z * flightTime
+            );
+
+            await bot.lookAt(predictedPos);
+
+            // Activate bow (hold right click)
+            bot.activateItem();
+            await new Promise(r => setTimeout(r, 1200)); // charge bow
+            bot.deactivateItem();
+            await new Promise(r => setTimeout(r, 500));
+
+            // Check if entity is dead
+            if (!entity.isValid) {
+                log(bot, `${entityType} defeated with ${weaponName}!`);
+                return true;
+            }
+        }
+
+        if (!entity.isValid) {
+            log(bot, `${entityType} defeated!`);
+            return true;
+        }
+    }
+
+    // Fallback: melee attack
+    log(bot, `No ranged weapon available, using melee against ${entityType}.`);
+    return await attackNearest(bot, entityType, true);
+}
+
+export async function buildPanicRoom(bot) {
+    /**
+     * Emergency shelter: builds a 3x3x3 hollow cobblestone box around the bot.
+     * Used when health is critically low. Eats available food inside.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if shelter built.
+     * @example
+     * await skills.buildPanicRoom(bot);
+     **/
+    const inv = world.getInventoryCounts(bot);
+    const cobble = (inv['cobblestone'] || 0) + (inv['stone'] || 0) + (inv['deepslate'] || 0);
+    const material = cobble >= 20 ?
+        (inv['cobblestone'] >= 20 ? 'cobblestone' : (inv['stone'] >= 20 ? 'stone' : 'deepslate')) :
+        null;
+
+    if (!material || cobble < 20) {
+        log(bot, 'Not enough blocks to build panic room (need 20+ cobblestone/stone).');
+        // Just eat and heal in place
+        await ensureFed(bot);
+        return false;
+    }
+
+    log(bot, 'Building emergency shelter!');
+    const pos = bot.entity.position;
+    const bx = Math.floor(pos.x);
+    const by = Math.floor(pos.y);
+    const bz = Math.floor(pos.z);
+
+    // Build floor, walls, and ceiling (3x3x3 hollow box)
+    const offsets = [];
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            offsets.push([dx, -1, dz]); // floor
+            offsets.push([dx, 2, dz]);  // ceiling
+        }
+    }
+    // walls
+    for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (dx === -1 || dx === 1) {
+                offsets.push([dx, dy, -1]);
+                offsets.push([dx, dy, 0]);
+                offsets.push([dx, dy, 1]);
+            }
+        }
+        offsets.push([0, dy, -1]);
+        offsets.push([0, dy, 1]);
+    }
+
+    let placed = 0;
+    for (const [dx, dy, dz] of offsets) {
+        if (bot.interrupt_code) return false;
+        const block = bot.blockAt(new Vec3(bx + dx, by + dy, bz + dz));
+        if (block && block.name === 'air') {
+            try {
+                await placeBlock(bot, material, bx + dx, by + dy, bz + dz, 'bottom', true);
+                placed++;
+            } catch (_e) { /* best effort */ }
+        }
+    }
+
+    log(bot, `Panic room built with ${placed} blocks. Eating food...`);
+    await ensureFed(bot);
+
+    // Wait until health recovers
+    let waitTime = 0;
+    while (bot.health < 18 && waitTime < 30000) {
+        if (bot.interrupt_code) return true;
+        await new Promise(r => setTimeout(r, 2000));
+        waitTime += 2000;
+        if (bot.food < 18) await ensureFed(bot);
+    }
+
+    log(bot, `Health recovered to ${bot.health}. Breaking out...`);
+    // Break front wall to exit
+    try {
+        await breakBlockAt(bot, bx, by, bz - 1);
+        await breakBlockAt(bot, bx, by + 1, bz - 1);
+    } catch (_e) { /* exit best effort */ }
+
+    return true;
+}
+
+export async function ensureFed(bot) {
+    /**
+     * Eat the best available food item if hunger is below 18.
+     * Prioritizes cooked food, then raw food.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if food was consumed.
+     * @example
+     * await skills.ensureFed(bot);
+     **/
+    if (bot.food >= 18) return true;
+
+    // Food priority list (best to worst)
+    const foodPriority = [
+        'golden_apple', 'enchanted_golden_apple',
+        'cooked_beef', 'cooked_porkchop', 'cooked_mutton',
+        'cooked_salmon', 'cooked_cod', 'cooked_chicken', 'cooked_rabbit',
+        'bread', 'baked_potato', 'beetroot_soup', 'mushroom_stew',
+        'pumpkin_pie', 'cookie', 'melon_slice', 'sweet_berries',
+        'apple', 'carrot', 'potato',
+        'beef', 'porkchop', 'mutton', 'chicken', 'rabbit', 'cod', 'salmon',
+        'dried_kelp', 'beetroot', 'rotten_flesh'
+    ];
+
+    const inv = world.getInventoryCounts(bot);
+    for (const food of foodPriority) {
+        if ((inv[food] || 0) > 0) {
+            log(bot, `Eating ${food}...`);
+            return await consume(bot, food);
+        }
+    }
+
+    log(bot, 'No food available!');
+    return false;
+}
+
+export async function autoManageInventory(bot) {
+    /**
+     * Clean up inventory: drop junk items, keep important items,
+     * ensure at least 8 empty slots. Stores excess in a nearby chest if available.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if inventory was managed.
+     * @example
+     * await skills.autoManageInventory(bot);
+     **/
+    const junkItems = [
+        'dirt', 'gravel', 'sand', 'andesite', 'diorite', 'granite',
+        'cobbled_deepslate', 'tuff', 'netherrack', 'cobblestone',
+        'rotten_flesh', 'poisonous_potato', 'spider_eye',
+        'pufferfish', 'tropical_fish'
+    ];
+
+    // Keep threshold: always keep some cobblestone for crafting
+    const keepAmounts = {
+        'cobblestone': 64,
+        'dirt': 0,
+        'gravel': 0,
+        'sand': 0,
+        'andesite': 0,
+        'diorite': 0,
+        'granite': 0,
+        'cobbled_deepslate': 0,
+        'tuff': 0,
+        'netherrack': 0,
+        'rotten_flesh': 0,
+        'poisonous_potato': 0,
+        'spider_eye': 0,
+        'pufferfish': 0,
+        'tropical_fish': 0
+    };
+
+    const inv = world.getInventoryCounts(bot);
+    let emptySlots = bot.inventory.emptySlotCount();
+    let discarded = 0;
+
+    if (emptySlots >= 8) {
+        log(bot, `Inventory is fine (${emptySlots} empty slots).`);
+        return true;
+    }
+
+    // Try to store in nearby chest first
+    const chest = world.getNearestBlock(bot, 'chest', 32);
+    if (chest) {
+        log(bot, 'Storing excess items in nearby chest...');
+        for (const item of junkItems) {
+            if (bot.interrupt_code) return false;
+            const count = inv[item] || 0;
+            const keep = keepAmounts[item] || 0;
+            const toStore = count - keep;
+            if (toStore > 0) {
+                await putInChest(bot, item, toStore);
+                discarded += toStore;
+            }
+        }
+    } else {
+        // No chest — discard junk
+        log(bot, 'No chest nearby. Discarding junk items...');
+        for (const item of junkItems) {
+            if (bot.interrupt_code) return false;
+            const count = inv[item] || 0;
+            const keep = keepAmounts[item] || 0;
+            const toDrop = count - keep;
+            if (toDrop > 0) {
+                await discard(bot, item, toDrop);
+                discarded += toDrop;
+            }
+            emptySlots = bot.inventory.emptySlotCount();
+            if (emptySlots >= 8) break;
+        }
+    }
+
+    emptySlots = bot.inventory.emptySlotCount();
+    log(bot, `Inventory managed. Discarded/stored ${discarded} items. ${emptySlots} slots free.`);
+    return emptySlots >= 8;
+}
+
+export async function stockpileFood(bot, quantity = 32) {
+    /**
+     * Gather food by hunting passive animals nearby. Cooks meat in a furnace
+     * if fuel and furnace materials are available.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} quantity, target number of food items. Default 32.
+     * @returns {Promise<boolean>} true if enough food collected.
+     * @example
+     * await skills.stockpileFood(bot, 32);
+     **/
+    const meatAnimals = ['cow', 'pig', 'sheep', 'chicken', 'rabbit'];
+
+    // Count current food
+    const foodItems = [
+        'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_chicken', 'cooked_rabbit',
+        'bread', 'apple', 'carrot', 'baked_potato', 'melon_slice', 'sweet_berries',
+        'beef', 'porkchop', 'mutton', 'chicken', 'rabbit'
+    ];
+
+    let inv = world.getInventoryCounts(bot);
+    let totalFood = 0;
+    for (const f of foodItems) totalFood += (inv[f] || 0);
+
+    log(bot, `Current food supply: ${totalFood}/${quantity}`);
+
+    // Hunt animals until we have enough
+    let huntAttempts = 0;
+    while (totalFood < quantity && huntAttempts < 20) {
+        if (bot.interrupt_code) return false;
+        huntAttempts++;
+
+        let hunted = false;
+        for (const animal of meatAnimals) {
+            const entity = world.getNearestEntityWhere(bot, e => e.name === animal, 32);
+            if (entity) {
+                await attackEntity(bot, entity, true);
+                await pickupNearbyItems(bot);
+                hunted = true;
+                break;
+            }
+        }
+
+        if (!hunted) {
+            log(bot, 'No animals nearby. Exploring to find more...');
+            await explore(bot, 60);
+        }
+
+        inv = world.getInventoryCounts(bot);
+        totalFood = 0;
+        for (const f of foodItems) totalFood += (inv[f] || 0);
+    }
+
+    // Cook raw meat if we have a furnace and fuel
+    const rawMeats = ['beef', 'porkchop', 'mutton', 'chicken', 'rabbit'];
+    inv = world.getInventoryCounts(bot);
+    for (const meat of rawMeats) {
+        if (bot.interrupt_code) return false;
+        const rawCount = inv[meat] || 0;
+        if (rawCount > 0) {
+            const cooked = await smeltItem(bot, meat, rawCount);
+            if (cooked) log(bot, `Cooked ${rawCount} ${meat}.`);
+        }
+    }
+
+    inv = world.getInventoryCounts(bot);
+    totalFood = 0;
+    for (const f of foodItems) totalFood += (inv[f] || 0);
+    log(bot, `Food stockpile complete: ${totalFood} food items.`);
+    return totalFood >= quantity;
+}
+

@@ -1,6 +1,25 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync } from 'fs';
+import { writeFileSync, readFileSync, mkdirSync, existsSync, writeFile } from 'fs';
+import { promisify } from 'util';
 
 import settings from './settings.js';
+
+const writeFileAsync = promisify(writeFile);
+
+// Helper function to safely write files with retry logic for Windows EBADF issues
+async function safeWriteFile(filepath, content, retries = 3, delay = 100) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            await writeFileAsync(filepath, content, 'utf8');
+            return;
+        } catch (error) {
+            if (error.code === 'EBADF' && i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                continue;
+            }
+            throw error;
+        }
+    }
+}
 
 
 export class History {
@@ -65,13 +84,13 @@ export class History {
         if (this.full_history_fp === undefined) {
             const string_timestamp = new Date().toLocaleString().replace(/[/:]/g, '-').replace(/ /g, '').replace(/,/g, '_');
             this.full_history_fp = `./bots/${this.name}/histories/${string_timestamp}.json`;
-            writeFileSync(this.full_history_fp, '[]', 'utf8');
+            await safeWriteFile(this.full_history_fp, '[]');
         }
         try {
             const data = readFileSync(this.full_history_fp, 'utf8');
             let full_history = JSON.parse(data);
             full_history.push(...to_store);
-            writeFileSync(this.full_history_fp, JSON.stringify(full_history, null, 4), 'utf8');
+            await safeWriteFile(this.full_history_fp, JSON.stringify(full_history, null, 4));
         } catch (err) {
             console.error(`Error reading ${this.name}'s full history file: ${err.message}`);
         }
@@ -108,12 +127,11 @@ export class History {
                 taskStart: this.agent.task.taskStartTime,
                 last_sender: this.agent.last_sender
             };
-            writeFileSync(this.memory_fp, JSON.stringify(data, null, 2));
+            await safeWriteFile(this.memory_fp, JSON.stringify(data, null, 2));
             console.log('Saved memory to:', this.memory_fp);
-            if (this.agent.learnings?._dirty) this.agent.learnings.save();
+            if (this.agent.learnings?._dirty) await this.agent.learnings.save();
         } catch (error) {
             console.error('Failed to save history:', error);
-            throw error;
         }
     }
 

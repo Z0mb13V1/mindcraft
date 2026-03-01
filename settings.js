@@ -35,10 +35,10 @@ const settings = {
 
     "chat_ingame": true, // bot responses are shown in minecraft chat
     "language": "en", // translate to/from this language. Supports these language names: https://cloud.google.com/translate/docs/languages
-    "render_bot_view": false, // show bot's view in browser at localhost:3000, 3001...\n
+    "render_bot_view": true, // show bot's view in browser at localhost:3000, 3001...
 
     "allow_insecure_coding": false, // allows newAction command and model can write/run code on your computer. enable at own risk
-    "allow_vision": false, // allows vision model to interpret screenshots as inputs (enabled via SETTINGS_JSON in Docker with LIBGL_ALWAYS_SOFTWARE=1)
+    "allow_vision": true, // allows vision model to interpret screenshots as inputs
     "blocked_actions" : ["!newAction", "!checkBlueprint", "!checkBlueprintLevel", "!getBlueprint", "!getBlueprintLevel"] , // commands to disable and remove from docs. Ex: ["!setMode"]
     "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
     "relevant_docs_count": -1, // number of relevant code function docs to select for prompting. -1 for all

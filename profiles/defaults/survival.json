@@ -11,6 +11,8 @@
         "torch_placing": true,
         "elbow_room": true,
         "idle_staring": true,
+        "auto_eat": true,
+        "panic_defense": true,
         "cheat": false
     }
 }

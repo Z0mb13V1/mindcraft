@@ -125,20 +125,35 @@ export class Ollama {
     }
 
     async sendVisionRequest(messages, systemMessage, imageBuffer) {
-        const imageMessages = [...messages];
-        imageMessages.push({
-            role: "user",
-            content: [
-                { type: "text", text: systemMessage },
-                {
-                    type: "image_url",
-                    image_url: {
-                        url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}`
-                    }
-                }
-            ]
+        // Ollama uses its own image format: { role, content, images: [base64] }
+        let model = this.model_name || 'llava';
+        let formatted = strictFormat(messages);
+        formatted.unshift({ role: 'system', content: systemMessage });
+        // Append the vision request with image in Ollama's native format
+        formatted.push({
+            role: 'user',
+            content: systemMessage,
+            images: [imageBuffer.toString('base64')]
         });
-        
-        return this.sendRequest(imageMessages, systemMessage);
+
+        console.log(`Awaiting vision response... (model: ${model})`);
+        let res = null;
+        try {
+            let apiResponse = await this.send(this.chat_endpoint, {
+                model: model,
+                messages: formatted,
+                stream: false,
+                ...(this.params || {})
+            });
+            if (apiResponse) {
+                res = apiResponse['message']['content'];
+            } else {
+                res = 'Vision model returned no response.';
+            }
+        } catch (err) {
+            console.log('Vision request error:', err);
+            res = 'Vision failed, try again.';
+        }
+        return res;
     }
 }

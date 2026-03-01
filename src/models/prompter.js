@@ -13,6 +13,22 @@ import { selectAPI, createModel } from './_model_map.js';
 import { EnsembleModel } from '../ensemble/controller.js';
 import { UsageTracker } from '../utils/usage_tracker.js';
 
+// Helper function to safely write files with retry logic for Windows EBADF issues
+async function safeWriteFile(filepath, content, retries = 3, delay = 100) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            await fs.writeFile(filepath, content, 'utf8');
+            return;
+        } catch (error) {
+            if (error.code === 'EBADF' && i < retries - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+                continue;
+            }
+            throw error;
+        }
+    }
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -120,11 +136,9 @@ export class Prompter {
         }
 
         mkdirSync(`./bots/${name}`, { recursive: true });
-        try {
-            writeFileSync(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4));
-        } catch (err) {
-            console.error('Failed to save profile:', err.message);
-        }
+        // Save profile asynchronously with retry logic
+        safeWriteFile(`./bots/${name}/last_profile.json`, JSON.stringify(this.profile, null, 4))
+            .catch(err => console.error('Failed to save profile:', err.message));
 
         this.usageTracker = new UsageTracker(name);
     }
