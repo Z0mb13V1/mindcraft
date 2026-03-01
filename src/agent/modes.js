@@ -266,6 +266,91 @@ const modes_list = [
         }
     },
     {
+        // RC26: Auto-navigate to bed and sleep at night
+        name: 'night_bed',
+        description: 'Automatically find and sleep in a bed at night. Crafts and places a bed if none nearby.',
+        interrupts: ['action:followPlayer'],
+        on: true,
+        active: false,
+        cooldown: 30,       // seconds between attempts
+        lastAttempt: 0,
+        update: async function (agent) {
+            const bot = agent.bot;
+            const time = bot.time?.timeOfDay ?? 0;
+
+            // Only trigger at night (12500 = dusk, can sleep at 12542+)
+            if (time < 12500 || time > 23000) return;
+            // Already sleeping
+            if (bot.isSleeping) return;
+            // Cooldown to avoid spamming
+            if (Date.now() - this.lastAttempt < this.cooldown * 1000) return;
+            // Don't interrupt Nether/End (no night cycle)
+            const dim = bot.game?.dimension;
+            if (dim === 'the_nether' || dim === 'the_end') return;
+
+            this.lastAttempt = Date.now();
+
+            await execute(this, agent, async () => {
+                // Phase 1: Look for existing bed within 64 blocks
+                const beds = bot.findBlocks({
+                    matching: (block) => block.name.includes('bed'),
+                    maxDistance: 64,
+                    count: 1
+                });
+
+                if (beds.length > 0) {
+                    void say(agent, 'Night time — heading to bed.');
+                    const success = await skills.goToBed(bot);
+                    if (success) return;
+                    // goToBed failed — fall through to craft attempt
+                }
+
+                // Phase 2: No bed found (or sleep failed) — try to craft and place one
+                const inv = world.getInventoryCounts(bot);
+                const woolTypes = [
+                    'white_wool', 'orange_wool', 'magenta_wool', 'light_blue_wool',
+                    'yellow_wool', 'lime_wool', 'pink_wool', 'gray_wool',
+                    'light_gray_wool', 'cyan_wool', 'purple_wool', 'blue_wool',
+                    'brown_wool', 'green_wool', 'red_wool', 'black_wool'
+                ];
+                const plankTypes = [
+                    'oak_planks', 'spruce_planks', 'birch_planks', 'jungle_planks',
+                    'acacia_planks', 'dark_oak_planks', 'mangrove_planks',
+                    'cherry_planks', 'bamboo_planks', 'crimson_planks', 'warped_planks'
+                ];
+
+                const woolCount = woolTypes.reduce((sum, w) => sum + (inv[w] || 0), 0);
+                const plankCount = plankTypes.reduce((sum, p) => sum + (inv[p] || 0), 0);
+
+                if (woolCount >= 3 && plankCount >= 3) {
+                    void say(agent, 'No bed nearby — crafting one.');
+                    try {
+                        // Find which wool and plank type we actually have
+                        const woolType = woolTypes.find(w => (inv[w] || 0) >= 3)
+                            || woolTypes.find(w => (inv[w] || 0) > 0);
+                        // craftRecipe will try the default bed recipe
+                        const bedName = woolType ? woolType.replace('_wool', '_bed') : 'white_bed';
+                        await skills.craftRecipe(bot, bedName);
+
+                        // Place the bed
+                        const bedItem = bot.inventory.items().find(i => i.name.includes('bed'));
+                        if (bedItem) {
+                            const pos = bot.entity.position;
+                            await skills.placeBlock(bot, bedItem.name, pos.x + 1, pos.y, pos.z, 'bottom');
+                            // Now sleep in it
+                            await skills.goToBed(bot);
+                        }
+                    } catch (err) {
+                        console.log(`[night_bed] Craft/place failed: ${err.message}`);
+                    }
+                } else {
+                    // Not enough materials — just log once quietly
+                    console.log('[night_bed] No bed nearby and insufficient materials to craft one.');
+                }
+            });
+        }
+    },
+    {
         name: 'elbow_room',
         description: 'Move away from nearby players when idle.',
         interrupts: ['action:followPlayer'],

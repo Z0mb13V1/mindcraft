@@ -1391,6 +1391,9 @@ let _doorInterval = null;
 function startDoorInterval(bot) {
     /**
      * Start helper interval that opens nearby doors if the bot is stuck.
+     * Phase 1 (1.2s stuck): Try opening doors, fence gates, trapdoors.
+     * Phase 2 (8s stuck):   Last resort — temporarily enable breakBlocks so
+     *                       Baritone can dig through the obstacle, then disable again.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @returns {number} the interval id.
      **/
@@ -1400,17 +1403,27 @@ function startDoorInterval(bot) {
     let prev_pos = bot.entity.position.clone();
     let prev_check = Date.now();
     let stuck_time = 0;
+    let doorAttempted = false; // track whether we already tried doors this stuck episode
 
+    const DOOR_THRESHOLD  = 1200;  // ms — try doors first
+    const BREAK_THRESHOLD = 8000;  // ms — last resort: enable block breaking
 
     const doorCheckInterval = setInterval(() => {
         const now = Date.now();
         if (bot.entity.position.distanceTo(prev_pos) >= 0.1) {
             stuck_time = 0;
+            doorAttempted = false;
+            // RC26: If we previously enabled breakBlocks as last resort, disable it again
+            if (bot.ashfinder && bot.ashfinder.config.breakBlocks) {
+                bot.ashfinder.config.breakBlocks = false;
+            }
         } else {
             stuck_time += now - prev_check;
         }
-        
-        if (stuck_time > 1200) {
+
+        // Phase 1: Open doors / fence gates / trapdoors
+        if (stuck_time > DOOR_THRESHOLD && !doorAttempted) {
+            doorAttempted = true;
             // shuffle positions so we're not always opening the same door
             const positions = [
                 bot.entity.position.clone(),
@@ -1444,8 +1457,18 @@ function startDoorInterval(bot) {
                     break;
                 }
             }
-            stuck_time = 0;
         }
+
+        // Phase 2: Last resort — enable block breaking temporarily
+        if (stuck_time > BREAK_THRESHOLD) {
+            if (bot.ashfinder && !bot.ashfinder.config.breakBlocks) {
+                console.log('[RC26] Stuck >8s after door attempts — enabling breakBlocks as last resort');
+                bot.ashfinder.config.breakBlocks = true;
+            }
+            stuck_time = 0;
+            doorAttempted = false;
+        }
+
         prev_pos = bot.entity.position.clone();
         prev_check = now;
     }, 200);

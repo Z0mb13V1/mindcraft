@@ -88,7 +88,7 @@ export function initBot(username) {
     bot.once('spawn', () => {
         if (bot.ashfinder) {
             bot.ashfinder.config.thinkTimeout = 10000; // 10s path compute timeout
-            bot.ashfinder.config.breakBlocks = true;   // allow breaking obstacles
+            bot.ashfinder.config.breakBlocks = false;  // RC26: prefer doors/routing over breaking — last-resort break handled by startDoorInterval
             bot.ashfinder.config.placeBlocks = false;  // RC25b: DISABLED — Paper rejects client-side placements, creating ghost blocks
             bot.ashfinder.config.parkour = false;       // disable parkour (can get stuck)
             bot.ashfinder.config.swimming = true;       // allow swimming
