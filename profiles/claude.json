@@ -1,4 +1,6 @@
 {
+    "_TODO": "Gameplay chunks (these can be done in isolation and combined for a complete solution): Get a diamond pickaxe | Build a nether portal | Collect Blazerods | Collect Ender Pearls | Locate the Stronghold/End | Defeat the Ender Dragon",
+
     "name": "claude",
     "model": "claude-sonnet-4-20250514",
     "conversing": "!jump or jump→!jump\nname or who→I'm claude\nelse→!newAction(\"description\")\nOutput ONLY the command above. No text before or after.",
