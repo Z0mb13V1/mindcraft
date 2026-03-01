@@ -1,5 +1,5 @@
 /**
- * dragon_runner.js — Autonomous Ender Dragon progression system.
+ * dragon_runner.js — Autonomous Ender Dragon progression system (RC29).
  *
  * Six modular gameplay chunks that chain together for a full
  * fresh-world → Ender Dragon defeat run:
@@ -12,12 +12,20 @@
  *
  * Plus the meta-orchestrator: runDragonProgression()
  *
+ * RC29 upgrades:
+ *   - Persistent state via DragonProgress (survives restarts/deaths)
+ *   - Smart orchestrator with exponential backoff
+ *   - Death recovery with gear re-acquisition
+ *   - Dimension-aware navigation
+ *   - Proactive food/gear management between chunks
+ *
  * All functions use existing skill primitives from skills.js and world.js.
  * Each is idempotent — safe to call multiple times (skips completed steps).
  */
 
 import * as skills from './skills.js';
 import * as world from './world.js';
+import { DragonProgress, CHUNKS } from './dragon_progress.js';
 import Vec3 from 'vec3';
 
 function log(bot, msg) {
@@ -45,6 +53,14 @@ async function eatIfNeeded(bot) {
     }
 }
 
+/** Get the bot's current dimension */
+function getDimension(bot) {
+    const dim = bot.game?.dimension || 'overworld';
+    if (dim.includes('nether')) return 'the_nether';
+    if (dim.includes('end')) return 'the_end';
+    return 'overworld';
+}
+
 /** Ensure we have enough of an item, trying to craft then collect */
 async function _ensureItem(bot, itemName, count, craftFrom = null) {
     let have = countItem(bot, itemName);
@@ -65,6 +81,121 @@ async function _ensureItem(bot, itemName, count, craftFrom = null) {
         await skills.collectBlock(bot, itemName, needed);
     }
     return countItem(bot, itemName) >= count;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PRE-CHUNK PREPARATION & DEATH RECOVERY
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Ensure minimum gear and food before starting a chunk.
+ * Adapts requirements based on which chunk is next.
+ */
+async function prepareForChunk(bot, chunkName, progress) {
+    log(bot, `Preparing for chunk: ${chunkName}`);
+    if (bot.interrupt_code) return;
+
+    // Always eat first
+    await eatIfNeeded(bot);
+
+    // Ensure food stockpile (min 12 cooked meat)
+    const foodItems = ['cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_chicken',
+        'bread', 'baked_potato', 'cooked_salmon', 'cooked_cod', 'apple', 'carrot'];
+    let totalFood = 0;
+    const inv = world.getInventoryCounts(bot);
+    for (const f of foodItems) totalFood += (inv[f] || 0);
+
+    if (totalFood < 12) {
+        log(bot, `Food low (${totalFood}). Stockpiling...`);
+        await skills.stockpileFood(bot, 20);
+    }
+
+    // Manage inventory
+    await skills.autoManageInventory(bot);
+
+    // Chunk-specific prep
+    switch (chunkName) {
+        case CHUNKS.BLAZE_RODS:
+        case CHUNKS.ENDER_PEARLS:
+            // Need a sword for combat chunks
+            if (!hasItem(bot, 'diamond_sword') && !hasItem(bot, 'iron_sword')) {
+                if (hasItem(bot, 'iron_ingot', 2)) {
+                    await skills.craftRecipe(bot, 'iron_sword', 1);
+                } else if (hasItem(bot, 'cobblestone', 2)) {
+                    await skills.craftRecipe(bot, 'stone_sword', 1);
+                }
+            }
+            break;
+
+        case CHUNKS.DRAGON_FIGHT:
+            // Max out gear before the End
+            if (!hasItem(bot, 'diamond_sword') && hasItem(bot, 'diamond', 2)) {
+                await skills.craftRecipe(bot, 'diamond_sword', 1);
+            }
+            // Collect cobblestone for pillaring
+            if (countItem(bot, 'cobblestone') < 64 && getDimension(bot) === 'overworld') {
+                await skills.collectBlock(bot, 'cobblestone', 64);
+            }
+            break;
+    }
+
+    // Update milestones
+    progress.updateMilestones(bot);
+    await progress.save();
+}
+
+/**
+ * After death: try to recover items by going to death location.
+ * Then re-acquire minimum gear if recovery failed.
+ */
+async function recoverFromDeath(bot, progress) {
+    log(bot, 'Death recovery initiated...');
+
+    const deathPos = progress.getCoord('lastDeathPos');
+    const dim = progress.getDimension();
+
+    // Only attempt item recovery in same dimension
+    if (deathPos && getDimension(bot) === dim) {
+        log(bot, `Heading to death location: ${deathPos.join(', ')}`);
+        try {
+            await skills.goToPosition(bot, deathPos[0], deathPos[1], deathPos[2], 3);
+            await skills.pickupNearbyItems(bot);
+            log(bot, 'Picked up items near death location.');
+        } catch (_e) {
+            log(bot, 'Could not reach death location.');
+        }
+    }
+
+    // Check if we still have essential gear
+    const inv = world.getInventoryCounts(bot);
+    const hasPickaxe = inv['diamond_pickaxe'] || inv['iron_pickaxe'] || inv['stone_pickaxe'];
+    const hasSword = inv['diamond_sword'] || inv['iron_sword'] || inv['stone_sword'];
+
+    if (!hasPickaxe) {
+        log(bot, 'Lost pickaxe! Re-acquiring tools...');
+        await skills.collectBlock(bot, 'oak_log', 4);
+        if (hasItem(bot, 'oak_log', 1)) {
+            await skills.craftRecipe(bot, 'oak_planks', 1);
+            await skills.craftRecipe(bot, 'stick', 1);
+            await skills.craftRecipe(bot, 'crafting_table', 1);
+            await skills.craftRecipe(bot, 'wooden_pickaxe', 1);
+            await skills.collectBlock(bot, 'cobblestone', 3);
+            await skills.craftRecipe(bot, 'stone_pickaxe', 1);
+        }
+    }
+
+    if (!hasSword) {
+        log(bot, 'Lost sword! Crafting replacement...');
+        if (hasItem(bot, 'iron_ingot', 2)) {
+            await skills.craftRecipe(bot, 'iron_sword', 1);
+        } else if (hasItem(bot, 'cobblestone', 2)) {
+            await skills.craftRecipe(bot, 'stone_sword', 1);
+        }
+    }
+
+    // Stock up food
+    await skills.stockpileFood(bot, 16);
+    await eatIfNeeded(bot);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1103,87 +1234,199 @@ async function equipBestSword(bot) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// META ORCHESTRATOR: Full Dragon Progression
+// META ORCHESTRATOR: Full Dragon Progression (RC29 — persistent + smart)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Complete autonomous run from fresh world to defeating the Ender Dragon.
+ * Uses persistent DragonProgress to survive restarts and deaths.
+ * Smart retry with exponential backoff, death recovery, dimension awareness.
+ * @param {MinecraftBot} bot
+ * @returns {Promise<boolean>} true if Ender Dragon defeated.
+ */
 export async function runDragonProgression(bot) {
-    /**
-     * Complete autonomous run from fresh world to defeating the Ender Dragon.
-     * Chains all 6 gameplay chunks in order, skipping completed steps.
-     * Manages resources, food, and gear throughout.
-     * @param {MinecraftBot} bot
-     * @returns {Promise<boolean>} true if Ender Dragon defeated.
-     **/
     log(bot, '╔══════════════════════════════════════════════════╗');
-    log(bot, '║  DRAGON PROGRESSION: Fresh World → Ender Dragon  ║');
+    log(bot, '║  DRAGON PROGRESSION v2 (RC29): Smart Orchestrator║');
     log(bot, '╚══════════════════════════════════════════════════╝');
 
-    const chunks = [
-        { name: 'Diamond Pickaxe', check: () => hasItem(bot, 'diamond_pickaxe'),
-          run: () => skills.getDiamondPickaxe(bot) },
-        { name: 'Nether Portal', check: () => world.getNearestBlock(bot, 'nether_portal', 128) !== null,
-          run: () => buildNetherPortal(bot) },
-        { name: 'Blaze Rods', check: () => hasItem(bot, 'blaze_rod', 7),
-          run: () => collectBlazeRods(bot, 12) },
-        { name: 'Ender Pearls', check: () => hasItem(bot, 'ender_pearl', 12) || hasItem(bot, 'ender_eye', 12),
-          run: () => collectEnderPearls(bot, 12) },
-        { name: 'Stronghold', check: () => world.getNearestBlock(bot, 'end_portal', 16) !== null,
-          run: () => locateStronghold(bot) },
-        { name: 'Ender Dragon', check: () => false, // Always attempt
-          run: () => defeatEnderDragon(bot) }
-    ];
+    // ── Load or initialize persistent state ────────────────────────────
+    const botName = bot.username || bot.entity?.username || 'UnknownBot';
+    const progress = new DragonProgress(botName);
+    progress.load();
 
-    for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i];
-        if (bot.interrupt_code) {
-            log(bot, 'Dragon progression interrupted.');
-            return false;
+    // Log current state
+    log(bot, progress.getSummary());
+
+    // ── Register death handler for this run ────────────────────────────
+    let deathOccurred = false;
+    const deathHandler = () => {
+        deathOccurred = true;
+        const pos = bot.entity?.position;
+        if (pos) {
+            progress.recordDeath(pos.x, pos.y, pos.z, getDimension(bot));
         }
+        progress.save().catch(err => console.error('[DragonProgress] Save on death failed:', err));
+    };
+    bot.on('death', deathHandler);
 
-        if (chunk.check()) {
-            log(bot, `✓ Chunk ${i + 1}: ${chunk.name} — already complete, skipping.`);
-            continue;
-        }
+    // ── Chunk definitions ──────────────────────────────────────────────
+    const chunkRunners = {
+        [CHUNKS.DIAMOND_PICKAXE]: {
+            name: 'Diamond Pickaxe',
+            check: () => hasItem(bot, 'diamond_pickaxe') || progress.isChunkDone(CHUNKS.DIAMOND_PICKAXE),
+            run: () => skills.getDiamondPickaxe(bot),
+        },
+        [CHUNKS.NETHER_PORTAL]: {
+            name: 'Nether Portal',
+            check: () => {
+                if (progress.isChunkDone(CHUNKS.NETHER_PORTAL)) return true;
+                return world.getNearestBlock(bot, 'nether_portal', 128) !== null;
+            },
+            run: () => buildNetherPortal(bot),
+            onSuccess: () => {
+                const p = bot.entity.position;
+                progress.setCoord('overworldPortal', p.x, p.y, p.z);
+            },
+        },
+        [CHUNKS.BLAZE_RODS]: {
+            name: 'Blaze Rods',
+            check: () => hasItem(bot, 'blaze_rod', 7) || progress.state.milestones.blazeRods >= 7,
+            run: () => collectBlazeRods(bot, 12),
+            onSuccess: () => {
+                progress.updateMilestones(bot);
+            },
+        },
+        [CHUNKS.ENDER_PEARLS]: {
+            name: 'Ender Pearls',
+            check: () => {
+                const totalEyeMaterial = countItem(bot, 'ender_pearl') + countItem(bot, 'ender_eye');
+                return totalEyeMaterial >= 12 || progress.state.milestones.eyesOfEnder >= 12;
+            },
+            run: () => collectEnderPearls(bot, 12),
+            onSuccess: () => {
+                progress.updateMilestones(bot);
+            },
+        },
+        [CHUNKS.STRONGHOLD]: {
+            name: 'Stronghold',
+            check: () => {
+                if (progress.isChunkDone(CHUNKS.STRONGHOLD)) return true;
+                return world.getNearestBlock(bot, 'end_portal', 16) !== null;
+            },
+            run: () => locateStronghold(bot),
+            onSuccess: () => {
+                const p = bot.entity.position;
+                progress.setCoord('stronghold', p.x, p.y, p.z);
+                progress.setCoord('endPortal', p.x, p.y, p.z);
+            },
+        },
+        [CHUNKS.DRAGON_FIGHT]: {
+            name: 'Ender Dragon Fight',
+            check: () => false, // Always attempt
+            run: () => defeatEnderDragon(bot),
+            onSuccess: () => {
+                progress.setEnteredEnd(true);
+            },
+        },
+    };
 
-        log(bot, `\n▶ Chunk ${i + 1}/${chunks.length}: ${chunk.name}`);
-        log(bot, '─'.repeat(40));
+    // ── Main orchestration loop ────────────────────────────────────────
+    const MAX_RETRIES_PER_CHUNK = 5;
 
-        // Pre-chunk: ensure food and clean inventory
-        await eatIfNeeded(bot);
-        await skills.autoManageInventory(bot);
-
-        let success = false;
-        let retries = 0;
-        const maxRetries = 3;
-
-        while (!success && retries < maxRetries) {
-            if (bot.interrupt_code) return false;
-            retries++;
-            try {
-                success = await chunk.run();
-            } catch (err) {
-                log(bot, `Chunk ${chunk.name} error: ${err.message}`);
-                success = false;
+    try {
+        for (const chunkKey of DragonProgress.CHUNK_ORDER) {
+            if (bot.interrupt_code) {
+                log(bot, 'Dragon progression interrupted.');
+                await progress.save();
+                bot.removeListener('death', deathHandler);
+                return false;
             }
 
-            if (!success && retries < maxRetries) {
-                log(bot, `Chunk ${chunk.name} failed. Retry ${retries}/${maxRetries}...`);
-                await eatIfNeeded(bot);
-                await skills.explore(bot, 100);
+            const runner = chunkRunners[chunkKey];
+            const chunkIdx = DragonProgress.CHUNK_ORDER.indexOf(chunkKey) + 1;
+            const totalChunks = DragonProgress.CHUNK_ORDER.length;
+
+            // Skip completed chunks
+            if (runner.check()) {
+                if (!progress.isChunkDone(chunkKey)) {
+                    progress.markChunkDone(chunkKey);
+                    await progress.save();
+                }
+                log(bot, `[${chunkIdx}/${totalChunks}] ${runner.name} -- already complete, skipping.`);
+                continue;
+            }
+
+            log(bot, `\n>> Chunk ${chunkIdx}/${totalChunks}: ${runner.name}`);
+
+            // Pre-chunk preparation
+            await prepareForChunk(bot, chunkKey, progress);
+
+            let success = false;
+            let retries = 0;
+
+            while (!success && retries < MAX_RETRIES_PER_CHUNK) {
+                if (bot.interrupt_code) break;
+                retries++;
+
+                // Handle death recovery between retries
+                if (deathOccurred) {
+                    deathOccurred = false;
+                    log(bot, `Died during ${runner.name}. Recovering...`);
+                    await new Promise(r => setTimeout(r, 3000)); // Wait for respawn
+                    await recoverFromDeath(bot, progress);
+                }
+
+                progress.markChunkActive(chunkKey);
+                await progress.save();
+
+                const backoffMs = Math.min(1000 * Math.pow(2, retries - 1), 30000);
+                if (retries > 1) {
+                    log(bot, `Retry ${retries}/${MAX_RETRIES_PER_CHUNK} for ${runner.name} (backoff ${Math.round(backoffMs / 1000)}s)...`);
+                    await new Promise(r => setTimeout(r, backoffMs));
+                    await eatIfNeeded(bot);
+                    // Explore to fresh area before retrying
+                    if (getDimension(bot) === 'overworld') {
+                        await skills.explore(bot, 100 + retries * 50);
+                    }
+                }
+
+                try {
+                    success = await runner.run();
+                } catch (err) {
+                    log(bot, `Chunk ${runner.name} error: ${err.message}`);
+                    success = false;
+                }
+
+                if (success) {
+                    // Run onSuccess hook
+                    if (runner.onSuccess) {
+                        try { runner.onSuccess(); } catch (_e) { /* best effort */ }
+                    }
+                    progress.markChunkDone(chunkKey);
+                    progress.updateMilestones(bot);
+                    await progress.save();
+                    log(bot, `[${chunkIdx}/${totalChunks}] ${runner.name} -- COMPLETE!`);
+                } else if (!bot.interrupt_code) {
+                    progress.markChunkFailed(chunkKey);
+                    await progress.save();
+                }
+            }
+
+            if (!success) {
+                log(bot, `Chunk ${runner.name} failed after ${MAX_RETRIES_PER_CHUNK} attempts.`);
+                log(bot, 'Dragon progression paused. Run !beatMinecraft or !dragonProgression to resume.');
+                await progress.save();
+                bot.removeListener('death', deathHandler);
+                return false;
             }
         }
-
-        if (!success) {
-            log(bot, `✗ Chunk ${chunk.name} failed after ${maxRetries} attempts.`);
-            log(bot, 'Dragon progression halted. Fix the issue and run !dragonProgression again.');
-            return false;
-        }
-
-        log(bot, `✓ Chunk ${i + 1}: ${chunk.name} — COMPLETE!`);
+    } finally {
+        bot.removeListener('death', deathHandler);
     }
 
-    log(bot, '\n╔══════════════════════════════════════════════════╗');
-    log(bot, '║        ENDER DRAGON DEFEATED! GG!                ║');
-    log(bot, '╚══════════════════════════════════════════════════╝');
+    // ── Victory! ───────────────────────────────────────────────────────
+    log(bot, '\n== ENDER DRAGON DEFEATED! GG! ==');
+    log(bot, progress.getSummary());
+    await progress.save();
     return true;
 }

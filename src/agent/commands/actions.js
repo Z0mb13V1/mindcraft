@@ -630,9 +630,16 @@ export const actionsList = [
     },
     {
         name: '!dragonProgression',
-        description: 'Full autonomous run: fresh world → diamond pickaxe → nether → blaze rods → ender pearls → stronghold → defeat Ender Dragon. Skips completed steps.',
+        description: 'Full autonomous run: fresh world → diamond pickaxe → nether → blaze rods → ender pearls → stronghold → defeat Ender Dragon. Skips completed steps. Persistent — survives restarts.',
         perform: runAsAction(async (agent) => {
             await dragonRunner.runDragonProgression(agent.bot);
-        }, false, 120) // 2 hour timeout
+        }, false, 180) // 3 hour timeout
+    },
+    {
+        name: '!beatMinecraft',
+        description: 'Alias for !dragonProgression. Full autonomous Ender Dragon run with persistent progress. Survives deaths and restarts — picks up where it left off.',
+        perform: runAsAction(async (agent) => {
+            await dragonRunner.runDragonProgression(agent.bot);
+        }, false, 180) // 3 hour timeout
     },
 ];

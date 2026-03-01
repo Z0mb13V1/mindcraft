@@ -1,6 +1,6 @@
 {
     "_TODO": "Gameplay chunks: Get a diamond pickaxe | Build a nether portal | Collect Blazerods | Collect Ender Pearls | Locate the Stronghold/End | Defeat the Ender Dragon",
-    "_comment": "Local research bot — andy-4 via Ollama on RTX 3090. Solo survival → Ender Dragon progression.",
+    "_comment": "Local research bot — andy-4 via Ollama on RTX 3090. Solo survival → Ender Dragon progression (RC29 persistent).",
 
     "name": "LocalAndy",
     "model": "ollama/sweaterdog/andy-4:q8_0",
