@@ -189,12 +189,12 @@ export class Coder {
         // Note that the code may be able to modify the exposed objects.
         // Freeze exposed module objects so Compartment code cannot replace
         // methods on them (e.g. skills.collectBlocks = maliciousFn).
-        // Object.freeze is shallow — closure state inside each function is
-        // unaffected, so all skill implementations continue to work normally.
+        // Spread into plain objects first before freezing so ESLint's
+        // no-import-assign rule doesn't flag the namespace import references.
         const compartment = makeCompartment({
-            skills: Object.freeze(skills),
+            skills: Object.freeze({ ...skills }),
             log: skills.log,
-            world: Object.freeze(world),
+            world: Object.freeze({ ...world }),
             Vec3,
         });
         const mainFn = compartment.evaluate(src);

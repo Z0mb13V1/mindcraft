@@ -19,25 +19,18 @@ export default [
       globals: {
         ...globals.node,
         ...globals.browser,
-        // Custom globals for Minecraft bot code
+        // True runtime globals injected into all bot/agent code
         skills: "readonly",
         log: "readonly",
         world: "readonly",
         bot: "readonly",
         agent: "readonly",
         Vec3: "readonly",
-        newAction: "readonly",
-        nearbyEntities: "readonly",
-        assert: "readonly",
-        chat_model_profile: "readonly",
-        result: "readonly",
-        Compartment: "readonly",
-        res: "writable",
-        id: "readonly",
-        cleanEmb: "readonly",
-        text: "readonly",
-        meta: "readonly",
-        sendRequest: "readonly",
+        // Globals used in real source files (not action-code only)
+        Compartment: "readonly",   // SES Compartment, provided by ses lockdown (lockdown.js)
+        res: "writable",           // NPC item_goal.js
+        sendRequest: "readonly",   // novita.js and other model files
+        chat_model_profile: "readonly", // prompter.js
       },
     },
     rules: {
@@ -62,6 +55,32 @@ export default [
     files: ["bots/**/*.js"],
     rules: {
       "require-await": "off",           // Allow async functions without await in bot action files
+    },
+  },
+  // Globals and rules for LLM-generated action-code files.
+  // These identifiers are injected by the Coder sandbox at runtime and are not
+  // true module-level globals — scoping them here prevents masking real
+  // no-undef errors in the rest of the codebase.
+  {
+    files: ["**/action-code/*.js", "bots/execTemplate.js", "bots/lintTemplate.js"],
+    languageOptions: {
+      globals: {
+        newAction: "readonly",
+        nearbyEntities: "readonly",
+        assert: "readonly",
+        chat_model_profile: "readonly",
+        result: "readonly",
+        Compartment: "readonly",
+        res: "writable",
+        id: "readonly",
+        cleanEmb: "readonly",
+        text: "readonly",
+        meta: "readonly",
+        sendRequest: "readonly",
+      },
+    },
+    rules: {
+      "require-await": "off",
     },
   },
   // Allow non-top-level imports/exports in action-code files

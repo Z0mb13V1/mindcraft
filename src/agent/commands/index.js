@@ -32,7 +32,11 @@ export function blacklistCommands(commands) {
         }
         blockedCommands.add(command_name);
         delete commandMap[command_name];
-        delete commandList.find(command => command.name === command_name);
+        // Fix: findIndex + splice to actually remove from the array.
+        // The previous `delete commandList.find(...)` called delete on the
+        // returned object reference, which does nothing to the array.
+        const idx = commandList.findIndex(cmd => cmd.name === command_name);
+        if (idx !== -1) commandList.splice(idx, 1);
     }
 }
 

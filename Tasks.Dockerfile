@@ -28,7 +28,12 @@ RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tm
 
 # ── Application code ───────────────────────────────────────────────────────
 WORKDIR /mindcraft
-RUN git clone --depth 1 https://github.com/mindcraft-bots/mindcraft.git .
+# Copy source from the build context (this repo) rather than cloning from
+# GitHub at build time. A live git clone:
+#   1. Breaks reproducibility (upstream HEAD can change between builds)
+#   2. Fails in offline/air-gapped CI environments
+#   3. Introduces supply-chain risk (external fetch during image build)
+COPY . .
 
 COPY ./server_data.zip /mindcraft/
 RUN unzip -q server_data.zip && rm server_data.zip
