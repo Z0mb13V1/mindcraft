@@ -99,6 +99,7 @@ export class Ollama {
                         'Content-Type': 'application/json',
                         'Content-Length': Buffer.byteLength(bodyStr),
                     },
+                    timeout: 90000, // 90s timeout for local model responses
                 }, (res) => {
                     if (res.statusCode < 200 || res.statusCode >= 300) {
                         res.resume();
@@ -112,6 +113,7 @@ export class Ollama {
                     });
                 });
                 req.on('error', reject);
+                req.on('timeout', () => { req.destroy(new Error('Ollama request timed out')); });
                 req.write(bodyStr);
                 req.end();
             });
