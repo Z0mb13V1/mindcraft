@@ -23,7 +23,7 @@ Do not connect this bot to public servers with coding enabled. This project allo
 
 This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybrid Research Rig** — two AI bots running simultaneously on AWS EC2, combining cloud ensemble intelligence with local GPU inference.
 
-> **Live deployment**: All services run on AWS EC2 via `docker-compose.aws.yml`. See the [Architecture wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Architecture) for full infrastructure diagrams.
+> **Live deployment**: All 12 services run on AWS EC2 via `docker-compose.aws.yml` (CloudGrok + Minecraft server + ChromaDB + LiteLLM + Grafana + Prometheus + Tailscale + Discord bot). See the [Architecture wiki](https://github.com/Z0mb13V1/mindcraft/wiki/Architecture) for full infrastructure diagrams.
 
 ### Active Bots
 
@@ -90,6 +90,10 @@ bash aws/ec2-go.sh                      # SSH into EC2 + deploy (needs .pem)
 - **Graceful vision fallback** — if WebGL init fails, bots continue without crashing
 - **Tailscale VPN** — EC2 ↔ local 3090 tunnel for LocalAndy inference
 - **`ec2-go.sh`** — one-command deploy script with IMDSv2 support, SSM secret refresh, and auto-detection of local vs remote execution
+- **Progress Reporter (RC30)** — 5-minute milestone updates to console and Discord webhook; reports current goal, action, memory, inventory, and agent uptime
+- **Survival reliability (RC30)** — hunger safety net, golden apple priority over regular food, void-edge avoidance, death-location recovery with inventory retrieval
+- **Auto inventory management (RC30)** — overflow detection with automatic chest placement when slots drop below 6 before chunk operations
+- **Stuck recovery (RC30)** — door-break last resort after 8s navigation block; path sanitization against injection; async action chain hardening
 
 ### Security
 
@@ -105,14 +109,14 @@ This fork includes several security hardening measures:
 - **ESLint hardening** — `no-unused-vars`, `no-unreachable`, `no-floating-promise` enabled as warnings
 - **Deep audit** — 10 priorities resolved across code, config, Docker, and cleanup (`e5cf8b7a`)
 
-See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Security) for full details.
+See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft/wiki/Security) for full details.
 
 ### Documentation
 
 | Doc | Description |
 | --- | ----------- |
 | [CLAUDE.md](CLAUDE.md) | Architecture overview, commands, configuration notes |
-| [Wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, troubleshooting |
+| [Wiki](https://github.com/Z0mb13V1/mindcraft/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, troubleshooting |
 
 ---
 
