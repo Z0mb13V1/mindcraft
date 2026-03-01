@@ -5,6 +5,7 @@ import { SkillLibrary } from "../agent/library/skill_library.js";
 import { stringifyTurns } from '../utils/text.js';
 import { getCommand } from '../agent/commands/index.js';
 import settings from '../agent/settings.js';
+import { deepSanitize } from '../../settings.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -32,7 +33,7 @@ export class Prompter {
         } else {
             base_fp = './profiles/defaults/survival.json'; // safe fallback
         }
-        let base_profile = JSON.parse(readFileSync(base_fp, 'utf8'));
+        let base_profile = deepSanitize(JSON.parse(readFileSync(base_fp, 'utf8')));
 
         // first use defaults to fill in missing values in the base profile
         for (let key in default_profile) {

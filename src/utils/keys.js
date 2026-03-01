@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import { deepSanitize } from '../../settings.js';
 
 let keys = {};
 let keysLoaded = false;
@@ -9,7 +10,7 @@ function loadKeysFile() {
     if (keysLoaded) return;
     try {
         const data = readFileSync('./keys.json', 'utf8');
-        keys = JSON.parse(data);
+        keys = deepSanitize(JSON.parse(data));
         console.warn('⚠️  WARNING: keys.json loaded into memory. Use environment variables instead for better security.');
     } catch (_err) {
         // keys.json not found or unreadable — that's fine, use env vars

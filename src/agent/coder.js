@@ -4,6 +4,7 @@ import * as skills from './library/skills.js';
 import * as world from './library/world.js';
 import { Vec3 } from 'vec3';
 import {ESLint} from "eslint";
+import settings from './settings.js';
 
 export class Coder {
     constructor(agent) {
@@ -74,7 +75,18 @@ export class Coder {
 
             try {
                 console.log('Executing code...');
-                await executionModule.main(this.agent.bot);
+                const timeout_ms = settings.code_timeout_mins > 0 ? settings.code_timeout_mins * 60 * 1000 : null;
+                if (timeout_ms) {
+                    await Promise.race([
+                        executionModule.main(this.agent.bot),
+                        new Promise((_, reject) => setTimeout(
+                            () => reject(new Error(`Code execution timed out after ${settings.code_timeout_mins} minutes.`)),
+                            timeout_ms
+                        ))
+                    ]);
+                } else {
+                    await executionModule.main(this.agent.bot);
+                }
 
                 const code_output = this.agent.actions.getBotOutputSummary();
                 const summary = "Agent wrote this code: \n```" + this._sanitizeCode(code) + "```\nCode Output:\n" + code_output;
@@ -112,7 +124,7 @@ export class Coder {
         }
         const allDocs = await this.agent.prompter.skill_libary.getAllSkillDocs();
         // check function exists
-        const missingSkills = skills.filter(skill => !!allDocs[skill]);
+        const missingSkills = skills.filter(skill => !allDocs[skill]);
         if (missingSkills.length > 0) {
             result += 'These functions do not exist.\n';
             result += '### FUNCTIONS NOT FOUND ###\n';
@@ -184,7 +196,7 @@ export class Coder {
         const mainFn = compartment.evaluate(src);
         
         if (write_result) {
-            console.error('Error writing code execution file: ' + result);
+            console.error('Error writing code execution file: ' + write_result);
             return null;
         }
         return { func:{main: mainFn}, src_lint_copy: src_lint_copy };

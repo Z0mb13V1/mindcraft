@@ -85,4 +85,5 @@ if (process.env.SETTINGS_JSON) {
     }
 }
 
+export { deepSanitize };
 export default settings;

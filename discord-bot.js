@@ -7,6 +7,7 @@ import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { validateDiscordMessage } from './src/utils/message_validator.js';
 import { RateLimiter } from './src/utils/rate_limiter.js';
+import { deepSanitize } from './settings.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROFILES_DIR = join(__dirname, 'profiles');
@@ -59,7 +60,7 @@ function loadProfileAgentMap() {
     for (const profileName of ACTIVE_PROFILES) {
         try {
             const filePath = safeProfilePath(profileName);
-            const profile = JSON.parse(readFileSync(filePath, 'utf8'));
+            const profile = deepSanitize(JSON.parse(readFileSync(filePath, 'utf8')));
             if (profile.name) map[profileName] = profile.name;
         } catch { /* profile may not exist yet */ }
     }
@@ -493,7 +494,7 @@ const MODE_EMOJI = { cloud: '☁️', local: '🖥️', hybrid: '🔀' };
 async function readProfileAsync(name) {
     const filePath = safeProfilePath(name);
     const data = await readFile(filePath, 'utf8');
-    return JSON.parse(data);
+    return deepSanitize(JSON.parse(data));
 }
 
 async function writeProfileAsync(name, data) {

@@ -38,5 +38,8 @@ COPY . .
 # Run tests during build
 RUN npm test
 
+# Drop root privileges — node:slim includes a non-root 'node' user
+RUN chown -R node:node /app
+USER node
 
 CMD ["npm", "start"]
