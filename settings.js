@@ -1,6 +1,6 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
-    "host": "localhost", // Docker overrides via SETTINGS_JSON; set MINECRAFT_HOST env var for remote
+    "host": "54.152.239.117", // Docker overrides via SETTINGS_JSON; set MINECRAFT_HOST env var for remote
     "port": 25565, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 

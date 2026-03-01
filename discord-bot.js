@@ -151,6 +151,10 @@ const BOT_DM_CHANNEL = process.env.BOT_DM_CHANNEL || '';
 const BACKUP_CHAT_CHANNEL = process.env.BACKUP_CHAT_CHANNEL || '';
 const MINDSERVER_HOST = process.env.MINDSERVER_HOST || 'mindcraft';
 const MINDSERVER_PORT = process.env.MINDSERVER_PORT || 8080;
+// Optional secondary MindServer for local PC bots (e.g. Tailscale IP)
+// Set LOCAL_MINDSERVER_URL to connect to a second MindServer running locally
+// Example: LOCAL_MINDSERVER_URL=http://100.x.x.x:8080
+const LOCAL_MINDSERVER_URL = process.env.LOCAL_MINDSERVER_URL || '';
 
 // ── Discord Client ──────────────────────────────────────────
 const client = new Client({
@@ -169,6 +173,12 @@ let mindServerConnected = false;
 let knownAgents = [];      // [{name, in_game, socket_connected, viewerPort}]
 let agentStates = {};      // {agentName: {gameplay, action, inventory, nearby, ...}}
 let replyChannel = null;   // cached Discord channel for fast replies
+
+// ── Local MindServer State ──────────────────────────────────
+let localMindServerSocket = null;
+let localMindServerConnected = false;
+let localKnownAgents = [];  // agents from local PC MindServer
+let localAgentStates = {};  // states from local PC MindServer
 const messageLimiter = new RateLimiter(3, 60000);  // 3 messages per 60 seconds per user
 
 // ── Gemini Helper (shared by auto-fix and direct chat) ────────
@@ -244,7 +254,7 @@ If no issue:
 {"issue":false}`;
 
 async function runAutoFix() {
-    if (!autofixEnabled || !GOOGLE_API_KEY || !mindServerConnected) return;
+    if (!autofixEnabled || !GOOGLE_API_KEY || (!mindServerConnected && !localMindServerConnected)) return;
 
     // Fetch last 10 Discord messages for context
     let recentChat = '';
@@ -439,6 +449,98 @@ function connectToMindServer() {
     });
 }
 
+// ── Local MindServer Connection ─────────────────────────────
+function connectToLocalMindServer() {
+    if (!LOCAL_MINDSERVER_URL) return;
+
+    console.log(`📡 Connecting to Local MindServer at ${LOCAL_MINDSERVER_URL}`);
+
+    if (localMindServerSocket) {
+        localMindServerSocket.removeAllListeners();
+        localMindServerSocket.disconnect();
+    }
+
+    localMindServerSocket = io(LOCAL_MINDSERVER_URL, {
+        reconnection: true,
+        reconnectionDelay: 3000,
+        reconnectionDelayMax: 15000,
+        reconnectionAttempts: Infinity,
+        timeout: 10000
+    });
+
+    localMindServerSocket.on('connect', () => {
+        localMindServerConnected = true;
+        console.log('✅ Connected to Local MindServer');
+        localMindServerSocket.emit('listen-to-agents');
+    });
+
+    localMindServerSocket.on('disconnect', (reason) => {
+        localMindServerConnected = false;
+        localKnownAgents = [];
+        console.log(`⚠️ Disconnected from Local MindServer: ${reason}`);
+    });
+
+    localMindServerSocket.on('bot-output', async (agentName, message) => {
+        console.log(`[Local ${agentName}] ${message}`);
+        await sendToDiscord(`🏠 **${agentName}**: ${message}`);
+        addToChatBuffer(agentName, agentName, message);
+        chatMessageCount++;
+        if (chatMessageCount % AUTOFIX_CHECK_EVERY === 0) {
+            runAutoFix().catch(err => console.error('[AutoFix]', err.message));
+        }
+    });
+
+    localMindServerSocket.on('chat-message', async (agentName, json) => {
+        if (json && json.message) {
+            await sendToDiscord(`🏠💬 **${agentName}**: ${json.message}`);
+            addToChatBuffer(agentName, agentName, json.message);
+            chatMessageCount++;
+            if (chatMessageCount % AUTOFIX_CHECK_EVERY === 0) {
+                runAutoFix().catch(err => console.error('[AutoFix]', err.message));
+            }
+        }
+    });
+
+    localMindServerSocket.on('agents-status', (agents) => {
+        localKnownAgents = agents || [];
+        const summary = agents.map(a => `${a.name}${a.in_game ? '✅' : '⬛'}`).join(', ');
+        console.log(`[Local Agents] ${summary}`);
+    });
+
+    localMindServerSocket.on('state-update', (states) => {
+        if (states) localAgentStates = { ...localAgentStates, ...states };
+    });
+
+    localMindServerSocket.on('connect_error', (error) => {
+        localMindServerConnected = false;
+        console.error(`Local MindServer error: ${error.message}`);
+    });
+}
+
+// ── Merged Agent Helpers ────────────────────────────────────
+// Returns all agents from both MindServers, tagged with source
+function getAllAgents() {
+    const cloud = knownAgents.map(a => ({ ...a, _source: 'cloud' }));
+    const local = localKnownAgents.map(a => ({ ...a, _source: 'local' }));
+    return [...cloud, ...local];
+}
+
+function getAllAgentStates() {
+    return { ...agentStates, ...localAgentStates };
+}
+
+// Find which socket an agent belongs to
+function getAgentSocket(agentName) {
+    const lower = agentName.toLowerCase();
+    if (knownAgents.find(a => a.name.toLowerCase() === lower)) {
+        return { socket: mindServerSocket, connected: mindServerConnected, source: 'cloud' };
+    }
+    if (localKnownAgents.find(a => a.name.toLowerCase() === lower)) {
+        return { socket: localMindServerSocket, connected: localMindServerConnected, source: 'local' };
+    }
+    return null;
+}
+
 // ── Discord → Send ──────────────────────────────────────────
 async function sendToDiscord(message) {
     try {
@@ -463,15 +565,19 @@ async function sendToDiscord(message) {
 //   then agent receives: socket.on('send-message', (data))
 //   where data = { from: 'username', message: 'text' }
 function sendToAgent(agentName, message, fromUser = 'Discord') {
-    if (!mindServerSocket || !mindServerConnected) return { sent: false, reason: 'Not connected to MindServer' };
-
-    const agent = knownAgents.find(a => a.name.toLowerCase() === agentName.toLowerCase());
+    // Try both MindServers — find which one owns this agent
+    const allAgents = getAllAgents();
+    const agent = allAgents.find(a => a.name.toLowerCase() === agentName.toLowerCase());
     if (!agent) return { sent: false, reason: `Agent "${agentName}" not found` };
     if (!agent.in_game) return { sent: false, reason: `Agent "${agentName}" is not in-game` };
 
+    const target = getAgentSocket(agent.name);
+    if (!target || !target.connected) return { sent: false, reason: `MindServer for "${agentName}" not connected` };
+
     try {
-        mindServerSocket.emit('send-message', agent.name, { from: fromUser, message });
-        console.log(`[→ ${agent.name}] ${fromUser}: ${message}`);
+        target.socket.emit('send-message', agent.name, { from: fromUser, message });
+        const tag = target.source === 'local' ? '🏠→' : '→';
+        console.log(`[${tag} ${agent.name}] ${fromUser}: ${message}`);
         return { sent: true, agent: agent.name };
     } catch (error) {
         return { sent: false, reason: error.message };
@@ -479,15 +585,15 @@ function sendToAgent(agentName, message, fromUser = 'Discord') {
 }
 
 function sendToAllAgents(message, fromUser = 'Discord') {
-    const inGameAgents = knownAgents.filter(a => a.in_game);
-    if (inGameAgents.length === 0) return { sent: false, agents: [], reason: 'No agents in-game' };
+    const allAgents = getAllAgents().filter(a => a.in_game);
+    if (allAgents.length === 0) return { sent: false, agents: [], reason: 'No agents in-game' };
 
     const results = [];
-    for (const agent of inGameAgents) {
+    for (const agent of allAgents) {
         const result = sendToAgent(agent.name, message, fromUser);
         results.push(result);
     }
-    return { sent: true, agents: inGameAgents.map(a => a.name), results };
+    return { sent: true, agents: allAgents.map(a => a.name), results };
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -613,10 +719,12 @@ async function handleModeCommand(arg, message) {
 
 // ── Agent Helpers ───────────────────────────────────────────
 function getAgentStatusText() {
-    if (knownAgents.length === 0) return 'No agents registered.';
-    return knownAgents.map(a => {
+    const allAgents = getAllAgents();
+    if (allAgents.length === 0) return 'No agents registered.';
+    return allAgents.map(a => {
         const status = a.in_game ? '🟢 in-game' : (a.socket_connected ? '🟡 connected' : '🔴 offline');
-        return `• **${a.name}** — ${status}`;
+        const tag = a._source === 'local' ? ' 🏠' : '';
+        return `• **${a.name}**${tag} — ${status}`;
     }).join('\n');
 }
 
@@ -815,14 +923,22 @@ client.on('messageCreate', async (message) => {
                 }
 
                 case '!status': {
-                    const ms = mindServerConnected ? '✅ MindServer connected' : '❌ MindServer disconnected';
-                    const agentCount = knownAgents.length;
-                    const inGame = knownAgents.filter(a => a.in_game).length;
-                    let reply = `${ms}\n📊 **${agentCount}** agents registered, **${inGame}** in-game\n\n`;
-                    for (const agent of knownAgents) {
+                    const ms = mindServerConnected ? '✅ Cloud MindServer connected' : '❌ Cloud MindServer disconnected';
+                    const ls = LOCAL_MINDSERVER_URL
+                        ? (localMindServerConnected ? '✅ Local MindServer connected' : '❌ Local MindServer disconnected')
+                        : null;
+                    const allAgentsForStatus = getAllAgents();
+                    const allStates = getAllAgentStates();
+                    const agentCount = allAgentsForStatus.length;
+                    const inGame = allAgentsForStatus.filter(a => a.in_game).length;
+                    let reply = `${ms}\n`;
+                    if (ls) reply += `${ls}\n`;
+                    reply += `📊 **${agentCount}** agents registered, **${inGame}** in-game\n\n`;
+                    for (const agent of allAgentsForStatus) {
                         const status = agent.in_game ? '🟢 in-game' : (agent.socket_connected ? '🟡 connected' : '🔴 offline');
-                        reply += `• **${agent.name}** — ${status}`;
-                        const st = agentStates[agent.name];
+                        const tag = agent._source === 'local' ? ' 🏠' : ' ☁️';
+                        reply += `• **${agent.name}**${tag} — ${status}`;
+                        const st = allStates[agent.name];
                         if (agent.in_game && st && st.gameplay) {
                             const gp = st.gameplay;
                             reply += ` | ❤️${gp.health || '?'}  🍗${gp.hunger || '?'}  📍${formatPos(gp.position)}`;
@@ -839,8 +955,9 @@ client.on('messageCreate', async (message) => {
 
                 case '!reconnect':
                     if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
-                    await message.reply('🔄 Reconnecting to MindServer...');
+                    await message.reply('🔄 Reconnecting to MindServer(s)...');
                     connectToMindServer();
+                    if (LOCAL_MINDSERVER_URL) connectToLocalMindServer();
                     return;
 
                 case '!start': {
@@ -870,10 +987,11 @@ client.on('messageCreate', async (message) => {
                     // The hardcoded intercept in agent.js catches "freeze" and
                     // calls actions.stop() + shut_up — no LLM involved.
                     if (!isAdmin(message.author.id, message.member)) { await message.reply('⛔ This command requires admin privileges.'); return; }
-                    if (!mindServerConnected) { await message.reply('❌ MindServer not connected.'); return; }
+                    if (!mindServerConnected && !localMindServerConnected) { await message.reply('❌ No MindServer connected.'); return; }
                     const freezeArg = arg || 'all';
                     const { agents: freezeTargets } = resolveAgents(freezeArg);
-                    const inGame = freezeTargets.filter(n => knownAgents.find(a => a.name === n && a.in_game));
+                    const allAgentsFreeze = getAllAgents();
+                    const inGame = freezeTargets.filter(n => allAgentsFreeze.find(a => a.name === n && a.in_game));
                     if (inGame.length === 0) {
                         await message.reply('❌ No matching agents are in-game.');
                         return;
@@ -1110,6 +1228,7 @@ client.on('error', (error) => {
 async function start() {
     console.log('🚀 Starting Mindcraft Bot Manager...');
     console.log(`   MindServer: ${MINDSERVER_HOST}:${MINDSERVER_PORT}`);
+    if (LOCAL_MINDSERVER_URL) console.log(`   Local MindServer: ${LOCAL_MINDSERVER_URL}`);
 
     try {
         await client.login(BOT_TOKEN);
@@ -1119,6 +1238,9 @@ async function start() {
     }
 
     connectToMindServer();
+    if (LOCAL_MINDSERVER_URL) {
+        connectToLocalMindServer();
+    }
     console.log('✅ Mindcraft Bot Manager running');
 }
 
@@ -1128,6 +1250,7 @@ start().catch(err => { console.error('Fatal:', err); process.exit(1); });
 const shutdown = async (signal) => {
     console.log(`\n🛑 ${signal} received, shutting down...`);
     if (mindServerSocket) mindServerSocket.disconnect();
+    if (localMindServerSocket) localMindServerSocket.disconnect();
     await client.destroy();
     process.exit(0);
 };
