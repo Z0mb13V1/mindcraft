@@ -4,12 +4,14 @@ import * as skills from './library/skills.js';
 import * as world from './library/world.js';
 import { Vec3 } from 'vec3';
 import {ESLint} from "eslint";
+import path from 'path';
 
 export class Coder {
     constructor(agent) {
         this.agent = agent;
         this.file_counter = 0;
-        this.fp = '/bots/'+agent.name+'/action-code/';
+        const sanitizedName = path.basename(agent.name);
+        this.fp = '/bots/'+sanitizedName+'/action-code/';
         this.code_template = '';
         this.code_lint_template = '';
 

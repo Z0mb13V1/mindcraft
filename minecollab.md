@@ -215,7 +215,7 @@ The "initial inventory" specifies what items will be given to the agents when th
 
 To create a new task, you simply need to set the initial inventory and the target item. For construction tasks, you can set a new blueprint. See examples of those in tasks/construction_tasks/
 
-To create a task that relies on neither an inventory check or a blueprint check, you will need to design you own evaluation function. The examples for our existing evaluation functions can be found in src/agent/tasks/cooking_tasks.js CookingTaskValidator. For any further questions please contact me at i2white@ucsd.edu. 
+To create a task that relies on neither an inventory check or a blueprint check, you will need to design your own evaluation function. The examples for our existing evaluation functions can be found in src/agent/tasks/cooking_tasks.js CookingTaskValidator. For any further questions please open a GitHub issue. 
 
 ## Creating New Worlds 
 

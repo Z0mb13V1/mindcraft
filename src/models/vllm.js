@@ -15,7 +15,7 @@ export class VLLM {
         if (url)
             vllm_config.baseURL = url;
         else
-            vllm_config.baseURL = 'http://0.0.0.0:8000/v1';
+            vllm_config.baseURL = 'http://127.0.0.1:8000/v1';
 
         vllm_config.apiKey = ""
 
