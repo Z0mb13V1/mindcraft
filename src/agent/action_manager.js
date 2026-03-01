@@ -97,13 +97,20 @@ export class ActionManager {
                 // Pattern repeat: exact 3-action sequence repeats
                 const last3 = this._actionHistory.slice(-3).join(',');
                 const prev3 = this._actionHistory.slice(-6, -3).join(',');
-                // Frequency: any single action appears 5+ times in the window
+                // Frequency: any single action appears N+ times in the window
                 const counts = {};
                 for (const a of this._actionHistory) counts[a] = (counts[a] || 0) + 1;
                 const maxCount = Math.max(...Object.values(counts));
                 const loopAction = Object.keys(counts).find(a => counts[a] === maxCount);
-                if (last3 === prev3 || maxCount >= 5) {
-                    const reason = last3 === prev3 ? `pattern "${last3}" repeated` : `"${loopAction}" called ${maxCount} times`;
+                // RC27: Crafting chains legitimately need 5+ craftRecipe calls
+                // (logs→planks→sticks→tool = 5+ sequential crafts). Raise threshold
+                // for crafting actions and exempt non-identical craft sequences.
+                const isCraftAction = loopAction && loopAction.includes('craftRecipe');
+                const freqThreshold = isCraftAction ? 8 : 5;
+                const isPatternLoop = last3 === prev3;
+                const isFreqLoop = maxCount >= freqThreshold;
+                if (isPatternLoop || isFreqLoop) {
+                    const reason = isPatternLoop ? `pattern "${last3}" repeated` : `"${loopAction}" called ${maxCount} times`;
                     console.warn(`[ActionManager] Slow loop detected: ${reason}. Cancelling resume.`);
                     this.cancelResume();
                     this._actionHistory = [];

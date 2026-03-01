@@ -1,15 +1,23 @@
-import { readFileSync, mkdirSync, existsSync, writeFile } from 'fs';
+import { readFileSync, mkdirSync, existsSync, writeFile, renameSync, unlinkSync } from 'fs';
 import { promisify } from 'util';
 
 import settings from './settings.js';
 
 const writeFileAsync = promisify(writeFile);
 
-// Helper function to safely write files with retry logic for Windows EBADF issues
+// RC27: Atomic write — write to .tmp file then rename, preventing corruption on crash
 async function safeWriteFile(filepath, content, retries = 3, delay = 100) {
+    const tmpPath = filepath + '.tmp';
     for (let i = 0; i < retries; i++) {
         try {
-            await writeFileAsync(filepath, content, 'utf8');
+            await writeFileAsync(tmpPath, content, 'utf8');
+            // Atomic rename (overwrites destination on most OSes)
+            try { renameSync(tmpPath, filepath); } catch (renameErr) {
+                // Windows may fail rename if destination is locked; fall back to direct write
+                console.warn(`[RC27] Atomic rename failed for ${filepath}, falling back to direct write:`, renameErr.message);
+                await writeFileAsync(filepath, content, 'utf8');
+                try { unlinkSync(tmpPath); } catch(_e) {}
+            }
             return;
         } catch (error) {
             if (error.code === 'EBADF' && i < retries - 1) {
@@ -141,7 +149,22 @@ export class History {
                 console.log('No memory file found.');
                 return null;
             }
-            const data = JSON.parse(readFileSync(this.memory_fp, 'utf8'));
+            const raw = readFileSync(this.memory_fp, 'utf8');
+            // RC27: Guard against corrupted/empty memory files
+            if (!raw || !raw.trim()) {
+                console.warn(`[RC27] Memory file ${this.memory_fp} is empty, starting fresh.`);
+                return null;
+            }
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch (parseErr) {
+                console.error(`[RC27] Corrupted memory file ${this.memory_fp}: ${parseErr.message}. Starting fresh.`);
+                // Rename corrupted file so it's not lost but won't block startup
+                const backupPath = this.memory_fp + '.corrupted.' + Date.now();
+                try { renameSync(this.memory_fp, backupPath); } catch(_e) {}
+                return null;
+            }
             this.memory = data.memory || '';
 
             // ── Sanitize stale false beliefs on load ──────────────────────
@@ -170,7 +193,8 @@ export class History {
             return data;
         } catch (error) {
             console.error('Failed to load history:', error);
-            throw error;
+            // RC27: Don't re-throw — return null to start fresh instead of crash-looping
+            return null;
         }
     }
 

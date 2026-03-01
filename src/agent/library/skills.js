@@ -491,12 +491,11 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         blocktypes.push('stone');
     // RC13: If requesting any log type, also accept other log variants as fallback
     // This prevents bots from starving for wood when oak isn't available but birch/spruce is
-    if (blockType.endsWith('_log')) {
-        const allLogs = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
-        for (const logType of allLogs) {
-            if (!blocktypes.includes(logType)) blocktypes.push(logType);
-        }
-    }
+    // RC27: Don't eagerly add all log types — only expand AFTER the primary type yields 0 results.
+    // Eager expansion causes the bot to target wrong biome logs (e.g., acacia underground)
+    // when the requested type (oak) exists on the surface nearby.
+    const isLogFallbackEligible = blockType.endsWith('_log');
+    let logFallbackExpanded = false;
     const isLiquid = blockType === 'lava' || blockType === 'water';
 
     let collected = 0;
@@ -550,6 +549,17 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         }, 128, 1);  // RC17: Increased from 64 to 128 to match searchForBlock range
 
         if (blocks.length === 0) {
+            // RC27: If no primary log type found, expand to all log variants as fallback
+            if (isLogFallbackEligible && !logFallbackExpanded) {
+                logFallbackExpanded = true;
+                const allLogs = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+                for (const logType of allLogs) {
+                    if (!blocktypes.includes(logType)) blocktypes.push(logType);
+                }
+                console.log(`[RC27] No ${blockType} found, expanding search to all log types`);
+                i--;  // retry this iteration with expanded types
+                continue;
+            }
             if (collected === 0)
                 log(bot, `No ${blockType} found within 128 blocks. Gathering system is working fine — this area simply has none. Use !explore(200) to travel far enough to find new resources, then retry. Do NOT use !searchForBlock — explore first to load fresh chunks.`);
             else
@@ -1360,7 +1370,16 @@ export async function goToGoal(bot, goal) {
         // RC25b: Wrap gotoSmart with Promise.race because the PathExecutor's
         // stop() doesn't reject completionPromise, causing gotoSmart to hang forever.
         const result = await Promise.race([
-            bot.ashfinder.gotoSmart(goal),
+            bot.ashfinder.gotoSmart(goal).catch(err => {
+                // RC27: Baritone executor.js:185 can crash with "Cannot read properties
+                // of undefined (reading 'length')" when this.path becomes null mid-execution.
+                // Catch this here so it doesn't crash the entire process.
+                if (err?.message?.includes('Cannot read properties of undefined')) {
+                    console.warn(`[RC27] Baritone internal error (non-fatal): ${err.message}`);
+                    return { status: 'error', error: err };
+                }
+                throw err;
+            }),
             new Promise((resolve) => {
                 timeoutId = setTimeout(() => {
                     try { bot.ashfinder.stop(); } catch (_) {}
@@ -1499,15 +1518,36 @@ export async function goToPosition(bot, x, y, z, min_distance=2) {
         return true;
     }
     
+    let lastDigTarget = null;
+    let unharvestableTicks = 0;
     const checkDigProgress = () => {
         if (bot.targetDigBlock) {
             const targetBlock = bot.targetDigBlock;
             const itemId = bot.heldItem ? bot.heldItem.type : null;
             if (!targetBlock.canHarvest(itemId)) {
-                log(bot, `Pathfinding stopped: Cannot break ${targetBlock.name} with current tools.`);
-                bot.ashfinder.stop();
-                bot.stopDigging();
+                // RC27: Only abort after 2 consecutive checks on the same unharvstable block.
+                // Single transient ticks happen when the pathfinder equips tools mid-dig.
+                if (lastDigTarget && lastDigTarget.x === targetBlock.position.x &&
+                    lastDigTarget.y === targetBlock.position.y &&
+                    lastDigTarget.z === targetBlock.position.z) {
+                    unharvestableTicks++;
+                } else {
+                    lastDigTarget = targetBlock.position.clone();
+                    unharvestableTicks = 1;
+                }
+                if (unharvestableTicks >= 2) {
+                    log(bot, `Pathfinding stopped: Cannot break ${targetBlock.name} with current tools.`);
+                    bot.ashfinder.stop();
+                    bot.stopDigging();
+                    unharvestableTicks = 0;
+                }
+            } else {
+                unharvestableTicks = 0;
+                lastDigTarget = null;
             }
+        } else {
+            unharvestableTicks = 0;
+            lastDigTarget = null;
         }
     };
     

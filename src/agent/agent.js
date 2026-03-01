@@ -4,7 +4,7 @@ import { VisionInterpreter } from './vision/vision_interpreter.js';
 import { Prompter } from '../models/prompter.js';
 import { initModes } from './modes.js';
 import { initBot } from '../utils/mcdata.js';
-import { containsCommand, commandExists, executeCommand, truncCommandMessage, isAction, blacklistCommands } from './commands/index.js';
+import { containsCommand, commandExists, executeCommand, truncCommandMessage, isAction, blacklistCommands, isCommandBlocked } from './commands/index.js';
 import { ActionManager } from './action_manager.js';
 import { NPCContoller } from './npc/controller.js';
 import { MemoryBank } from './memory_bank.js';
@@ -446,8 +446,14 @@ export class Agent {
                 this.history.add(this.name, res);
                 
                 if (!commandExists(command_name)) {
-                    this.history.add('system', `Command ${command_name} does not exist.`);
-                    console.warn('Agent hallucinated command:', command_name);
+                    // RC27: Distinguish blocked commands from truly unknown ones
+                    if (isCommandBlocked(command_name)) {
+                        this.history.add('system', `Command ${command_name} is disabled in your profile's blocked_actions.`);
+                        console.log(`[RC27] Agent used blocked command: ${command_name}`);
+                    } else {
+                        this.history.add('system', `Command ${command_name} does not exist.`);
+                        console.warn('Agent hallucinated command:', command_name);
+                    }
                     continue;
                 }
 

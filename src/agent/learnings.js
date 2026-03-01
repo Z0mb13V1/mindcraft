@@ -1,13 +1,19 @@
-import { readFileSync, mkdirSync, existsSync, promises as fs } from 'fs';
+import { readFileSync, mkdirSync, existsSync, promises as fs, renameSync, unlinkSync } from 'fs';
 import path from 'path';
 
 const MAX_ENTRIES = 100;
 
-// Helper function to safely write files with retry logic for Windows EBADF issues
+// RC27: Atomic write — write to .tmp file then rename, preventing corruption on crash
 async function safeWriteFile(filepath, content, retries = 3, delay = 100) {
+    const tmpPath = filepath + '.tmp';
     for (let i = 0; i < retries; i++) {
         try {
-            await fs.writeFile(filepath, content, 'utf8');
+            await fs.writeFile(tmpPath, content, 'utf8');
+            try { renameSync(tmpPath, filepath); } catch (renameErr) {
+                console.warn(`[RC27] Atomic rename failed for ${filepath}, falling back:`, renameErr.message);
+                await fs.writeFile(filepath, content, 'utf8');
+                try { unlinkSync(tmpPath); } catch(_e) {}
+            }
             return;
         } catch (error) {
             if (error.code === 'EBADF' && i < retries - 1) {
@@ -31,6 +37,12 @@ export class Learnings {
         try {
             if (!existsSync(this.filePath)) return;
             const raw = readFileSync(this.filePath, 'utf8');
+            // RC27: Guard against empty/corrupted learnings file
+            if (!raw || !raw.trim()) {
+                console.warn(`[RC27] Learnings file ${this.filePath} is empty, starting fresh.`);
+                this.entries = [];
+                return;
+            }
             this.entries = JSON.parse(raw);
             if (!Array.isArray(this.entries)) this.entries = [];
             console.log(`[Learnings] Loaded ${this.entries.length} entries for ${this.agentName}`);

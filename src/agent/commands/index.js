@@ -10,8 +10,17 @@ for (let command of commandList) {
     commandMap[command.name] = command;
 }
 
+// RC27: Track blocked commands separately so we can distinguish
+// "blocked by profile" from "truly hallucinated/unknown"
+const blockedCommands = new Set();
+
 export function getCommand(name) {
     return commandMap[name];
+}
+
+export function isCommandBlocked(name) {
+    if (!name.startsWith('!')) name = '!' + name;
+    return blockedCommands.has(name);
 }
 
 export function blacklistCommands(commands) {
@@ -21,6 +30,7 @@ export function blacklistCommands(commands) {
             console.warn(`Command ${command_name} is unblockable`);
             continue;
         }
+        blockedCommands.add(command_name);
         delete commandMap[command_name];
         delete commandList.find(command => command.name === command_name);
     }
