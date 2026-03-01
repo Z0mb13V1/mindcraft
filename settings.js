@@ -7,14 +7,14 @@ const settings = {
     // the mindserver manages all agents and hosts the UI
     "mindserver_port": 8080,
     "mindserver_host_public": false, // true binds to 0.0.0.0 (all interfaces, required for Docker multi-container setups); false binds to localhost only
-    "mindserver_url": "http://54.152.239.117:8080", // connect to a remote MindServer (e.g. "http://54.152.239.117:8080"). When set, no local MindServer is started — agents register themselves on the remote one.
+    // "mindserver_url": "http://54.152.239.117:8080", // connect to a remote MindServer (e.g. "http://54.152.239.117:8080"). When set, no local MindServer is started — agents register themselves on the remote one.
     "auto_open_ui": true, // opens UI in browser on startup
 
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
         "./profiles/local-research.json",
+        "./profiles/cloud-persistent.json",
         // "./profiles/ensemble.json",
-        // "./profiles/cloud-persistent.json",
         // "./profiles/gemini.json",
         // "./profiles/gemini2.json",
         // "./profiles/grok.json",
@@ -35,7 +35,7 @@ const settings = {
 
     "chat_ingame": true, // bot responses are shown in minecraft chat
     "language": "en", // translate to/from this language. Supports these language names: https://cloud.google.com/translate/docs/languages
-    "render_bot_view": true, // show bot's view in browser at localhost:3000, 3001...\n
+    "render_bot_view": false, // show bot's view in browser at localhost:3000, 3001...\n
 
     "allow_insecure_coding": false, // allows newAction command and model can write/run code on your computer. enable at own risk
     "allow_vision": false, // allows vision model to interpret screenshots as inputs (enabled via SETTINGS_JSON in Docker with LIBGL_ALWAYS_SOFTWARE=1)
