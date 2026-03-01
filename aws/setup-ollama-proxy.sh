@@ -3,7 +3,7 @@
 # aws/setup-ollama-proxy.sh — Set up socat proxy for Ollama via Tailscale
 # =============================================================================
 # Runs on EC2 host. Creates a systemd service that proxies localhost:11435
-# to the local Ollama instance at 100.122.190.4:11434 via Tailscale.
+# to the local Ollama instance via Tailscale (set OLLAMA_TAILSCALE_IP env var).
 #
 # Why: Docker containers (even with network_mode: host) have issues routing
 # data through Tailscale's TUN interface. This proxy runs as a native host
@@ -19,7 +19,10 @@ info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-OLLAMA_REMOTE="${OLLAMA_TAILSCALE_IP:-100.122.190.4}:11434"
+if [ -z "${OLLAMA_TAILSCALE_IP:-}" ]; then
+    error "OLLAMA_TAILSCALE_IP is required. Set it to your local machine's Tailscale IP (e.g. 100.x.x.x)"
+fi
+OLLAMA_REMOTE="${OLLAMA_TAILSCALE_IP}:11434"
 PROXY_PORT="11435"
 SERVICE_NAME="ollama-proxy"
 

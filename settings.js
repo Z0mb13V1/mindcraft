@@ -1,13 +1,13 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
-    "host": "54.152.239.117", // EC2 public IP (local dev) — Docker overrides via SETTINGS_JSON
+    "host": "localhost", // Docker overrides via SETTINGS_JSON; set MINECRAFT_HOST env var for remote
     "port": 25565, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI
     "mindserver_port": 8080,
     "mindserver_host_public": false, // true binds to 0.0.0.0 (all interfaces, required for Docker multi-container setups); false binds to localhost only
-    // "mindserver_url": "http://54.152.239.117:8080", // connect to a remote MindServer (e.g. "http://54.152.239.117:8080"). When set, no local MindServer is started — agents register themselves on the remote one.
+    // "mindserver_url": "", // connect to a remote MindServer (e.g. "http://your-server:8080"). When set, no local MindServer is started — agents register themselves on the remote one.
     "auto_open_ui": false, // disabled to prevent stale browser tabs from sending restart events
 
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
@@ -22,7 +22,7 @@ const settings = {
 
     "load_memory": true, // load memory from previous session
     "init_message": "", // empty = use hardcoded "Hello world! I am [name]" (bypasses LLM, avoids andy-4 hallucination)
-    "only_chat_with": ["Zombie_Virus"], // only respond to your messages + known bots; ignore random bots like ClaudeExplorer
+    "only_chat_with": [], // restrict to specific players, e.g. ["YourName"]; empty = respond to all
 
     "speak": false,
     // allows all bots to speak through text-to-speech.

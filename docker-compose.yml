@@ -35,7 +35,7 @@ services:
       VIEW_DISTANCE: "10"
       ONLINE_MODE: "FALSE"        # Required for mineflayer bots (offline auth)
       ENABLE_RCON: "true"         # Enables save-off/save-on for experiment backups
-      RCON_PASSWORD: "${RCON_PASSWORD:-mindcraft}"  # Override via .env for production
+      RCON_PASSWORD: "${RCON_PASSWORD:?Set RCON_PASSWORD in .env}"  # Override via .env for production
       # ── Plugin auto-download from Modrinth ──
       # ViaVersion suite: lets older Java clients connect
       # Geyser: lets Bedrock clients connect (Floodgate not needed w/ ONLINE_MODE=FALSE)

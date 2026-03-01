@@ -22,7 +22,7 @@ services:
       SIMULATION_DISTANCE: "4"
       ONLINE_MODE: "FALSE"    # Required for mineflayer bots (offline auth)
       ENABLE_RCON: "true"
-      RCON_PASSWORD: "${RCON_PASSWORD:-mindcraft}"
+      RCON_PASSWORD: "${RCON_PASSWORD:?Set RCON_PASSWORD in .env}"
       # ── Plugin auto-download from Modrinth ──
       # ViaVersion suite: lets older Java clients connect
       # Geyser: lets Bedrock clients connect (Floodgate not needed w/ ONLINE_MODE=FALSE)
@@ -144,7 +144,7 @@ services:
       - ./grafana-provisioning/dashboard-json:/etc/grafana/provisioning/dashboards/json
       - ./grafana-provisioning/alerting:/etc/grafana/provisioning/alerting
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:-admin}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GF_ADMIN_PASSWORD:?Set GF_ADMIN_PASSWORD in .env}"
     restart: unless-stopped
     deploy:
       resources:
