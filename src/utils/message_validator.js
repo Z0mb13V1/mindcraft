@@ -26,14 +26,15 @@ export function validateDiscordMessage(message) {
         return { valid: false, error: `Message exceeds ${MAX_DISCORD_MESSAGE_LENGTH} characters` };
     }
 
-    const warnings = [];
-
-    // Check for command injection patterns
+    // Block command injection patterns outright — do not pass these to agents.
     for (const pattern of COMMAND_INJECTION_PATTERNS) {
         if (pattern.test(message)) {
-            warnings.push(`Suspicious pattern detected: ${pattern.source}`);
+            console.warn(`[MessageValidator] Blocked message containing disallowed pattern: ${pattern.source}`);
+            return { valid: false, error: `Message contains a disallowed pattern and was blocked.` };
         }
     }
+
+    const warnings = [];
 
     // Alert on suspicious patterns (but allow them for agents to handle)
     const suspiciousPatterns = [

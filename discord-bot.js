@@ -272,6 +272,11 @@ async function runAutoFix() {
         const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
         const result = JSON.parse(cleaned);
         if (!result.issue || !result.bot || !result.message) return;
+        // Sanitize LLM output: cap length and strip leading ! to prevent
+        // bot command injection (e.g. Gemini hallucinating "!newAction ...").
+        const rawMsg = String(result.message).slice(0, 150).replace(/^!+/, '').trim();
+        if (!rawMsg) return;
+        result.message = rawMsg;
         const now = Date.now();
         if (lastAutoFix[result.bot] && (now - lastAutoFix[result.bot]) < AUTOFIX_COOLDOWN_MS) return;
         const sent = sendToAgent(result.bot, result.message, 'AutoFix');

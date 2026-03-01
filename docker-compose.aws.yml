@@ -6,6 +6,9 @@ services:
   minecraft:
     image: itzg/minecraft-server
     container_name: minecraft-server
+    # ⚠️  SECURITY: ONLINE_MODE=FALSE (required for mineflayer) disables Mojang auth.
+    #    Anyone who knows the EC2 IP can join. Restrict port 25565 at the AWS
+    #    Security Group level to trusted IPs only (your own IPs / player IPs).
     ports:
       - "25565:25565"         # Java Edition
       - "19132:19132/udp"     # Bedrock Edition (Geyser)
@@ -105,8 +108,9 @@ services:
   chromadb:
     image: chromadb/chroma:0.5.20
     container_name: chromadb
-    ports:
-      - "8000:8000"
+    # Internal only — no host port binding. Reachable within Docker network as chromadb:8000.
+    expose:
+      - "8000"
     volumes:
       - ./chromadb-data:/chroma/chroma
     restart: unless-stopped
@@ -122,8 +126,9 @@ services:
     container_name: prometheus
     volumes:
       - ./prometheus-aws.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
+    # Internal only — Grafana scrapes via Docker network. Not exposed to host.
+    expose:
+      - "9090"
     restart: unless-stopped
     deploy:
       resources:
@@ -156,8 +161,9 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
-    ports:
-      - "9100:9100"
+    # Internal only — Prometheus scrapes via Docker network. Not exposed to host.
+    expose:
+      - "9100"
     restart: unless-stopped
     deploy:
       resources:
@@ -169,8 +175,9 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
-    ports:
-      - "8081:8080"
+    # Internal only — Prometheus scrapes via Docker network. Not exposed to host.
+    expose:
+      - "8080"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -190,13 +197,17 @@ services:
     environment:
       AWS_S3_BUCKET_NAME: "${AWS_S3_BUCKET:-mindcraft-world-backups}"
       AWS_DEFAULT_REGION: "us-east-1"
-      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+      # AWS credentials intentionally omitted — use EC2 instance IAM role instead.
+      # Attach an IAM role with s3:PutObject/s3:DeleteObject on the bucket.
+      # Static keys would be readable by any container with docker.sock access.
       BACKUP_CRON_EXPRESSION: "0 3 * * *"   # Daily at 3 AM UTC
       BACKUP_RETENTION_DAYS: "7"
       BACKUP_FILENAME: "minecraft-world-%Y-%m-%dT%H-%M-%S.tar.gz"
     volumes:
       - ./minecraft-data:/backup/minecraft-data:ro
+      # docker.sock (ro) is required so the backup tool can pause containers for
+      # a consistent snapshot. Mitigated by: no static AWS keys in this container,
+      # IAM role scoped to the backup bucket only, and image pinned to v2.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     restart: unless-stopped
     deploy:

@@ -187,10 +187,14 @@ export class Coder {
         // This is where we determine the environment the agent's code should be exposed to.
         // It will only have access to these things, (in addition to basic javascript objects like Array, Object, etc.)
         // Note that the code may be able to modify the exposed objects.
+        // Freeze exposed module objects so Compartment code cannot replace
+        // methods on them (e.g. skills.collectBlocks = maliciousFn).
+        // Object.freeze is shallow — closure state inside each function is
+        // unaffected, so all skill implementations continue to work normally.
         const compartment = makeCompartment({
-            skills,
+            skills: Object.freeze(skills),
             log: skills.log,
-            world,
+            world: Object.freeze(world),
             Vec3,
         });
         const mainFn = compartment.evaluate(src);

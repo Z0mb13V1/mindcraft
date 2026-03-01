@@ -72,7 +72,7 @@ else
   Or run this script directly on EC2 (it auto-detects)."
     fi
 
-    SSH_OPTS="-i ${EC2_KEY} -o StrictHostKeyChecking=no -o ConnectTimeout=10"
+    SSH_OPTS="-i ${EC2_KEY} -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
     SSH_CMD="ssh ${SSH_OPTS} ${EC2_USER}@${EC2_IP}"
 
     # Test SSH
@@ -132,6 +132,21 @@ TAILSCALE_AUTHKEY=$(get_param TAILSCALE_AUTHKEY)
 LITELLM_MASTER_KEY=$(get_param LITELLM_MASTER_KEY)
 EC2_PUBLIC_IP=$(get_param EC2_PUBLIC_IP)
 GITHUB_TOKEN=$(get_param GITHUB_TOKEN)
+
+# Strip embedded newlines from SSM values — a multiline value would break
+# the .env file format and could inject extra key=value pairs.
+strip_nl() { printf '%s' "$1" | tr -d '\n\r'; }
+GEMINI_API_KEY=$(strip_nl "$GEMINI_API_KEY")
+XAI_API_KEY=$(strip_nl "$XAI_API_KEY")
+ANTHROPIC_API_KEY=$(strip_nl "$ANTHROPIC_API_KEY")
+DISCORD_BOT_TOKEN=$(strip_nl "$DISCORD_BOT_TOKEN")
+BOT_DM_CHANNEL=$(strip_nl "$BOT_DM_CHANNEL")
+BACKUP_CHAT_CHANNEL=$(strip_nl "$BACKUP_CHAT_CHANNEL")
+DISCORD_ADMIN_IDS=$(strip_nl "$DISCORD_ADMIN_IDS")
+TAILSCALE_AUTHKEY=$(strip_nl "$TAILSCALE_AUTHKEY")
+LITELLM_MASTER_KEY=$(strip_nl "$LITELLM_MASTER_KEY")
+EC2_PUBLIC_IP=$(strip_nl "$EC2_PUBLIC_IP")
+GITHUB_TOKEN=$(strip_nl "$GITHUB_TOKEN")
 
 cat > /app/keys.json <<KEYS
 {
