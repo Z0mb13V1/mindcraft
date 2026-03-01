@@ -403,10 +403,15 @@ export async function isClearPath(bot, target) {
     /**
      * Check if there is a path to the target that requires no digging or placing blocks.
      * RC25: Uses Baritone generatePath with restrictive config.
+     * RC30: Guard against missing ashfinder (e.g. during respawn).
      * @param {Bot} bot - The bot to get the path for.
      * @param {Entity} target - The target to path to.
      * @returns {boolean} - True if there is a clear path, false otherwise.
      */
+    // RC30: Guard — ashfinder may not be initialized yet (respawn, early tick)
+    if (!bot.ashfinder?.config) {
+        return false;
+    }
     // Temporarily disable break/place to test clear-path feasibility
     const prevBreak = bot.ashfinder.config.breakBlocks;
     const prevPlace = bot.ashfinder.config.placeBlocks;

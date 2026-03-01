@@ -410,22 +410,33 @@ const modes_list = [
     },
     {
         name: 'auto_eat',
-        description: 'Automatically eat food when hunger drops below 14. Interrupts non-critical actions.',
+        description: 'Automatically eat food when hunger drops below 14 or health drops below 50%. Prioritizes golden apples at critical health. Interrupts non-critical actions.',
         interrupts: ['all'],
         on: true,
         active: false,
         lastEat: 0,
         update: async function (agent) {
             const bot = agent.bot;
-            if (bot.food >= 14) return;
-            if (Date.now() - this.lastEat < 10000) return; // 10s cooldown
+            // RC30: Hunger safety net — force eat when health < 50% regardless of hunger
+            const healthCritical = bot.health < 10;
+            if (bot.food >= 14 && !healthCritical) return;
+            if (Date.now() - this.lastEat < (healthCritical ? 3000 : 10000)) return; // faster cooldown when health critical
 
-            const foodPriority = [
+            // RC30: Prioritize golden apples when health is critical
+            const criticalFoodPriority = [
+                'enchanted_golden_apple', 'golden_apple',
+                'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_chicken',
+                'cooked_salmon', 'cooked_cod', 'cooked_rabbit', 'bread', 'baked_potato',
+                'apple', 'carrot', 'melon_slice', 'sweet_berries',
+                'beef', 'porkchop', 'mutton', 'chicken', 'dried_kelp', 'rotten_flesh'
+            ];
+            const normalFoodPriority = [
                 'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_chicken',
                 'cooked_salmon', 'cooked_cod', 'cooked_rabbit', 'bread', 'baked_potato',
                 'golden_apple', 'apple', 'carrot', 'melon_slice', 'sweet_berries',
                 'beef', 'porkchop', 'mutton', 'chicken', 'dried_kelp', 'rotten_flesh'
             ];
+            const foodPriority = healthCritical ? criticalFoodPriority : normalFoodPriority;
 
             const inv = world.getInventoryCounts(bot);
             let foodItem = null;
@@ -435,7 +446,9 @@ const modes_list = [
 
             if (foodItem) {
                 this.lastEat = Date.now();
-                await say(agent, `Eating ${foodItem} (hunger: ${bot.food}).`);
+                await say(agent, healthCritical
+                    ? `Emergency eating ${foodItem}! (health: ${bot.health.toFixed(1)}, hunger: ${bot.food})`
+                    : `Eating ${foodItem} (hunger: ${bot.food}).`);
                 await execute(this, agent, async () => {
                     await skills.consume(agent.bot, foodItem);
                 });

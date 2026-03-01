@@ -2,6 +2,7 @@ import { createMindServer, registerAgent, numStateListeners } from './mindserver
 import { AgentProcess } from '../process/agent_process.js';
 import { getServer } from './mcserver.js';
 import open from 'open';
+import path from 'path';
 import { writeFileSync } from 'fs';
 
 let _mindserver;
@@ -96,7 +97,12 @@ export async function createRemoteAgent(settings, remoteUrl) {
             console.warn(`Attempting to connect anyway...`);
         }
 
-        const settingsPath = `/tmp/mindcraft_${agent_name}_settings.json`;
+        // RC30: Sanitize agent_name to prevent path traversal
+        const safeName = path.basename(agent_name).replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (!safeName) {
+            return { success: false, error: 'Invalid agent name after sanitization' };
+        }
+        const settingsPath = `/tmp/mindcraft_${safeName}_settings.json`;
         writeFileSync(settingsPath, JSON.stringify(settings));
 
         const agentProcess = new AgentProcess(agent_name, null, remoteUrl, settingsPath);

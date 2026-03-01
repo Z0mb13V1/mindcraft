@@ -239,7 +239,7 @@ class ConversationManager {
     
     async endAllConversations() {
         for (const sender in this.convos) {
-            this.endConversation(sender);
+            await this.endConversation(sender); // RC30: await async endConversation
         }
         if (agent.self_prompter.isPaused()) {
             await _resumeSelfPrompter();

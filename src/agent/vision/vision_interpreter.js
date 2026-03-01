@@ -33,8 +33,8 @@ export class VisionInterpreter {
     }
 
     async lookAtPlayer(player_name, direction) {
-        if (!this.allow_vision || !this.agent.prompter.vision_model.sendVisionRequest) {
-            return "Vision is disabled. Use other methods to describe the environment.";
+        if (!this.allow_vision || !this.camera || !this.agent.prompter.vision_model?.sendVisionRequest) {
+            return "Vision is disabled or camera not ready. Use other methods to describe the environment.";
         }
         let result = "";
         const bot = this.agent.bot;
@@ -59,8 +59,8 @@ export class VisionInterpreter {
     }
 
     async lookAtPosition(x, y, z) {
-        if (!this.allow_vision || !this.agent.prompter.vision_model.sendVisionRequest) {
-            return "Vision is disabled. Use other methods to describe the environment.";
+        if (!this.allow_vision || !this.camera || !this.agent.prompter.vision_model?.sendVisionRequest) {
+            return "Vision is disabled or camera not ready. Use other methods to describe the environment.";
         }
         let result = "";
         const bot = this.agent.bot;

@@ -337,12 +337,12 @@ export class Agent {
         this.bot.interrupt_code = false;
     }
 
-    shutUp() {
+    async shutUp() {
         this.shut_up = true;
         if (this.self_prompter.isActive()) {
             this.self_prompter.stop(false);
         }
-        convoManager.endAllConversations();
+        await convoManager.endAllConversations(); // RC30: properly await async
     }
 
     async handleMessage(source, message, max_responses=null) {

@@ -70,7 +70,7 @@ export const actionsList = [
         description: 'Stop all chatting and self prompting, but continue current action.',
         perform: async function (agent) {
             agent.openChat('Shutting up.');
-            agent.shutUp();
+            await agent.shutUp();
             return;
         }
     },

@@ -26,6 +26,7 @@
 import * as skills from './skills.js';
 import * as world from './world.js';
 import { DragonProgress, CHUNKS } from './dragon_progress.js';
+import { ProgressReporter } from './progress_reporter.js';
 import Vec3 from 'vec3';
 
 function log(bot, msg) {
@@ -110,7 +111,24 @@ async function prepareForChunk(bot, chunkName, progress) {
         await skills.stockpileFood(bot, 20);
     }
 
-    // Manage inventory
+    // RC30: Proactive inventory overflow — place a chest and store junk if nearly full
+    const emptySlots = bot.inventory.emptySlotCount();
+    if (emptySlots < 6 && getDimension(bot) === 'overworld') {
+        log(bot, `Inventory nearly full (${emptySlots} empty). Placing chest for overflow...`);
+        const nearbyChest = world.getNearestBlock(bot, 'chest', 32);
+        if (!nearbyChest && hasItem(bot, 'chest')) {
+            // Place a chest at current position
+            const pos = bot.entity.position;
+            try {
+                await skills.placeBlock(bot, 'chest',
+                    Math.floor(pos.x) + 1, Math.floor(pos.y), Math.floor(pos.z), 'side');
+            } catch (_e) {
+                log(bot, 'Could not place overflow chest.');
+            }
+        }
+    }
+
+    // Manage inventory (stores in nearby chests or discards junk)
     await skills.autoManageInventory(bot);
 
     // Chunk-specific prep
@@ -147,15 +165,34 @@ async function prepareForChunk(bot, chunkName, progress) {
 /**
  * After death: try to recover items by going to death location.
  * Then re-acquire minimum gear if recovery failed.
+ * RC30: Hardened recovery — full tool chain re-crafting, dimension-aware
+ * portal linking safety, armor re-equip.
  */
 async function recoverFromDeath(bot, progress) {
     log(bot, 'Death recovery initiated...');
 
     const deathPos = progress.getCoord('lastDeathPos');
-    const dim = progress.getDimension();
+    const deathDim = progress.getDimension();
+    const currentDim = getDimension(bot);
 
-    // Only attempt item recovery in same dimension
-    if (deathPos && getDimension(bot) === dim) {
+    // RC30: Portal linking safety — if we died in the Nether but respawned in Overworld,
+    // and we have a saved portal coord, navigate to portal first before attempting recovery
+    if (deathDim === 'the_nether' && currentDim === 'overworld') {
+        const portalCoord = progress.getCoord('overworldPortal');
+        if (portalCoord) {
+            log(bot, `Died in Nether, respawned in Overworld. Heading to saved portal: ${portalCoord.join(', ')}`);
+            try {
+                await skills.goToPosition(bot, portalCoord[0], portalCoord[1], portalCoord[2], 3);
+                // Wait for portal transition
+                await skills.wait(bot, 5000);
+            } catch (_e) {
+                log(bot, 'Could not reach Overworld portal. Will re-acquire gear in Overworld.');
+            }
+        }
+    }
+
+    // Attempt item recovery only if in the same dimension as death
+    if (deathPos && getDimension(bot) === deathDim) {
         log(bot, `Heading to death location: ${deathPos.join(', ')}`);
         try {
             await skills.goToPosition(bot, deathPos[0], deathPos[1], deathPos[2], 3);
@@ -164,23 +201,58 @@ async function recoverFromDeath(bot, progress) {
         } catch (_e) {
             log(bot, 'Could not reach death location.');
         }
+    } else if (deathPos) {
+        log(bot, `Death was in ${deathDim} but currently in ${getDimension(bot)}. Skipping item recovery.`);
     }
 
-    // Check if we still have essential gear
+    // RC30: Full inventory check and re-acquisition chain
     const inv = world.getInventoryCounts(bot);
     const hasPickaxe = inv['diamond_pickaxe'] || inv['iron_pickaxe'] || inv['stone_pickaxe'];
     const hasSword = inv['diamond_sword'] || inv['iron_sword'] || inv['stone_sword'];
 
     if (!hasPickaxe) {
-        log(bot, 'Lost pickaxe! Re-acquiring tools...');
-        await skills.collectBlock(bot, 'oak_log', 4);
-        if (hasItem(bot, 'oak_log', 1)) {
-            await skills.craftRecipe(bot, 'oak_planks', 1);
-            await skills.craftRecipe(bot, 'stick', 1);
-            await skills.craftRecipe(bot, 'crafting_table', 1);
-            await skills.craftRecipe(bot, 'wooden_pickaxe', 1);
-            await skills.collectBlock(bot, 'cobblestone', 3);
-            await skills.craftRecipe(bot, 'stone_pickaxe', 1);
+        log(bot, 'Lost pickaxe! Full tool chain re-crafting...');
+        // Step 1: Get wood (try multiple tree types)
+        let gotWood = false;
+        for (const logType of ['oak_log', 'birch_log', 'spruce_log', 'dark_oak_log', 'acacia_log', 'jungle_log']) {
+            if (bot.interrupt_code) return;
+            if (hasItem(bot, logType, 1)) { gotWood = true; break; }
+            try {
+                await skills.collectBlock(bot, logType, 4);
+                if (countItem(bot, logType) > 0) { gotWood = true; break; }
+            } catch (_e) { /* try next type */ }
+        }
+        if (gotWood) {
+            // Step 2: Craft basic tools
+            const planksType = Object.keys(world.getInventoryCounts(bot))
+                .find(k => k.endsWith('_log'));
+            if (planksType) {
+                const planksName = planksType.replace('_log', '_planks');
+                await skills.craftRecipe(bot, planksName, 1);
+                await skills.craftRecipe(bot, 'stick', 1);
+                await skills.craftRecipe(bot, 'crafting_table', 1);
+                await skills.craftRecipe(bot, 'wooden_pickaxe', 1);
+                // Step 3: Upgrade to stone
+                try {
+                    await skills.collectBlock(bot, 'cobblestone', 8);
+                    await skills.craftRecipe(bot, 'stone_pickaxe', 1);
+                    await skills.craftRecipe(bot, 'stone_sword', 1);
+                } catch (_e) {
+                    log(bot, 'Could not gather cobblestone for stone tools.');
+                }
+                // Step 4: Try for iron if we have time
+                if (!bot.interrupt_code && getDimension(bot) === 'overworld') {
+                    try {
+                        await skills.collectBlock(bot, 'iron_ore', 3);
+                        if (countItem(bot, 'raw_iron') >= 3 || countItem(bot, 'iron_ore') >= 3) {
+                            await skills.smeltItem(bot, 'raw_iron', 3);
+                            await skills.craftRecipe(bot, 'iron_pickaxe', 1);
+                        }
+                    } catch (_e) {
+                        log(bot, 'Could not upgrade to iron. Stone tools will suffice.');
+                    }
+                }
+            }
         }
     }
 
@@ -188,8 +260,35 @@ async function recoverFromDeath(bot, progress) {
         log(bot, 'Lost sword! Crafting replacement...');
         if (hasItem(bot, 'iron_ingot', 2)) {
             await skills.craftRecipe(bot, 'iron_sword', 1);
-        } else if (hasItem(bot, 'cobblestone', 2)) {
+        } else if (hasItem(bot, 'cobblestone', 2) || hasItem(bot, 'cobbled_deepslate', 2)) {
             await skills.craftRecipe(bot, 'stone_sword', 1);
+        } else {
+            // Desperate: craft wooden sword
+            const logTypes = Object.keys(world.getInventoryCounts(bot)).filter(k => k.endsWith('_log'));
+            if (logTypes.length > 0) {
+                const planksName = logTypes[0].replace('_log', '_planks');
+                await skills.craftRecipe(bot, planksName, 1);
+                await skills.craftRecipe(bot, 'stick', 1);
+                await skills.craftRecipe(bot, 'wooden_sword', 1);
+            }
+        }
+    }
+
+    // RC30: Re-equip armor if we have any
+    const armorSlots = ['head', 'torso', 'legs', 'feet'];
+    const armorPriority = {
+        head: ['diamond_helmet', 'iron_helmet', 'chainmail_helmet', 'leather_helmet'],
+        torso: ['diamond_chestplate', 'iron_chestplate', 'chainmail_chestplate', 'leather_chestplate'],
+        legs: ['diamond_leggings', 'iron_leggings', 'chainmail_leggings', 'leather_leggings'],
+        feet: ['diamond_boots', 'iron_boots', 'chainmail_boots', 'leather_boots'],
+    };
+    for (const slot of armorSlots) {
+        for (const armorName of armorPriority[slot]) {
+            const armorItem = bot.inventory.items().find(i => i.name === armorName);
+            if (armorItem) {
+                try { await bot.equip(armorItem, slot); } catch (_e) { /* best effort */ }
+                break;
+            }
         }
     }
 
@@ -1137,13 +1236,25 @@ export async function defeatEnderDragon(bot) {
         fightAttempts++;
         await eatIfNeeded(bot);
 
+        // RC30: Golden apple priority when health is critical during dragon fight
+        if (bot.health < 10) {
+            const inv = world.getInventoryCounts(bot);
+            const gapple = (inv['golden_apple'] || 0) > 0 ? 'golden_apple'
+                : (inv['enchanted_golden_apple'] || 0) > 0 ? 'enchanted_golden_apple' : null;
+            if (gapple) {
+                log(bot, `Critical health (${bot.health.toFixed(1)})! Eating ${gapple}!`);
+                await skills.consume(bot, gapple);
+            }
+        }
+
         if (bot.health < 8) {
             await skills.buildPanicRoom(bot);
         }
 
-        // Void check: don't fall off the island
-        if (bot.entity.position.y < 0) {
-            log(bot, 'DANGER: Near void! Moving to safety...');
+        // RC30: Void edge avoidance — check before we get too close
+        const pos = bot.entity.position;
+        if (pos.y < 5 || (Math.abs(pos.x) > 40 && pos.y < 55) || (Math.abs(pos.z) > 40 && pos.y < 55)) {
+            log(bot, 'DANGER: Near void edge! Moving to center...');
             await skills.goToPosition(bot, 0, 64, 0, 10); // Center of End island
             continue;
         }
@@ -1268,6 +1379,10 @@ export async function runDragonProgression(bot) {
         progress.save().catch(err => console.error('[DragonProgress] Save on death failed:', err));
     };
     bot.on('death', deathHandler);
+
+    // ── RC30: Start progress reporter ──────────────────────────────────
+    const reporter = new ProgressReporter(bot, progress);
+    reporter.start();
 
     // ── Chunk definitions ──────────────────────────────────────────────
     const chunkRunners = {
@@ -1406,6 +1521,7 @@ export async function runDragonProgression(bot) {
                     progress.updateMilestones(bot);
                     await progress.save();
                     log(bot, `[${chunkIdx}/${totalChunks}] ${runner.name} -- COMPLETE!`);
+                    reporter.onChunkChange(); // RC30: trigger progress report on chunk transition
                 } else if (!bot.interrupt_code) {
                     progress.markChunkFailed(chunkKey);
                     await progress.save();
@@ -1421,6 +1537,7 @@ export async function runDragonProgression(bot) {
             }
         }
     } finally {
+        reporter.stop(); // RC30: stop progress reporter
         bot.removeListener('death', deathHandler);
     }
 
