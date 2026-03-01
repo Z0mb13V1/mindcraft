@@ -1,8 +1,0 @@
-# Normalize line endings to LF for all text files
-* text=auto eol=lf
-
-# LFS tracked files (binary/large, skip line ending normalization)
-tasks/construction_tasks/*.json filter=lfs diff=lfs merge=lfs -text
-test/construction_tasks/*.json filter=lfs diff=lfs merge=lfs -text
-tasks/construction_tasks/train_multiagent_construction_tasks.json filter=lfs diff=lfs merge=lfs -text
-test/construction_tasks/example_multiagent_construction_tasks.json filter=lfs diff=lfs merge=lfs -text

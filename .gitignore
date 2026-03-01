@@ -7,19 +7,6 @@ scratch.js
 bots/**/action-code/**
 bots/**/
 keys.json
-
-# Environment variables and secrets
-.env
-.env.local
-.env.*.local
-*.pem
-*.key
-*.p12
-*.pfx
-.credentials
-secrets.json
-passwords.txt
-clean-git-history.ps1
 services/viaproxy/jars/**
 services/viaproxy/logs/**
 services/viaproxy/plugins/**
@@ -28,12 +15,7 @@ services/viaproxy/saves.json
 services/viaproxy/viaproxy.yml
 tmp/
 wandb/
-# Experiment DATA (world snapshots, logs, results) is ignored — not scripts
-experiments/*/world-before/
-experiments/*/world-after/
-experiments/*/logs/
-experiments/*/results/
-experiments/*/metadata.json
+experiments/
 andy_*.json
 jill_*.json
 src/models/logs/*
@@ -46,42 +28,24 @@ tasks/construction_tasks/train/**
 server_data*
 **/.DS_Store
 src/mindcraft-py/__pycache__/
+.dockerignore
 
-# Claude Code temp files & local settings
-tmpclaude-*
-nul
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+
+# Claude Code
 .claude/
 
-# Removed / superseded files (prevent re-adding)
-StartAndy.bat
-bot-test.js
-test-phase2.js
+# Minecraft server data
+minecraft-data/
 
-# ViaProxy binary cache
-services/viaproxy/viabedrock/blob_cache/
-
-# Sensitive docs (contain API keys, channel IDs, internal notes)
-SECURITY-INCIDENT-REPORT.md
-SECURITY-SUMMARY.txt
-COMPLETION-STATUS.txt
-ACTION-ITEMS.md
-PHASE2-VERIFICATION.txt
-MAINTENANCE.md
-discord-bot.js.bak
-.test-async-io.json
-
-# AWS / Docker runtime
+# AWS runtime config
 aws/config.env
 docker-compose.override.yml
-
-# Minecraft server data (synced with NAS)
-minecraft-data/
-sync-log.txt
-backup-alerts.log
-
-# GPU exporter source repo (built image used locally, not committed)
-nvidia_gpu_exporter/
-
-# One-time admin/utility scripts (contain usernames, not part of project)
-go-public.ps1
-contribute-safe.ps1
