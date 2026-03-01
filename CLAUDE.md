@@ -75,7 +75,7 @@ Model routing: a string like `"gemini-2.5-pro"` is auto-matched to its provider;
 ### Web UI & Multi-Agent
 - **`src/mindcraft/mindserver.js`** — WebSocket server on port 8080; hosts HUD overlay and bot registry
 - **`src/mindcraft/public/`** — Frontend HUD with per-bot runtime, goal, and command log
-- Multiple bots share one MindServer. Inter-bot messaging uses `!startConversation()` protocol and an alias system (`/msg gk` → `Grok_1`).
+- Multiple bots share one MindServer. Inter-bot messaging uses `!startConversation()` protocol and an alias system (`/msg gk` → `Grok_En`).
 
 ### Security Guards (do not remove)
 - `src/utils/message_validator.js` — Injection detection and char sanitization on all chat input

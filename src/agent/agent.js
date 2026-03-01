@@ -24,8 +24,8 @@ import { validateMinecraftMessage, validateUsername } from '../utils/message_val
 const INGAME_ALIASES = {
     'gemini': 'Gemini_1',
     'gi':     'Gemini_1',
-    'grok':   'Grok_1',
-    'gk':     'Grok_1',
+    'grok':   'Grok_En',
+    'gk':     'Grok_En',
 };
 
 export class Agent {
