@@ -33,7 +33,8 @@ export class ActionManager {
     async stop() {
         if (!this.executing) return;
         const timeout = setTimeout(() => {
-            this.agent.cleanKill('Code execution refused stop after 10 seconds. Killing process.');
+            console.warn('Code execution refused stop after 10 seconds. Force-cancelling action.');
+            this.executing = false;
         }, 10000);
         while (this.executing) {
             this.agent.requestInterrupt();
@@ -41,7 +42,7 @@ export class ActionManager {
             await new Promise(resolve => setTimeout(resolve, 300));
         }
         clearTimeout(timeout);
-    } 
+    }
 
     cancelResume() {
         this.resume_func = null;

@@ -29,7 +29,7 @@ export class AgentProcess {
 
         const agentProcess = spawn(process.execPath, args, {
             stdio: 'inherit',
-            stderr: 'inherit',
+            windowsHide: true,
         });
         
         let last_restart = Date.now();
@@ -38,9 +38,17 @@ export class AgentProcess {
             this.running = false;
             logoutAgent(this.name);
             
-            if (code > 1) {
+            // Exit code 88 = name conflict (needs long delay, not a task failure)
+            if (code > 1 && code !== 88) {
                 console.log(`Ending task`);
                 process.exit(code);
+            }
+
+            if (code === 88) {
+                // Name conflict — MC server still holds old session; wait 60s
+                console.log('Name conflict detected. Waiting 60s for server session to expire...');
+                setTimeout(() => this.start(true, 'Agent process restarted.', count_id), 60000);
+                return;
             }
 
             if (code !== 0 && signal !== 'SIGINT') {
@@ -51,15 +59,19 @@ export class AgentProcess {
                         console.error('Agent crashed 3+ times rapidly. Stopping restarts.')
                         return
                     }
-                    const delay = this._quickExits * 10000
+                    const delay = Math.max(20000, this._quickExits * 10000)
                     console.log(`Agent exited quickly (${this._quickExits}/3). Retrying in ${delay / 1000}s...`)
                     setTimeout(() => this.start(true, 'Agent process restarted.', count_id), delay)
                     return
                 }
                 this._quickExits = 0
-                console.log('Restarting agent...');
-                this.start(true, 'Agent process restarted.', count_id, this.port);
-                last_restart = Date.now();
+                // Wait 15s before restarting to let MC server release the old session
+                const RESTART_DELAY_MS = 30000;
+                console.log(`Restarting agent in ${RESTART_DELAY_MS / 1000}s...`);
+                setTimeout(() => {
+                    this.start(true, 'Agent process restarted.', count_id, this.port);
+                    last_restart = Date.now();
+                }, RESTART_DELAY_MS);
             }
         });
     

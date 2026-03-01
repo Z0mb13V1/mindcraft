@@ -67,7 +67,13 @@ class MindServerProxy {
         });
 
         this.socket.on('restart-agent', (agentName) => {
-            console.log(`Restarting agent: ${agentName}`);
+            // Ignore unnamed/broadcast restarts (e.g. from stale UI settings updates)
+            if (!agentName) {
+                console.log('Ignoring unnamed restart-agent event');
+                return;
+            }
+            if (agentName !== this.agent.name) return;
+            console.log(`Restarting agent: ${this.agent.name}`);
             this.agent.cleanKill();
         });
 		

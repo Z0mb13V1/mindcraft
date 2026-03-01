@@ -84,9 +84,13 @@ export class Agent {
 
             // Log and Analyze
             // handleDisconnection handles logging to console and server
-            const { type: _type } = handleDisconnection(this.name, reason);
-     
-            process.exit(1);
+            const { type } = handleDisconnection(this.name, reason);
+
+            // Clean disconnect so MC server releases the session immediately
+            try { this.bot.quit(); } catch {}
+
+            // Name conflicts need extra delay — use exit code 88
+            process.exit(type === 'name_conflict' ? 88 : 1);
         };
         
         // Bind events
@@ -193,6 +197,10 @@ export class Agent {
             try {
                 if (ignore_messages.some((m) => cleanMessage.startsWith(m))) return;
 
+                // Ignore bot action status broadcasts from unrecognized bots
+                // (e.g. "*used goToCoordinates*", "*BotName stopped.*")
+                if (/^\*.*\*$/.test(cleanMessage.trim())) return;
+
                 this.shut_up = false;
 
                 console.log(this.name, 'received message from', username, ':', cleanMessage);
@@ -256,7 +264,7 @@ export class Agent {
                 convoManager.receiveFromBot(this.last_sender, msg_package);
             }
         }
-        else if (init_message) {
+        else if (init_message && !this.self_prompter.isActive()) {
             await this.handleMessage('system', init_message, 2);
         }
         else {
@@ -629,7 +637,7 @@ export class Agent {
 
     cleanKill(msg='Killing agent process...', code=1) {
         this.history.add('system', msg);
-        this.bot.chat(code > 1 ? 'Restarting.': 'Exiting.');
+        try { this.bot.chat(code > 1 ? 'Restarting.': 'Exiting.'); } catch {}
         this.history.save();
         if (this.learnings) {
             this.learnings.save();
@@ -638,6 +646,7 @@ export class Agent {
             this.prompter.usageTracker.saveSync();
             this.prompter.usageTracker.destroy();
         }
+        try { this.bot.quit(); } catch {}
         process.exit(code);
     }
     async checkTaskDone() {

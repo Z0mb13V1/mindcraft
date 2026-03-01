@@ -8,12 +8,12 @@ const settings = {
     "mindserver_port": 8080,
     "mindserver_host_public": false, // true binds to 0.0.0.0 (all interfaces, required for Docker multi-container setups); false binds to localhost only
     // "mindserver_url": "http://54.152.239.117:8080", // connect to a remote MindServer (e.g. "http://54.152.239.117:8080"). When set, no local MindServer is started — agents register themselves on the remote one.
-    "auto_open_ui": true, // opens UI in browser on startup
+    "auto_open_ui": false, // disabled to prevent stale browser tabs from sending restart events
 
     "base_profile": "assistant", // survival, assistant, creative, or god_mode
     "profiles": [
         "./profiles/local-research.json",
-        "./profiles/cloud-persistent.json",
+        // "./profiles/cloud-persistent.json", // disabled — CloudGrok already running on EC2
         // "./profiles/ensemble.json",
         // "./profiles/gemini.json",
         // "./profiles/gemini2.json",
@@ -25,7 +25,7 @@ const settings = {
 
     "load_memory": true, // load memory from previous session
     "init_message": "", // empty = use hardcoded "Hello world! I am [name]" (bypasses LLM, avoids andy-4 hallucination)
-    "only_chat_with": [], // users that the bots listen to and send general messages to. if empty it will chat publicly
+    "only_chat_with": ["Zombie_Virus"], // only respond to your messages + known bots; ignore random bots like ClaudeExplorer
 
     "speak": false,
     // allows all bots to speak through text-to-speech.
