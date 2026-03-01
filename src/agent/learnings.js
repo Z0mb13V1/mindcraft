@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync, promises as fs } from 'fs';
+import { readFileSync, mkdirSync, existsSync, promises as fs } from 'fs';
 import path from 'path';
 
 const MAX_ENTRIES = 100;

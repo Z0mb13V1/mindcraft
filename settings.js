@@ -15,9 +15,6 @@ const settings = {
         "./profiles/local-research.json",
         // "./profiles/cloud-persistent.json", // disabled — CloudGrok already running on EC2
         // "./profiles/ensemble.json",
-        // "./profiles/gemini.json",
-        // "./profiles/gemini2.json",
-        // "./profiles/grok.json",
 
         // using more than 1 profile requires you to /msg each bot indivually
         // individual profiles override values from the base profile

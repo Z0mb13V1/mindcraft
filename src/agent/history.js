@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, mkdirSync, existsSync, writeFile } from 'fs';
+import { readFileSync, mkdirSync, existsSync, writeFile } from 'fs';
 import { promisify } from 'util';
 
 import settings from './settings.js';

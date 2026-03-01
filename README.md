@@ -1,7 +1,6 @@
 <!-- markdownlint-disable MD013 -->
 # 🧠mindcraft⛏️
 
-[![CI/CD Pipeline](https://github.com/Z0mb13V1/mindcraft-0.1.3/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Z0mb13V1/mindcraft-0.1.3/actions/workflows/ci-cd.yml)
 [![Trendshift](https://trendshift.io/api/badge/repositories/9163)](https://trendshift.io/repositories/9163)
 
 Crafting minds for Minecraft with LLMs and [Mineflayer](https://prismarinejs.github.io/mineflayer/#/)!
@@ -74,41 +73,29 @@ cd /app && bash aws/ec2-go.sh --secrets # Refresh API keys from SSM only
 
 `ec2-go.sh` auto-detects whether it's running on EC2 (local execution) or remotely (SSH wrapper). IMDSv2 supported.
 
-**On Windows PC (one-command launcher):**
-
-```powershell
-.\rig-go.ps1                            # Full flow: pull, validate, launch, logs
-.\rig-go.ps1 -Build                     # Rebuild Docker images first
-.\rig-go.ps1 -SkipPull -NoLogs          # Quick relaunch, no git pull, no log tail
-```
-
 **From Mac (remote deploy):**
 
 ```bash
 bash aws/ec2-go.sh                      # SSH into EC2 + deploy (needs .pem)
 ```
 
-See [docs/mac-workflow.md](docs/mac-workflow.md) for the full Mac operational guide.
-
 ### Key Features
 
-- **HUD Overlay** — gaming-style dashboard in the MindServer web UI (`:8080`) with per-bot runtime tracker (MM:SS), current goal / next action display with self-prompter state badges, and a scrollable color-coded command log. See [docs/hud-checklist.md](docs/hud-checklist.md).
+- **HUD Overlay** — gaming-style dashboard in the MindServer web UI (`:8080`) with per-bot runtime tracker (MM:SS), current goal / next action display with self-prompter state badges, and a scrollable color-coded command log.
 - **Live Bot Cameras** — first-person prismarine-viewer streams embedded as iframes in the web UI (ports 3000+)
 - **Vision enabled** for both bots — Xvfb + Mesa software rendering in Docker with 2s startup delay for WebGL context init
 - **Human message priority** — `requestInterrupt()` fires immediately when a human player speaks
 - **Loop detection** — tracks last 12 actions, cancels on 3-action pattern repeats or 5+ of the same action
 - **Per-profile `blocked_actions`** — LocalAndy blocks `!startConversation` to prevent hallucinated names
 - **Graceful vision fallback** — if WebGL init fails, bots continue without crashing
-- **LiteLLM proxy** — unified OpenAI-compatible gateway for all model providers (port 4000). Config in `services/litellm/litellm_config.yaml`.
-- **Tailscale VPN** — EC2 ↔ local 3090 tunnel for LocalAndy inference. Socat proxy bridges `localhost:11435` → Tailscale → `100.122.190.4:11434`.
+- **Tailscale VPN** — EC2 ↔ local 3090 tunnel for LocalAndy inference
 - **`ec2-go.sh`** — one-command deploy script with IMDSv2 support, SSM secret refresh, and auto-detection of local vs remote execution
-- **Experiment framework** — `experiments/` directory with `snapshot.sh`, `analyze.sh`, `compare.sh` for A/B testing bot configurations
 
 ### Security
 
 This fork includes several security hardening measures:
 
-- **Environment variable keys** — API keys loaded from `.env` / env vars (priority over `keys.json`). See `.env.example`.
+- **Environment variable keys** — API keys loaded from `.env` / env vars (priority over `keys.json`).
 - **AWS SSM Parameter Store** — secrets stored encrypted at `/mindcraft/*`, pulled at deploy time via `ec2-go.sh --secrets`
 - **Recursive prototype pollution protection** — `SETTINGS_JSON` sanitized at all nesting depths
 - **Cross-platform path traversal guard** — Discord bot profile paths validated with `path.sep`
@@ -124,11 +111,7 @@ See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Se
 
 | Doc | Description |
 | --- | ----------- |
-| [docs/mac-workflow.md](docs/mac-workflow.md) | MacBook Pro operational guide — daily commands, API key rotation, monitoring |
-| [docs/hud-checklist.md](docs/hud-checklist.md) | HUD overlay verification checklist — visual elements, socket.io events, tests |
-| [docs/PRODUCTION-DEPLOYMENT.md](docs/PRODUCTION-DEPLOYMENT.md) | Full EC2 deployment guide |
-| [docs/TAILSCALE.md](docs/TAILSCALE.md) | Tailscale VPN setup for EC2 ↔ local GPU |
-| [docs/RESEARCH-RIG.md](docs/RESEARCH-RIG.md) | Research rig architecture and design |
+| [CLAUDE.md](CLAUDE.md) | Architecture overview, commands, configuration notes |
 | [Wiki](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, troubleshooting |
 
 ---
@@ -153,7 +136,7 @@ See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft-0.1.3/wiki/Se
 2. Download the [latest release](https://github.com/mindcraft-bots/mindcraft/releases/latest) and unzip it, or clone the repository.
 
 3. Set up your API keys (you only need one provider):
-   - **Recommended:** Copy `.env.example` to `.env` and fill in your keys. Environment variables take priority.
+   - **Recommended:** Create a `.env` file and add your keys (e.g. `OPENAI_API_KEY=sk-...`). Environment variables take priority.
    - **Legacy:** Rename `keys.example.json` to `keys.json` and fill in your keys. *(Less secure — migrate to `.env` when possible.)*
 
 4. In terminal/command prompt, run `npm install` from the installed directory
