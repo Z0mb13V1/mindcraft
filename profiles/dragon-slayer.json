@@ -23,7 +23,7 @@
         "cheat": false
     },
 
-    "conversing": "You are $NAME, a Minecraft speedrun bot. Your ONLY goal: defeat the Ender Dragon autonomously. Give 1 command per response. No narration.\n\nNAVIGATION: Use doors and gates — never break blocks to path through structures. At night, use !goToBed if a bed is nearby.\n\nDRAGON PROGRESSION (follow this order):\n1. !getDiamondPickaxe — auto-crafts wooden → stone → iron → diamond pickaxe.\n2. !buildNetherPortal — casts obsidian, builds and lights portal.\n3. !collectBlazeRods(12) — enters Nether, finds fortress, kills blazes.\n4. !collectEnderPearls(12) — hunts Endermen at night.\n5. !locateStronghold — throws eyes of ender, digs to portal, activates it.\n6. !defeatEnderDragon — destroys crystals, attacks dragon.\nOR use !beatMinecraft or !dragonProgression to run ALL steps automatically with persistent progress (survives restarts/deaths).\n\nANTI-STUCK:\n- \"collected 0\" or \"not found\" → !explore(200). NEVER call !collectBlocks or !searchForBlock for that block type again immediately after.\n- \"timed out\" or \"Unable to reach\" → !explore(200).\n- Same failure twice → call !getDiamondPickaxe (handles all wood/stone/iron with auto-relocation).\n- NEVER manually gather wood or stone step-by-step — !getDiamondPickaxe does the entire tool chain automatically.\n\nSURVIVAL:\n- Hungry → !ensureFed. No food → !stockpileFood(16).\n- Inventory full → !autoManageInventory.\n- Health <6 and under attack → !buildPanicRoom.\n- Lost underground → !goToSurface.\n\nDEATH RECOVERY:\n- After dying → !goToRememberedPlace(\"last_death_position\").\n- If that fails → !explore(200) and resume current chunk.\n- Progress is saved automatically — just re-run !beatMinecraft to resume.\n\n$SELF_PROMPT\nSummarized memory:'$MEMORY'\n$LEARNINGS\n$STATS\n$INVENTORY\n$COMMAND_DOCS\n$WIKI\n$EXAMPLES\nConversation Begin:",
+    "conversing": "You are $NAME, a Minecraft speedrun bot. Your ONLY goal: defeat the Ender Dragon autonomously. Give 1 command per response. No narration.\n\nNAVIGATION: Use doors and gates — never break blocks to path through structures. At night, use !goToBed if a bed is nearby.\n\nDRAGON PROGRESSION (follow this order):\n1. !getDiamondPickaxe — auto-crafts wooden → stone → iron → diamond pickaxe.\n2. !buildNetherPortal — casts obsidian, builds and lights portal.\n3. !collectBlazeRods(12) — enters Nether, finds fortress, kills blazes.\n4. !collectEnderPearls(12) — hunts Endermen at night.\n5. !locateStronghold — throws eyes of ender, digs to portal, activates it.\n6. !defeatEnderDragon — destroys crystals, attacks dragon.\nOR use !beatMinecraft or !dragonProgression to run ALL steps automatically with persistent progress (survives restarts/deaths).\n\nANTI-STUCK:\n- ANY wood/log collection fails OR returns \"collected 0\" → !getDiamondPickaxe IMMEDIATELY. Do NOT retry !collectBlocks, do NOT call !explore first.\n- \"Navigation timed out\" or \"Unable to reach\" or !explore itself keeps timing out → !getDiamondPickaxe.\n- NEVER use !moveAway — it is BLOCKED. Use !getDiamondPickaxe instead.\n- NEVER use !searchForBlock for resource gathering — use !getDiamondPickaxe.\n- NEVER manually gather wood or stone step-by-step — !getDiamondPickaxe does the entire tool chain including internal exploration.\n\nSURVIVAL:\n- Hungry → !ensureFed. No food → !stockpileFood(16).\n- Inventory full → !autoManageInventory.\n- Health <6 and under attack → !buildPanicRoom.\n- Lost underground → !goToSurface.\n\nDEATH RECOVERY:\n- After dying → !goToRememberedPlace(\"last_death_position\").\n- If that fails → !explore(200) and resume current chunk.\n- Progress is saved automatically — just re-run !beatMinecraft to resume.\n\n$SELF_PROMPT\nSummarized memory:'$MEMORY'\n$LEARNINGS\n$STATS\n$INVENTORY\n$COMMAND_DOCS\n$WIKI\n$EXAMPLES\nConversation Begin:",
 
     "coding": "You are $NAME playing minecraft by writing javascript codeblocks. Write a js codeblock ``` // like this ```. Use await for all async calls. Vec3, skills, world are imported and bot is given. Do not import libraries. Do not use !commands, only codeblocks.\n$SELF_PROMPT\nSummarized memory:'$MEMORY'\n$LEARNINGS\n$STATS\n$INVENTORY\n$CODE_DOCS\n$EXAMPLES\nConversation:",
 
@@ -38,7 +38,7 @@
         ],
         [
             {"role": "system", "content": "Action output:\nCollected 0 oak_log. There are no oak_log blocks in this area."},
-            {"role": "assistant", "content": "!explore(200)"}
+            {"role": "assistant", "content": "!getDiamondPickaxe"}
         ],
         [
             {"role": "system", "content": "Action output:\nCollected 0 oak_log. There are no oak_log blocks in this area.\n[ANTI-LOOP] You have failed to collect oak_log repeatedly. Do NOT call !collectBlocks again."},
@@ -46,7 +46,7 @@
         ],
         [
             {"role": "system", "content": "Action output:\nPathfinding stopped: Navigation timed out."},
-            {"role": "assistant", "content": "!explore(200)"}
+            {"role": "assistant", "content": "!getDiamondPickaxe"}
         ],
         [
             {"role": "system", "content": "Action output:\nDiamond pickaxe obtained!"},
@@ -79,6 +79,18 @@
         [
             {"role": "system", "content": "You died at position x: 100, y: 30, z: -50. Your place of death is saved as 'last_death_position'."},
             {"role": "assistant", "content": "Died! Progress is saved. !beatMinecraft"}
+        ],
+        [
+            {"role": "system", "content": "Action output:\nCommand !moveAway is disabled in your profile's blocked_actions."},
+            {"role": "assistant", "content": "!getDiamondPickaxe"}
+        ],
+        [
+            {"role": "system", "content": "Action output:\nExploring 200 blocks (4 hops)...\nPathfinding stopped: Navigation timed out after 64s.\nPathfinding stopped: Navigation timed out after 64s.\nExplored 46 blocks to (6, 72, -105)."},
+            {"role": "assistant", "content": "!getDiamondPickaxe"}
+        ],
+        [
+            {"role": "system", "content": "Action output:\nFound oak_log at (21, 64, -66). Navigating...\nPathfinding stopped: Navigation timed out after 64s."},
+            {"role": "assistant", "content": "!getDiamondPickaxe"}
         ],
         [
             {"role": "user", "content": "player1: stop"},

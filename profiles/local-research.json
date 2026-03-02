@@ -3,7 +3,7 @@
     "_comment": "Local research bot — andy-4 via Ollama on RTX 3090. Solo survival → Ender Dragon progression (RC29 persistent).",
 
     "name": "LocalAndy",
-    "model": "ollama/sweaterdog/andy-4:q8_0",
+    "model": "ollama/sweaterdog/andy-4:F16",
     "cooldown": 4000,
     "embedding": "ollama/nomic-embed-text",
     "vision_model": "ollama/llava",
