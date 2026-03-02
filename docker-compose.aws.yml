@@ -26,6 +26,9 @@ services:
       ONLINE_MODE: "FALSE"    # Required for mineflayer bots (offline auth)
       ENABLE_RCON: "true"
       RCON_PASSWORD: "${RCON_PASSWORD:?Set RCON_PASSWORD in .env}"
+      # ── Whitelist Security ──
+      ENFORCE_WHITELIST: "TRUE"   # Enable whitelist (only whitelisted players can join)
+      WHITELIST: "LocalAndy,CloudGrok,DragonSlayer,Ensemble_1,Gemini_1,Grok_En,claude,claude_thinker,gpt,Freeguy,Mercury,Mistral,LLama,qwen,deepseek,vllm,azure,andy-4,andy-4-thinking"  # Add human player names here
       # ── Plugin auto-download from Modrinth ──
       # ViaVersion suite: lets older Java clients connect
       # Geyser: lets Bedrock clients connect (Floodgate not needed w/ ONLINE_MODE=FALSE)
