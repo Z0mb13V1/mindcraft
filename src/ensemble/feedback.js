@@ -110,6 +110,7 @@ export class FeedbackCollector {
                 // Dimension mismatch: delete and recreate collection
                 console.warn('[Feedback] Embedding dimension mismatch, recreating collection');
                 try {
+                    if (!this._client) throw new Error('ChromaDB client is null');
                     await this._client.deleteCollection({ name: COLLECTION_NAME });
                     this._collection = await this._client.createCollection({
                         name: COLLECTION_NAME,

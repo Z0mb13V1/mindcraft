@@ -129,7 +129,7 @@ services:
 
   # ── Prometheus ────────────────────────────────────────────────────────────
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.2.1
     container_name: prometheus
     volumes:
       - ./prometheus-aws.yml:/etc/prometheus/prometheus.yml
@@ -145,7 +145,7 @@ services:
 
   # ── Grafana ───────────────────────────────────────────────────────────────
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.5.2
     container_name: grafana
     ports:
       - "3004:3000"
@@ -166,7 +166,7 @@ services:
 
   # ── Node Exporter ─────────────────────────────────────────────────────────
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.9.0
     container_name: node-exporter
     # Internal only — Prometheus scrapes via Docker network. Not exposed to host.
     expose:
@@ -180,7 +180,7 @@ services:
 
   # ── cAdvisor ──────────────────────────────────────────────────────────────
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
     container_name: cadvisor
     # Internal only — Prometheus scrapes via Docker network. Not exposed to host.
     expose:
@@ -250,7 +250,7 @@ services:
   # host gateway. Without this, the tunnel only exists in the container's
   # namespace and mindcraft cannot reach 100.x.x.x addresses.
   tailscale:
-    image: tailscale/tailscale:latest
+    image: tailscale/tailscale:v1.80.2
     container_name: tailscale
     network_mode: host
     environment:

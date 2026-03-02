@@ -63,13 +63,15 @@ export class LLMJudge {
 
         const judgeTurns = [{ role: 'user', content: judgePrompt }];
 
+        let timer = null;
         try {
             const result = await Promise.race([
                 model.sendRequest(judgeTurns, judgeSystem),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('judge timeout')), this.timeoutMs)
-                )
+                new Promise((_, reject) => {
+                    timer = setTimeout(() => reject(new Error('judge timeout')), this.timeoutMs);
+                })
             ]);
+            clearTimeout(timer);
 
             // Parse: extract first matching agent ID from the response
             const validIds = proposals.map(p => p.agentId);
@@ -85,6 +87,7 @@ export class LLMJudge {
             console.warn(`[Judge] Could not parse agent ID from response: "${result.slice(0, 100)}"`);
             return null;
         } catch (err) {
+            clearTimeout(timer);
             console.warn(`[Judge] Failed: ${err.message}`);
             return null;
         }

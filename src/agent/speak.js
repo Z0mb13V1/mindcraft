@@ -99,6 +99,7 @@ $s.Dispose()`;
             proc.stdin.end();
         } else if (isMac) {
             // Guard against text starting with '-' which 'say' would treat as a flag.
+            // macOS 'say' does not support '--' as end-of-options, so prepend a space instead.
             const safeTxt = txt.startsWith('-') ? ` ${txt}` : txt;
             proc = spawn('say', [safeTxt], { stdio: 'ignore' });
         } else {
