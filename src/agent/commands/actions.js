@@ -256,9 +256,9 @@ export const actionsList = [
         },
         perform: runAsAction(async (agent, item_name, num) => {
             const start_loc = agent.bot.entity.position;
-            await skills.moveAway(agent.bot, 5);
+            try { await skills.moveAway(agent.bot, 5); } catch (_) { /* navigation may fail, that's ok */ }
             await skills.discard(agent.bot, item_name, num);
-            await skills.goToPosition(agent.bot, start_loc.x, start_loc.y, start_loc.z, 0);
+            try { await skills.goToPosition(agent.bot, start_loc.x, start_loc.y, start_loc.z, 0); } catch (_) { /* ok */ }
         })
     },
     {

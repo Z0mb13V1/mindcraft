@@ -93,10 +93,12 @@ async function _ensureItem(bot, itemName, count, craftFrom = null) {
  * Adapts requirements based on which chunk is next.
  */
 async function prepareForChunk(bot, chunkName, progress) {
+    console.log(`[RC31] prepareForChunk: ${chunkName}`);
     log(bot, `Preparing for chunk: ${chunkName}`);
     if (bot.interrupt_code) return;
 
     // Always eat first
+    console.log('[RC31] prepareForChunk: eatIfNeeded');
     await eatIfNeeded(bot);
 
     // Ensure food stockpile (min 12 cooked meat)
@@ -107,11 +109,13 @@ async function prepareForChunk(bot, chunkName, progress) {
     for (const f of foodItems) totalFood += (inv[f] || 0);
 
     if (totalFood < 12) {
+        console.log(`[RC31] prepareForChunk: stockpileFood (totalFood=${totalFood})`);
         log(bot, `Food low (${totalFood}). Stockpiling...`);
         await skills.stockpileFood(bot, 20);
     }
 
     // RC30: Proactive inventory overflow — place a chest and store junk if nearly full
+    console.log('[RC31] prepareForChunk: checking inventory');
     const emptySlots = bot.inventory.emptySlotCount();
     if (emptySlots < 6 && getDimension(bot) === 'overworld') {
         log(bot, `Inventory nearly full (${emptySlots} empty). Placing chest for overflow...`);
@@ -129,10 +133,29 @@ async function prepareForChunk(bot, chunkName, progress) {
     }
 
     // Manage inventory (stores in nearby chests or discards junk)
+    console.log('[RC31] prepareForChunk: autoManageInventory');
     await skills.autoManageInventory(bot);
 
     // Chunk-specific prep
+    console.log(`[RC31] prepareForChunk: chunk-specific prep for ${chunkName}`);
     switch (chunkName) {
+        case CHUNKS.NETHER_PORTAL:
+            // RC31: Must be on the surface for portal building (need iron, gravel, lava)
+            if (bot.entity.position.y < 50 && getDimension(bot) === 'overworld') {
+                log(bot, 'Underground — going to surface for nether portal building...');
+                try {
+                    await skills.goToSurface(bot);
+                } catch (_e) {
+                    log(bot, 'goToSurface failed, trying pillarUp...');
+                    try {
+                        await skills.pillarUp(bot, Math.min(30, 70 - Math.floor(bot.entity.position.y)));
+                    } catch (_pe) {
+                        log(bot, 'pillarUp also failed. Will try portal building from current position.');
+                    }
+                }
+            }
+            break;
+
         case CHUNKS.BLAZE_RODS:
         case CHUNKS.ENDER_PEARLS:
             // Need a sword for combat chunks
@@ -317,6 +340,7 @@ async function recoverFromDeath(bot, progress) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function buildNetherPortal(bot) {
+    console.log('[RC31] buildNetherPortal: starting');
     /**
      * Build a nether portal using one of two methods:
      * (A) If the bot already has 10+ obsidian and flint_and_steel, build directly.
@@ -1465,6 +1489,7 @@ export async function runDragonProgression(bot) {
 
     try {
         for (const chunkKey of DragonProgress.CHUNK_ORDER) {
+            console.log(`[RC31] orchestrator: processing chunk ${chunkKey}`);
             if (bot.interrupt_code) {
                 log(bot, 'Dragon progression interrupted.');
                 await progress.save();
@@ -1478,6 +1503,7 @@ export async function runDragonProgression(bot) {
 
             // Skip completed chunks
             if (runner.check()) {
+                console.log(`[RC31] orchestrator: chunk ${chunkKey} check=true, skipping`);
                 if (!progress.isChunkDone(chunkKey)) {
                     progress.markChunkDone(chunkKey);
                     await progress.save();
@@ -1521,8 +1547,11 @@ export async function runDragonProgression(bot) {
                 }
 
                 try {
+                    console.log(`[RC31] orchestrator: running chunk ${runner.name} (retry ${retries})`);
                     success = await runner.run();
+                    console.log(`[RC31] orchestrator: chunk ${runner.name} returned success=${success}`);
                 } catch (err) {
+                    console.error(`[RC31] orchestrator: chunk ${runner.name} threw: ${err.message}`);
                     log(bot, `Chunk ${runner.name} error: ${err.message}`);
                     success = false;
                 }

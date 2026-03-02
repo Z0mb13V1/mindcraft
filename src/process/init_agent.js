@@ -5,20 +5,42 @@ import { readFileSync } from 'fs';
 
 // RC27: Catch unhandled errors from Baritone executor and other async code
 // that crash the process. Log them and continue instead of exiting.
+// RC30: Broadened to catch ALL pathfinding/navigation errors non-fatally
+// since goToGoal's timeout handles recovery.  Only truly fatal errors exit.
+const NON_FATAL_PATTERNS = [
+    'Cannot read properties of undefined',
+    'Cannot read properties of null',
+    'aborted',
+    'Timeout',
+    'timed out',
+    'goal is not a',
+    'path was',
+    'No path',
+    'is not reachable',
+    'position is not loaded',
+    'stuck',
+    'Digging',
+    'event loop',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'socket hang up',
+];
+function isNonFatal(msg) {
+    return NON_FATAL_PATTERNS.some(p => msg.includes(p));
+}
 process.on('uncaughtException', (err) => {
-    // Known: Baritone executor.js path becomes undefined mid-navigation
-    if (err?.message?.includes('Cannot read properties of undefined')) {
-        console.error(`[RC27] Caught non-fatal uncaught error: ${err.message}`);
+    const msg = err?.message || String(err);
+    if (isNonFatal(msg)) {
+        console.error(`[RC30] Caught non-fatal uncaught error: ${msg}`);
         return; // swallow — goToGoal's timeout will handle recovery
     }
     console.error('[RC27] Uncaught exception (fatal):', err);
     process.exit(1);
 });
 process.on('unhandledRejection', (reason) => {
-    // Known: Baritone promise rejections when path is null
     const msg = reason?.message || String(reason);
-    if (msg.includes('Cannot read properties of undefined')) {
-        console.error(`[RC27] Caught non-fatal unhandled rejection: ${msg}`);
+    if (isNonFatal(msg)) {
+        console.error(`[RC30] Caught non-fatal unhandled rejection: ${msg}`);
         return;
     }
     console.error('[RC27] Unhandled rejection:', reason);
