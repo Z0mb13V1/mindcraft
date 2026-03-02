@@ -729,7 +729,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 }
                 consecutiveFails++;
                 if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
-                    log(bot, `Failed ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Use !explore(200) to travel to a completely new area, then retry.`);
+                    log(bot, `Failed ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Call !getDiamondPickaxe — it handles relocation and tool progression automatically.`);
                     break;
                 }
                 continue;
@@ -743,7 +743,7 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     bot.modes.unpause('unstuck');
     
     if (collected === 0 && num > 0) {
-        log(bot, `Collected 0 ${blockType}. There are no ${blockType} blocks in this area (commands are working correctly). You MUST relocate far away: !explore(200) to reach a completely new area with fresh resources. Do NOT say gathering is broken — it works fine, you just need to travel farther.`);
+        log(bot, `Collected 0 ${blockType}. No ${blockType} found in this area. Call !getDiamondPickaxe — it handles wood collection and tool progression automatically with built-in relocation. Do NOT call !explore or !collectBlocks manually.`);
     } else {
         log(bot, `Collected ${collected} ${blockType}.`);
     }
@@ -1864,10 +1864,28 @@ export async function explore(bot, distance=40) {
         } catch (_err) {
             consecutiveFails++;
             if (consecutiveFails >= 2) {
-                log(bot, `Exploration stuck after ${Math.round(totalMoved)} blocks. Move to a new area far away and try a different direction.`);
-                break;
+                // RC29b: Terrain escape — when consecutive hops fail (ocean/cliff blocking),
+                // try going to the surface first then attempt an uphill path before giving up.
+                log(bot, `Exploration stuck after ${Math.round(totalMoved)} blocks. Trying terrain escape (surface + uphill)...`);
+                try {
+                    // Step 1: Climb to surface to clear water/cliff terrain
+                    await goToSurface(bot);
+                    // Step 2: Try a new completely random direction from surface
+                    const escapeAngle = Math.random() * 2 * Math.PI;
+                    const ex = Math.floor(bot.entity.position.x + hopDist * Math.cos(escapeAngle));
+                    const ez = Math.floor(bot.entity.position.z + hopDist * Math.sin(escapeAngle));
+                    const surfY2 = Math.floor(bot.entity.position.y);
+                    await goToPosition(bot, ex, surfY2, ez, 3);
+                    totalMoved += currentPos.distanceTo(bot.entity.position);
+                    consecutiveFails = 0;
+                    angle = escapeAngle; // continue in the escape direction
+                } catch (_escape) {
+                    log(bot, `Terrain escape failed. Explored ${Math.round(totalMoved)} blocks total.`);
+                    break;
+                }
+                continue;
             }
-            // Try perpendicular direction on failure
+            // Try perpendicular direction on first failure
             const perpAngle = angle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
             const px = Math.floor(currentPos.x + hopDist * Math.cos(perpAngle));
             const pz = Math.floor(currentPos.z + hopDist * Math.sin(perpAngle));
@@ -2756,8 +2774,23 @@ export async function getDiamondPickaxe(bot) {
             }
         }
         if (!logType) {
-            log(bot, 'Cannot find any logs to begin tool progression.');
+            log(bot, 'No logs nearby. Exploring 200 blocks to find trees...');
+            await explore(bot, 200);
+            for (const lt of logTypes) {
+                if (await collectBlock(bot, lt, 3)) { logType = lt; break; }
+            }
+        }
+        if (!logType) {
+            log(bot, 'Cannot find any logs even after exploring. Run !getDiamondPickaxe again from a different area.');
             return false;
+        }
+        // Re-read inventory — collectBlock may have picked up a different log type
+        // (e.g., RC27 expanded search returns oak while hunting birch).
+        inv = world.getInventoryCounts(bot);
+        const actualLog = logTypes.find(l => (inv[l] ?? 0) >= 1);
+        if (actualLog && actualLog !== logType) {
+            log(bot, `Collected ${actualLog} (was hunting ${logType}), adjusting.`);
+            logType = actualLog;
         }
         const plankType = logType.replace('_log', '_planks');
         if (!await craftRecipe(bot, plankType, 1)) {
