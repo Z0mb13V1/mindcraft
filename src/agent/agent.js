@@ -448,13 +448,25 @@ export class Agent {
                 if (!commandExists(command_name)) {
                     // RC27: Distinguish blocked commands from truly unknown ones
                     if (isCommandBlocked(command_name)) {
-                        this.history.add('system', `Command ${command_name} is disabled in your profile's blocked_actions.`);
-                        console.log(`[RC27] Agent used blocked command: ${command_name}`);
+                        // RC29→RC31: Auto-redirect blocked commands to !dragonProgression
+                        // This chains all 6 chunks (diamond pickaxe → nether portal → blaze rods → etc.)
+                        const craftRedirectCmds = ['!craftRecipe', '!collectBlocks', '!searchForBlock', '!getCraftingPlan', '!newAction'];
+                        if (craftRedirectCmds.includes(command_name) && commandExists('!dragonProgression')) {
+                            console.log(`[RC31] Redirecting blocked ${command_name} → !dragonProgression`);
+                            this.history.add('system', `${command_name} is blocked. Running !dragonProgression instead (it handles ALL progression automatically).`);
+                            res = '!dragonProgression';
+                            command_name = '!dragonProgression';
+                            // Fall through to normal command execution below
+                        } else {
+                            this.history.add('system', `Command ${command_name} is disabled in your profile's blocked_actions.`);
+                            console.log(`[RC27] Agent used blocked command: ${command_name}`);
+                            continue;
+                        }
                     } else {
                         this.history.add('system', `Command ${command_name} does not exist.`);
                         console.warn('Agent hallucinated command:', command_name);
+                        continue;
                     }
-                    continue;
                 }
 
                 if (checkInterrupt()) break;

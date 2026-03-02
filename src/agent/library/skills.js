@@ -99,6 +99,21 @@ export async function craftRecipe(bot, itemName, num=1) {
     
     if (craftingTable && bot.entity.position.distanceTo(craftingTable.position) > 4) {
         await goToNearestBlock(bot, 'crafting_table', 4, craftingTableRange);
+        // If still can't reach (e.g., table is above/below in unreachable spot), place one from inventory
+        if (bot.entity.position.distanceTo(craftingTable.position) > 4) {
+            let hasTable = world.getInventoryCounts(bot)['crafting_table'] > 0;
+            if (hasTable) {
+                let pos = world.getNearestFreeSpace(bot, 1, 6);
+                if (pos) {
+                    await placeBlock(bot, 'crafting_table', pos.x, pos.y, pos.z);
+                    craftingTable = world.getNearestBlock(bot, 'crafting_table', craftingTableRange);
+                    if (craftingTable) {
+                        recipes = bot.recipesFor(mc.getItemId(itemName), null, 1, craftingTable);
+                        placedTable = true;
+                    }
+                }
+            }
+        }
     }
 
     const recipe = recipes[0];
@@ -2471,9 +2486,182 @@ function stringifyItem(bot, item) {
     return text;
 }
 
+// RC30: Pillar up out of a shaft by placing blocks below the bot
+export async function pillarUp(bot, distance = 10) {
+    /**
+     * Pillar up by placing blocks below the bot. Uses cobblestone, dirt, or netherrack.
+     * Breaks blocks above the bot's head before jumping.
+     * @param {MinecraftBot} bot
+     * @param {number} distance - number of blocks to go up
+     * @returns {Promise<boolean>} true if successfully pillared all the way up
+     */
+    const placeableBlocks = ['cobblestone', 'dirt', 'netherrack', 'stone', 'granite', 'diorite', 'andesite', 'deepslate', 'cobbled_deepslate'];
+    
+    for (let i = 0; i < distance; i++) {
+        // Find a suitable block in inventory to place
+        const inv = world.getInventoryCounts(bot);
+        const blockToPlace = placeableBlocks.find(b => (inv[b] ?? 0) > 0);
+        if (!blockToPlace) {
+            log(bot, `Ran out of blocks to place after pillaring up ${i} blocks.`);
+            return i > 0;
+        }
+
+        // Break blocks above the bot's head (need 2 blocks of air above to jump)
+        const headPos = bot.entity.position.offset(0, 2, 0);
+        const headBlock = bot.blockAt(new Vec3(Math.floor(headPos.x), Math.floor(headPos.y), Math.floor(headPos.z)));
+        if (headBlock && headBlock.name !== 'air' && headBlock.name !== 'cave_air') {
+            const dug = await breakBlockAt(bot, headBlock.position.x, headBlock.position.y, headBlock.position.z);
+            if (!dug) {
+                log(bot, `Cannot break block above head at y=${headBlock.position.y}. Stopped after ${i} blocks.`);
+                return i > 0;
+            }
+        }
+        // Also check one more above for safety
+        const aboveHead = bot.blockAt(new Vec3(Math.floor(headPos.x), Math.floor(headPos.y) + 1, Math.floor(headPos.z)));
+        if (aboveHead && aboveHead.name !== 'air' && aboveHead.name !== 'cave_air') {
+            await breakBlockAt(bot, aboveHead.position.x, aboveHead.position.y, aboveHead.position.z);
+        }
+
+        // Jump and place block below
+        await bot.equip(bot.registry.itemsByName[blockToPlace].id, 'hand');
+        bot.setControlState('jump', true);
+        await new Promise(r => setTimeout(r, 350)); // wait to be at top of jump
+        bot.setControlState('jump', false);
+
+        // Place block at the position below the bot's feet
+        const feetPos = bot.entity.position;
+        const belowBlock = bot.blockAt(new Vec3(Math.floor(feetPos.x), Math.floor(feetPos.y) - 1, Math.floor(feetPos.z)));
+        if (belowBlock && (belowBlock.name === 'air' || belowBlock.name === 'cave_air')) {
+            try {
+                // Find an adjacent solid face to place against
+                const neighbors = [
+                    belowBlock.position.offset(0, -1, 0),
+                    belowBlock.position.offset(1, 0, 0),
+                    belowBlock.position.offset(-1, 0, 0),
+                    belowBlock.position.offset(0, 0, 1),
+                    belowBlock.position.offset(0, 0, -1),
+                ];
+                let placed = false;
+                for (const nPos of neighbors) {
+                    const nBlock = bot.blockAt(nPos);
+                    if (nBlock && nBlock.name !== 'air' && nBlock.name !== 'cave_air' && nBlock.name !== 'water' && nBlock.name !== 'lava') {
+                        const face = belowBlock.position.minus(nPos);
+                        await bot.placeBlock(nBlock, face);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    log(bot, `Could not find adjacent block to place against at y=${belowBlock.position.y}. Stopped after ${i} blocks.`);
+                    return i > 0;
+                }
+            } catch (placeErr) {
+                log(bot, `Failed to place block: ${placeErr.message}. Stopped after ${i} blocks.`);
+                return i > 0;
+            }
+        }
+        await new Promise(r => setTimeout(r, 250)); // small delay between pillars
+    }
+    log(bot, `Pillared up ${distance} blocks.`);
+    return true;
+}
+
+// RC30: Strip-mine horizontally to find ore when pathfinder can't reach any
+export async function stripMineForOre(bot, oreNames, length = 32) {
+    /**
+     * Dig a 1x2 horizontal tunnel to find ore. Mines in the direction the bot is facing.
+     * @param {MinecraftBot} bot
+     * @param {string[]} oreNames - ore block names to look for (e.g. ['iron_ore', 'deepslate_iron_ore'])
+     * @param {number} length - how far to dig (blocks)
+     * @returns {Promise<boolean>} true if ore was found and collected
+     */
+    // Determine direction from bot's yaw
+    const yaw = bot.entity.yaw;
+    let dx = 0, dz = 0;
+    // Normalize yaw to cardinal direction
+    const facing = ((yaw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (facing >= 5.5 || facing < 0.785) { dz = 1; }       // south
+    else if (facing >= 0.785 && facing < 2.356) { dx = -1; }  // west  
+    else if (facing >= 2.356 && facing < 3.927) { dz = -1; }  // north
+    else { dx = 1; }                                          // east
+
+    log(bot, `Strip-mining ${length} blocks (dx=${dx}, dz=${dz}) looking for ${oreNames.join('/')}`);
+    
+    const startPos = bot.entity.position.clone();
+    let oresCollected = 0;
+
+    for (let i = 1; i <= length; i++) {
+        if (bot.interrupt_code) break;
+        
+        const x = Math.floor(startPos.x) + dx * i;
+        const y = Math.floor(startPos.y);
+        const z = Math.floor(startPos.z) + dz * i;
+
+        // Break the two blocks in front (feet level and head level)
+        for (const yOff of [0, 1]) {
+            const block = bot.blockAt(new Vec3(x, y + yOff, z));
+            if (!block || block.name === 'air' || block.name === 'cave_air') continue;
+            
+            // Check for lava
+            if (block.name === 'lava' || block.name === 'water') {
+                log(bot, `Hit ${block.name} while strip-mining. Stopping.`);
+                return oresCollected > 0;
+            }
+            
+            // Check if this IS an ore we want
+            if (oreNames.includes(block.name)) {
+                oresCollected++;
+                log(bot, `Found ${block.name} while strip-mining at (${x}, ${y + yOff}, ${z})!`);
+            }
+            
+            await breakBlockAt(bot, x, y + yOff, z);
+        }
+
+        // Also check blocks to the sides and above/below for ore
+        const sideOffsets = [
+            [0, 2, 0],   // above head
+            [0, -1, 0],  // below feet
+            [-dz, 0, dx], // left wall (feet)
+            [-dz, 1, dx], // left wall (head)
+            [dz, 0, -dx], // right wall (feet)
+            [dz, 1, -dx], // right wall (head)
+        ];
+        for (const [ox, oy, oz] of sideOffsets) {
+            const sideBlock = bot.blockAt(new Vec3(x + ox, y + oy, z + oz));
+            if (sideBlock && oreNames.includes(sideBlock.name)) {
+                oresCollected++;
+                log(bot, `Found ${sideBlock.name} adjacent to tunnel at (${x + ox}, ${y + oy}, ${z + oz})!`);
+                await breakBlockAt(bot, x + ox, y + oy, z + oz);
+            }
+        }
+
+        // Move into the newly cleared space
+        try {
+            await bot.waitForTicks(2);
+            // Simple movement: walk forward into the cleared space
+            await goToPosition(bot, x + 0.5, y, z + 0.5, 0);
+        } catch (_moveErr) {
+            // If pathfinder fails, try teleporting via simple walk
+            bot.setControlState('forward', true);
+            await new Promise(r => setTimeout(r, 500));
+            bot.setControlState('forward', false);
+        }
+
+        // Pick up dropped items every few blocks
+        if (i % 4 === 0) {
+            await pickupNearbyItems(bot);
+        }
+    }
+
+    await pickupNearbyItems(bot);
+    log(bot, `Strip-mine complete. Found ${oresCollected} ore blocks in ${length}-block tunnel.`);
+    return oresCollected > 0;
+}
+
 export async function digDown(bot, distance = 10) {
     /**
-     * Digs down a specified distance. Will stop if it reaches lava, water, or a fall of >=4 blocks below the bot.
+     * Digs down a specified distance. Will stop if it reaches lava, water, or a fall of >=6 blocks below the bot.
+     * For drops of 3-5 blocks, places blocks to create a safe staircase down.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {int} distance, distance to dig down.
      * @returns {Promise<boolean>} true if successfully dug all the way down.
@@ -2498,17 +2686,19 @@ export async function digDown(bot, distance = 10) {
             return false;
         }
 
-        const MAX_FALL_BLOCKS = 2;
+        // RC30: Increased from 2 to 5. Count air blocks below.
+        const MAX_FALL_BLOCKS = 5;
         let num_fall_blocks = 0;
+        let checkBlock = belowBlock;
         for (let j = 0; j <= MAX_FALL_BLOCKS; j++) {
-            if (!belowBlock || (belowBlock.name !== 'air' && belowBlock.name !== 'cave_air')) {
+            if (!checkBlock || (checkBlock.name !== 'air' && checkBlock.name !== 'cave_air')) {
                 break;
             }
             num_fall_blocks++;
-            belowBlock = bot.blockAt(belowBlock.position.offset(0, -1, 0));
+            checkBlock = bot.blockAt(start_block_pos.offset(0, -i-1-j-1, 0));
         }
         if (num_fall_blocks > MAX_FALL_BLOCKS) {
-            log(bot, `Dug down ${i-1} blocks, but reached a drop below the next block.`);
+            log(bot, `Dug down ${i-1} blocks, but reached a large drop (${num_fall_blocks} blocks) below.`);
             return false;
         }
 
@@ -2748,9 +2938,17 @@ export async function getDiamondPickaxe(bot) {
      * Tiers: wooden → stone → iron → diamond.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @returns {Promise<boolean>} true if diamond pickaxe obtained, false otherwise.
-     * @example
-     * await skills.getDiamondPickaxe(bot);
      **/
+    console.log('[RC30] getDiamondPickaxe: starting');
+
+    // Clear near-full inventory first so items can be picked up during collection
+    const invSize = Object.values(world.getInventoryCounts(bot)).reduce((a, b) => a + b, 0);
+    console.log(`[RC30] getDiamondPickaxe: invSize=${invSize}`);
+    if (invSize >= 30) {
+        log(bot, `Inventory near-full (${invSize} stacks). Clearing junk before collecting resources...`);
+        await autoManageInventory(bot);
+    }
+
     let inv;
 
     // Already done
@@ -2763,6 +2961,11 @@ export async function getDiamondPickaxe(bot) {
     // ── TIER 1: wooden pickaxe ───────────────────────────────────────────────
     inv = world.getInventoryCounts(bot);
     if (!inv['wooden_pickaxe'] && !inv['stone_pickaxe'] && !inv['iron_pickaxe']) {
+        // Skip wooden pickaxe entirely if we already have materials for stone pickaxe
+        if ((inv['cobblestone'] ?? 0) >= 3 && (inv['stick'] ?? 0) >= 2) {
+            log(bot, 'Already have cobblestone and sticks — skipping wooden pickaxe, going straight to stone.');
+            // Fall through to tier 2
+        } else {
         log(bot, 'Starting tool progression: collecting logs...');
         const logTypes = ['oak_log', 'birch_log', 'spruce_log', 'dark_oak_log',
                           'acacia_log', 'jungle_log', 'mangrove_log'];
@@ -2793,10 +2996,25 @@ export async function getDiamondPickaxe(bot) {
             logType = actualLog;
         }
         const plankType = logType.replace('_log', '_planks');
-        if (!await craftRecipe(bot, plankType, 1)) {
+
+        // Craft ALL logs into planks (need ≥9: 4 crafting_table + 2 sticks + 3 pickaxe)
+        const logsAvail = inv[logType] ?? 0;
+        if (!await craftRecipe(bot, plankType, Math.max(logsAvail, 3))) {
             log(bot, `Failed to craft ${plankType}.`);
             return false;
         }
+
+        // Craft a crafting table — required for all pickaxe recipes
+        inv = world.getInventoryCounts(bot);
+        const nearTable = world.getNearestBlock(bot, 'crafting_table', 16);
+        const isReachable = nearTable && bot.entity.position.distanceTo(nearTable.position) <= 4;
+        if (!(inv['crafting_table'] > 0) && !isReachable) {
+            if (!await craftRecipe(bot, 'crafting_table', 1)) {
+                log(bot, 'Failed to craft crafting table.');
+                return false;
+            }
+        }
+
         if (!await craftRecipe(bot, 'stick', 1)) {
             log(bot, 'Failed to craft sticks.');
             return false;
@@ -2806,16 +3024,80 @@ export async function getDiamondPickaxe(bot) {
             return false;
         }
         log(bot, 'Wooden pickaxe crafted.');
+        } // end else (wooden pickaxe craft)
+    }
+
+    // Helper: ensure we have enough sticks & a crafting table for upcoming pickaxe
+    async function ensureSticksAndTable() {
+        const inv2 = world.getInventoryCounts(bot);
+        // Need at least 2 sticks
+        if ((inv2['stick'] ?? 0) < 2) {
+            // Need planks for sticks — check if we have some
+            const anyPlanks = ['oak_planks','birch_planks','spruce_planks','dark_oak_planks',
+                               'acacia_planks','jungle_planks','mangrove_planks'].find(p => (inv2[p] ?? 0) >= 2);
+            if (anyPlanks) {
+                await craftRecipe(bot, 'stick', 1);
+            } else {
+                // Collect 1 log and make planks + sticks
+                const logTypes2 = ['oak_log','birch_log','spruce_log','dark_oak_log',
+                                   'acacia_log','jungle_log','mangrove_log'];
+                for (const lt of logTypes2) {
+                    if (await collectBlock(bot, lt, 1)) {
+                        const pt = lt.replace('_log', '_planks');
+                        await craftRecipe(bot, pt, 1);
+                        await craftRecipe(bot, 'stick', 1);
+                        break;
+                    }
+                }
+            }
+        }
+        // Ensure crafting table available (in inventory, not just "nearby" which might be unreachable)
+        const inv3 = world.getInventoryCounts(bot);
+        const nearbyTable = world.getNearestBlock(bot, 'crafting_table', 16);
+        const tableReachable = nearbyTable && bot.entity.position.distanceTo(nearbyTable.position) <= 4;
+        if (!(inv3['crafting_table'] > 0) && !tableReachable) {
+            let anyPlanks = ['oak_planks','birch_planks','spruce_planks','dark_oak_planks',
+                               'acacia_planks','jungle_planks','mangrove_planks'].find(p => (inv3[p] ?? 0) >= 4);
+            if (!anyPlanks) {
+                // Convert logs to planks if we have any
+                const logTypes3 = ['oak_log','birch_log','spruce_log','dark_oak_log',
+                                   'acacia_log','jungle_log','mangrove_log'];
+                const logType3 = logTypes3.find(l => (inv3[l] ?? 0) >= 1);
+                if (logType3) {
+                    const pt3 = logType3.replace('_log', '_planks');
+                    await craftRecipe(bot, pt3, 1);  // 1 log → 4 planks
+                    anyPlanks = pt3;
+                } else {
+                    // Collect a log if none in inventory
+                    for (const lt of logTypes3) {
+                        if (await collectBlock(bot, lt, 1)) {
+                            const pt3 = lt.replace('_log', '_planks');
+                            await craftRecipe(bot, pt3, 1);
+                            anyPlanks = pt3;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (anyPlanks) {
+                await craftRecipe(bot, 'crafting_table', 1);
+            }
+        }
     }
 
     // ── TIER 2: stone pickaxe ────────────────────────────────────────────────
     inv = world.getInventoryCounts(bot);
     if (!inv['stone_pickaxe'] && !inv['iron_pickaxe']) {
-        log(bot, 'Collecting cobblestone for stone pickaxe...');
-        if (!await collectBlock(bot, 'stone', 3)) {
-            log(bot, 'Could not find stone. Try moving to a rocky area.');
-            return false;
+        if ((inv['cobblestone'] ?? 0) < 3) {
+            log(bot, 'Collecting cobblestone for stone pickaxe...');
+            if (!await collectBlock(bot, 'stone', 3)) {
+                log(bot, 'Could not find stone. Try moving to a rocky area.');
+                return false;
+            }
+        } else {
+            log(bot, 'Already have enough cobblestone for stone pickaxe.');
         }
+        await ensureSticksAndTable();
         if (!await craftRecipe(bot, 'stone_pickaxe', 1)) {
             log(bot, 'Failed to craft stone pickaxe.');
             return false;
@@ -2825,53 +3107,226 @@ export async function getDiamondPickaxe(bot) {
 
     // ── TIER 3: iron pickaxe ─────────────────────────────────────────────────
     inv = world.getInventoryCounts(bot);
+    console.log(`[RC30] Tier 3 check: iron_pickaxe=${inv['iron_pickaxe'] ?? 0}`);
     if (!inv['iron_pickaxe']) {
+      try {
         log(bot, 'Collecting iron ore for iron pickaxe...');
-        let gotIron = await collectBlock(bot, 'iron_ore', 3);
-        if (!gotIron) gotIron = await collectBlock(bot, 'deepslate_iron_ore', 3);
+        const ironOres = ['iron_ore', 'deepslate_iron_ore'];
+        
+        // Check if we already have raw_iron or iron_ingot in inventory
+        inv = world.getInventoryCounts(bot);
+        const rawIronHave = (inv['raw_iron'] ?? 0);
+        const ironIngotHave = (inv['iron_ingot'] ?? 0);
+        const ironNeeded = 3 - ironIngotHave;  // need 3 total iron ingots
+        const oreNeeded = Math.max(0, ironNeeded - rawIronHave);
+        
+        let gotIron = oreNeeded <= 0;
+        
         if (!gotIron) {
-            log(bot, 'Could not find iron ore. Try digging deeper or exploring caves.');
+            // Attempt 1: regular collectBlock
+            gotIron = await collectBlock(bot, 'iron_ore', oreNeeded);
+            if (!gotIron) gotIron = await collectBlock(bot, 'deepslate_iron_ore', oreNeeded);
+        }
+        
+        if (!gotIron) {
+            // Attempt 2: strip-mine at current level (works even in shafts)
+            log(bot, 'Cannot reach iron ore via pathfinding. Strip-mining to find iron...');
+            const currentY = Math.floor(bot.entity.position.y);
+            
+            // If we're deep underground in a shaft, try to escape upward first
+            if (currentY < 50) {
+                log(bot, 'Underground — trying to pillar up to better terrain...');
+                const pillarDist = Math.min(20, 60 - currentY); // aim for ~y=60 (surface-ish)
+                if (pillarDist > 0) {
+                    await pillarUp(bot, pillarDist);
+                }
+            }
+            
+            // Now try strip-mining at current position (any y-level from 0-64 has iron)
+            gotIron = await stripMineForOre(bot, ironOres, 40);
+        }
+        
+        if (!gotIron) {
+            // Attempt 3: explore on surface, then dig fresh shaft
+            log(bot, 'Strip-mine did not find iron. Exploring to find a new area...');
+            try { await goToSurface(bot); } catch (_e) {
+                // goToSurface may fail in enclosed spaces — pillar up instead
+                await pillarUp(bot, 30);
+            }
+            await explore(bot, 200);
+            const newY = Math.floor(bot.entity.position.y);
+            if (newY > 16) {
+                await digDown(bot, Math.min(newY - 16, 40));
+            }
+            gotIron = await collectBlock(bot, 'iron_ore', oreNeeded);
+            if (!gotIron) gotIron = await collectBlock(bot, 'deepslate_iron_ore', oreNeeded);
+            if (!gotIron) gotIron = await stripMineForOre(bot, ironOres, 40);
+        }
+        
+        if (!gotIron) {
+            log(bot, 'Could not find iron ore after multiple attempts. Try !getDiamondPickaxe again later.');
             return false;
         }
-        if (!await smeltItem(bot, 'raw_iron', 3)) {
-            log(bot, 'Failed to smelt raw iron into iron ingots.');
+        
+        // Check how much raw iron we have now
+        inv = world.getInventoryCounts(bot);
+        const totalRaw = (inv['raw_iron'] ?? 0);
+        const totalIngots = (inv['iron_ingot'] ?? 0);
+        
+        if (totalIngots < 3 && totalRaw > 0) {
+            // RC30: Ensure we have a furnace before smelting
+            const furnaceInv = (inv['furnace'] ?? 0);
+            const furnaceNearby = world.getNearestBlock(bot, 'furnace', 16);
+            if (!furnaceInv && !furnaceNearby) {
+                log(bot, 'Crafting furnace for smelting (8 cobblestone)...');
+                await ensureSticksAndTable();  // need crafting table
+                if (!await craftRecipe(bot, 'furnace', 1)) {
+                    log(bot, 'Failed to craft furnace. Need 8 cobblestone.');
+                    return false;
+                }
+            }
+            
+            // RC30: Ensure we have fuel — collect coal if no fuel in inventory
+            const fuelItems = ['coal', 'charcoal', 'oak_planks', 'birch_planks', 'spruce_planks',
+                              'dark_oak_planks', 'acacia_planks', 'jungle_planks', 'mangrove_planks',
+                              'oak_log', 'birch_log', 'spruce_log'];
+            const hasFuel = fuelItems.some(f => (inv[f] ?? 0) > 0);
+            if (!hasFuel) {
+                log(bot, 'No fuel for furnace. Collecting coal...');
+                let gotFuel = await collectBlock(bot, 'coal_ore', 2);
+                if (!gotFuel) {
+                    // Use wood as backup fuel — collect a log
+                    const logTypes4 = ['oak_log','birch_log','spruce_log','dark_oak_log','acacia_log','jungle_log'];
+                    for (const lt of logTypes4) {
+                        if (await collectBlock(bot, lt, 2)) { gotFuel = true; break; }
+                    }
+                }
+                if (!gotFuel) {
+                    log(bot, 'Cannot find fuel for smelting. Try again from a different area.');
+                    return false;
+                }
+            }
+            
+            const smeltCount = Math.min(totalRaw, 3 - totalIngots);
+            if (!await smeltItem(bot, 'raw_iron', smeltCount)) {
+                log(bot, 'Failed to smelt raw iron into iron ingots.');
+                return false;
+            }
+        } else if (totalIngots < 3 && totalRaw === 0) {
+            log(bot, 'Collected ore blocks but no raw_iron in inventory. May need a better pickaxe or retry.');
             return false;
         }
+        
+        await ensureSticksAndTable();
         if (!await craftRecipe(bot, 'iron_pickaxe', 1)) {
             log(bot, 'Failed to craft iron pickaxe.');
             return false;
         }
         log(bot, 'Iron pickaxe crafted.');
+      } catch (tier3Err) {
+        log(bot, `[RC30] Iron tier error: ${tier3Err.message}. Will retry on next !getDiamondPickaxe call.`);
+        console.error('[RC30] Tier 3 error:', tier3Err);
+        return false;
+      }
     }
 
     // ── TIER 4: diamond pickaxe ──────────────────────────────────────────────
-    log(bot, 'Digging to diamond level (y=-11)...');
+    // RC31: Quick-check — if we already have a diamond pickaxe, return immediately
+    if (world.getInventoryCounts(bot)['diamond_pickaxe']) {
+        log(bot, 'Already have a diamond pickaxe! Skipping tier 4.');
+        return true;
+    }
+    console.log('[RC30] Entering tier 4: diamond pickaxe');
+  try {
     const targetY = -11;
-    const currentY = Math.floor(bot.entity.position.y);
-    if (currentY > targetY) {
+    const MAX_DIG_ATTEMPTS = 4;
+    let reachedDiamondLevel = false;
+    
+    for (let attempt = 0; attempt < MAX_DIG_ATTEMPTS && !reachedDiamondLevel; attempt++) {
+        const currentY = Math.floor(bot.entity.position.y);
+        log(bot, `Digging to diamond level (y=${targetY}), attempt ${attempt + 1}/${MAX_DIG_ATTEMPTS} from y=${currentY}...`);
+        
+        if (currentY <= targetY + 5) {
+            reachedDiamondLevel = true;
+            break;
+        }
+        
         const dist = currentY - targetY;
-        if (!await digDown(bot, dist)) {
-            log(bot, 'Stopped before reaching diamond level (lava or cave gap detected). Try again from a different spot.');
+        const digSuccess = await digDown(bot, dist);
+        const afterY = Math.floor(bot.entity.position.y);
+        console.log(`[RC30] Tier4 dig attempt ${attempt + 1}: digSuccess=${digSuccess}, afterY=${afterY}`);
+        
+        if (digSuccess || afterY <= targetY + 10) {
+            reachedDiamondLevel = true;
+        } else {
+            // Failed — move horizontally and try a new shaft (NO goToSurface — it times out)
+            log(bot, `Dig attempt ${attempt + 1} stopped at y=${afterY}. Moving sideways to try new shaft...`);
+            try {
+                // Pick a random cardinal direction and walk 15 blocks
+                const dirs = [{x:15,z:0},{x:-15,z:0},{x:0,z:15},{x:0,z:-15}];
+                const dir = dirs[attempt % dirs.length];
+                const pos = bot.entity.position;
+                await goToPosition(bot, pos.x + dir.x, afterY, pos.z + dir.z, 2);
+            } catch (moveErr) {
+                console.log(`[RC30] Tier4 sideways move failed: ${moveErr.message}. Trying pillarUp...`);
+                try { await pillarUp(bot, 5); } catch (_pe) { /* ignore */ }
+                // Fall through and try dig from new position anyway
+            }
+        }
+    }
+    
+    if (!reachedDiamondLevel) {
+        const finalY = Math.floor(bot.entity.position.y);
+        if (finalY > targetY + 15) {
+            log(bot, `Could not reach diamond level after ${MAX_DIG_ATTEMPTS} attempts (y=${finalY}). Call !getDiamondPickaxe again.`);
             return false;
         }
+        log(bot, `Not at target but y=${finalY} is close enough. Trying anyway...`);
     }
 
     log(bot, 'Searching for diamond ore...');
-    let gotDiamonds = await collectBlock(bot, 'deepslate_diamond_ore', 3);
-    if (!gotDiamonds) gotDiamonds = await collectBlock(bot, 'diamond_ore', 3);
+    const diamondOres = ['deepslate_diamond_ore', 'diamond_ore'];
+    let gotDiamonds = false;
+    try { gotDiamonds = await collectBlock(bot, 'deepslate_diamond_ore', 3); } catch (_ce) { /* timeout safe */ }
     if (!gotDiamonds) {
-        log(bot, 'No diamond ore found near y=-11. Explore at this depth and try again with !getDiamondPickaxe.');
+        try { gotDiamonds = await collectBlock(bot, 'diamond_ore', 3); } catch (_ce) { /* timeout safe */ }
+    }
+    
+    if (!gotDiamonds) {
+        log(bot, 'No diamond ore found via pathfinding. Strip-mining at diamond level...');
+        try { gotDiamonds = await stripMineForOre(bot, diamondOres, 50); } catch (_se) { /* timeout safe */ }
+    }
+    
+    if (!gotDiamonds) {
+        // Try a second strip-mine in perpendicular direction
+        log(bot, 'First strip-mine found nothing. Trying perpendicular branch...');
+        try {
+            // Rotate bot ~90 degrees by nudging sideways
+            const p = bot.entity.position;
+            try { await goToPosition(bot, p.x + 3, p.y, p.z, 1); } catch (_) { /* ok */ }
+            gotDiamonds = await stripMineForOre(bot, diamondOres, 50);
+        } catch (_se2) { /* timeout safe */ }
+    }
+    
+    if (!gotDiamonds) {
+        log(bot, 'No diamond ore found after mining. Explore and try !getDiamondPickaxe again.');
         return false;
     }
 
+    await ensureSticksAndTable();
     if (!await craftRecipe(bot, 'diamond_pickaxe', 1)) {
         log(bot, 'Failed to craft diamond pickaxe. Need 3 diamonds + 2 sticks on a crafting table.');
         return false;
     }
 
-    await goToSurface(bot);
+    try { await pillarUp(bot, 30); } catch (_e) { /* best effort */ }
     log(bot, 'Diamond pickaxe obtained!');
     return true;
+  } catch (tier4Err) {
+    log(bot, `[RC30] Diamond tier error: ${tier4Err.message}. Will retry on next call.`);
+    console.error('[RC30] Tier 4 error:', tier4Err);
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
