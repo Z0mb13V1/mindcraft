@@ -122,6 +122,14 @@ export class History {
 
             await this.summarizeMemories(chunk);
             await this.appendFullHistory(chunk);
+
+            // Prevent context-collapse on small/local models: after summarising,
+            // keep at most 15 recent turns so the rolling window stays tight.
+            const MAX_TURNS_POST_SUMMARY = 15;
+            if (this.turns.length > MAX_TURNS_POST_SUMMARY) {
+                const overflow = this.turns.splice(0, this.turns.length - MAX_TURNS_POST_SUMMARY);
+                await this.appendFullHistory(overflow);
+            }
         }
     }
 

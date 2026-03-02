@@ -504,6 +504,13 @@ export class Agent {
                     if (exploreRes) {
                         this.history.add('system', exploreRes);
                     }
+                    // Inject a hard directive so small models don't loop back to !collectBlocks
+                    this.history.add('system',
+                        `[ANTI-LOOP] You have failed to collect ${blockType} repeatedly. ` +
+                        `Do NOT call !collectBlocks, !searchForBlock, or any gather command for ${blockType} again right now. ` +
+                        `If you need tools, call !getDiamondPickaxe — it handles all wood/stone/iron internally with automatic relocation. ` +
+                        `If you are mid-speedrun, call !beatMinecraft to resume the full chain.`
+                    );
                 }
             }
             else { // conversation response

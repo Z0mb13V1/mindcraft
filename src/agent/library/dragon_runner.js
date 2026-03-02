@@ -213,8 +213,23 @@ async function recoverFromDeath(bot, progress) {
     if (!hasPickaxe) {
         log(bot, 'Lost pickaxe! Full tool chain re-crafting...');
         // Step 1: Get wood (try multiple tree types)
+        // Ocean escape: if no log exists within 64 blocks, explore until we find land
+        const LOG_TYPES = ['oak_log', 'birch_log', 'spruce_log', 'dark_oak_log', 'acacia_log', 'jungle_log'];
+        const hasAnyLogInRange = () => world.getNearestBlocks(bot, LOG_TYPES, 64, 1).length > 0;
+        if (!hasAnyLogInRange()) {
+            log(bot, 'No trees within 64 blocks (ocean/void spawn?). Exploring up to 600 blocks to find land with trees...');
+            for (let attempt = 0; attempt < 3 && !hasAnyLogInRange(); attempt++) {
+                if (bot.interrupt_code) break;
+                await skills.explore(bot, 200);
+            }
+            if (!hasAnyLogInRange()) {
+                log(bot, 'Still no trees after 3 explore attempts. Running getDiamondPickaxe full chain as fallback.');
+                await skills.getDiamondPickaxe(bot);
+                return;
+            }
+        }
         let gotWood = false;
-        for (const logType of ['oak_log', 'birch_log', 'spruce_log', 'dark_oak_log', 'acacia_log', 'jungle_log']) {
+        for (const logType of LOG_TYPES) {
             if (bot.interrupt_code) return;
             if (hasItem(bot, logType, 1)) { gotWood = true; break; }
             try {
