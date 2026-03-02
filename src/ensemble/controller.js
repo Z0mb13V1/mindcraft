@@ -66,17 +66,21 @@ export class EnsembleModel {
         // Phase 3: retrieve similar past experiences to augment context
         let augmentedSystem = systemMessage;
         if (this.feedback.isReady) {
-            const situationText = turns.filter(t => t.role === 'user').slice(-2)
-                .map(t => t.content).join(' ');
-            const experiences = await this.feedback.getSimilar(situationText, 3);
-            if (experiences.length > 0) {
-                const memBlock = experiences.map(e => {
-                    const m = e.metadata;
-                    const outcome = m.outcome && m.outcome !== 'pending' ? ` (outcome: ${m.outcome})` : '';
-                    return `- Situation: "${e.document.slice(0, 120)}" → action: ${m.winner_command || 'chat'}${outcome}`;
-                }).join('\n');
-                augmentedSystem = systemMessage + `\n\n[PAST EXPERIENCE - similar situations]\n${memBlock}`;
-                console.log(`[Ensemble] Injected ${experiences.length} past experience(s) into context`);
+            try {
+                const situationText = turns.filter(t => t.role === 'user').slice(-2)
+                    .map(t => t.content).join(' ');
+                const experiences = await this.feedback.getSimilar(situationText, 3);
+                if (experiences.length > 0) {
+                    const memBlock = experiences.map(e => {
+                        const m = e.metadata;
+                        const outcome = m.outcome && m.outcome !== 'pending' ? ` (outcome: ${m.outcome})` : '';
+                        return `- Situation: "${e.document.slice(0, 120)}" → action: ${m.winner_command || 'chat'}${outcome}`;
+                    }).join('\n');
+                    augmentedSystem = systemMessage + `\n\n[PAST EXPERIENCE - similar situations]\n${memBlock}`;
+                    console.log(`[Ensemble] Injected ${experiences.length} past experience(s) into context`);
+                }
+            } catch (err) {
+                console.warn(`[Ensemble] Failed to retrieve past experiences: ${err.message}`);
             }
         }
 

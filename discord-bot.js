@@ -185,14 +185,14 @@ const messageLimiter = new RateLimiter(3, 60000);  // 3 messages per 60 seconds 
 async function callGemini(systemPrompt, userMessage, history = []) {
     if (!GOOGLE_API_KEY) return null;
     try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_API_KEY}`;
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
         const contents = [
             ...history,
             { role: 'user', parts: [{ text: userMessage }] }
         ];
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GOOGLE_API_KEY },
             body: JSON.stringify({
                 system_instruction: { parts: [{ text: systemPrompt }] },
                 contents,

@@ -1371,12 +1371,16 @@ export async function runDragonProgression(bot) {
     // ── Register death handler for this run ────────────────────────────
     let deathOccurred = false;
     const deathHandler = () => {
-        deathOccurred = true;
-        const pos = bot.entity?.position;
-        if (pos) {
-            progress.recordDeath(pos.x, pos.y, pos.z, getDimension(bot));
+        try {
+            deathOccurred = true;
+            const pos = bot.entity?.position;
+            if (pos && isFinite(pos.x) && isFinite(pos.y) && isFinite(pos.z)) {
+                progress.recordDeath(pos.x, pos.y, pos.z, getDimension(bot));
+            }
+            progress.save().catch(err => console.error('[DragonProgress] Save on death failed:', err));
+        } catch (err) {
+            console.error('[DragonProgress] Death handler error:', err.message);
         }
-        progress.save().catch(err => console.error('[DragonProgress] Save on death failed:', err));
     };
     bot.on('death', deathHandler);
 
