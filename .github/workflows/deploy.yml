@@ -1,0 +1,40 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/mindcraft-ec2.pem
+          chmod 600 ~/.ssh/mindcraft-ec2.pem
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy on EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/mindcraft-ec2.pem \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=30 \
+              "${EC2_USER}@${EC2_HOST}" \
+              'cd /app && git fetch origin main && git reset --hard origin/main && bash aws/ec2-go.sh'
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/mindcraft-ec2.pem
