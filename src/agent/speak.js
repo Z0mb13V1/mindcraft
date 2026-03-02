@@ -98,8 +98,10 @@ $s.Dispose()`;
             proc.stdin.write(txt, 'utf8');
             proc.stdin.end();
         } else if (isMac) {
-            // '--' signals end of options so leading '-' in LLM text is not a flag.
-            proc = spawn('say', ['--', txt], { stdio: 'ignore' });
+            // Guard against text starting with '-' which 'say' would treat as a flag.
+            // macOS 'say' does not support '--' as end-of-options, so prepend a space instead.
+            const safeTxt = txt.startsWith('-') ? ` ${txt}` : txt;
+            proc = spawn('say', [safeTxt], { stdio: 'ignore' });
         } else {
             // '--' signals end of options so leading '-' in LLM text is not a flag.
             proc = spawn('espeak', ['--', txt], { stdio: 'ignore' });
