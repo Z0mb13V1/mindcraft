@@ -41,6 +41,11 @@ const settings = {
     "code_timeout_mins": -1, // minutes code is allowed to run. -1 for no timeout
     "relevant_docs_count": -1, // number of relevant code function docs to select for prompting. -1 for all
 
+    // ── Fabric Modded Server Support (opt-in) ──
+    "modded_mode": false, // true = enable Fabric mod detection, modded commands, and mod-aware skills
+    "server_type": "paper", // "paper" (default) or "fabric" — controls docker-compose server type
+    "fabric_mods_dir": "./mods", // path to Fabric mods directory (only used when modded_mode is true)
+
     "max_messages": 100, // max number of messages to keep in context
     "num_examples": 2, // number of examples to give to the model
     "max_commands": 15, // max number of commands that can be used in consecutive responses. -1 for no limit

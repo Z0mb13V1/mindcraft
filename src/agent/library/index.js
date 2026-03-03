@@ -1,6 +1,8 @@
 import * as skills from './skills.js';
 import * as world from './world.js';
 import * as dragonRunner from './dragon_runner.js';
+import * as moddedSkills from './modded_skills.js';
+import settings from '../settings.js';
 
 
 export function docHelper(functions, module_name) {
@@ -21,5 +23,8 @@ export function getSkillDocs() {
     docArray = docArray.concat(docHelper(Object.values(skills), 'skills'));
     docArray = docArray.concat(docHelper(Object.values(world), 'world'));
     docArray = docArray.concat(docHelper(Object.values(dragonRunner), 'dragonRunner'));
+    if (settings.modded_mode) {
+        docArray = docArray.concat(docHelper(Object.values(moddedSkills), 'moddedSkills'));
+    }
     return docArray;
 }

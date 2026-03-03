@@ -1,0 +1,42 @@
+# Fabric Mod Pack — Docker Compose Override
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.fabric.yml up -d
+#
+# This override switches the Minecraft server from Paper to Fabric 1.21
+# and mounts the ./mods directory for Fabric mod JARs.
+#
+# Prerequisites:
+#   1. Place Fabric mod JARs in ./mods/
+#   2. Set modded_mode: true in settings.js (or via SETTINGS_JSON env var)
+#   3. Ensure mods are compatible with Minecraft 1.21 + Fabric Loader
+#
+# Recommended mods (performance):
+#   - Sodium (rendering optimization)
+#   - Lithium (game logic optimization)
+#   - Starlight (lighting engine rewrite)
+#   - FerriteCore (memory usage optimization)
+#
+# Optional mods (pathfinding):
+#   - Baritone for Fabric (advanced pathfinding — official Fabric port)
+
+services:
+
+  # Override: Switch Minecraft server from Paper to Fabric
+  minecraft:
+    environment:
+      TYPE: "FABRIC"
+      VERSION: "1.21"
+      FABRIC_LOADER_VERSION: "LATEST"
+      MEMORY: "4G"
+      # Disable Paper-specific plugins (not compatible with Fabric)
+      MODRINTH_PROJECTS: ""
+      # Enable Fabric mod loading
+      USE_AIKAR_FLAGS: "true"
+    volumes:
+      - ./minecraft-data:/data
+      - ./mods:/data/mods:ro                                # Mount Fabric mod JARs (read-only)
+      - ./whitelist.json:/data/whitelist.json:ro
+    # Fabric + mods need more startup time
+    healthcheck:
+      start_period: 150s

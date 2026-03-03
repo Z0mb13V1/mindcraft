@@ -46,6 +46,9 @@ secrets.json
 # Minecraft server data
 minecraft-data/
 
+# Fabric mod JARs (keep mods/ dir via mods/README.md, ignore actual JARs)
+mods/*.jar
+
 # Binary assets (hosted on GitHub Releases)
 tasks/construction_tasks/*.pdf
 

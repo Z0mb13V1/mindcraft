@@ -1,4 +1,5 @@
 import * as skills from '../library/skills.js';
+import * as moddedSkills from '../library/modded_skills.js';
 import * as dragonRunner from '../library/dragon_runner.js';
 import settings from '../settings.js';
 import convoManager from '../conversation.js';
@@ -643,3 +644,61 @@ export const actionsList = [
         }, false, 180) // 3 hour timeout
     },
 ];
+
+// ═══════════════════════════════════════════════════════════════════════
+// MODDED COMMANDS (only registered when settings.modded_mode is true)
+// ═══════════════════════════════════════════════════════════════════════
+if (settings.modded_mode) {
+    actionsList.push(
+        {
+            name: '!mineModdedOre',
+            description: 'Mine modded ores from Fabric mods (e.g., Create zinc, AE2 certus quartz). Requires modded_mode.',
+            params: {
+                'oreType': { type: 'string', description: 'Modded ore ID (e.g., "create:zinc_ore") or "any" for closest modded ore.', domain: [] },
+                'count': { type: 'int', description: 'Number of ores to mine.', domain: [1, 64] }
+            },
+            perform: runAsAction(async (agent, oreType, count) => {
+                await moddedSkills.mineModdedOre(agent.bot, oreType, count);
+            }, false, 10)
+        },
+        {
+            name: '!useModdedMachine',
+            description: 'Navigate to and interact with a modded machine block (e.g., Create mechanical press, AE2 inscriber).',
+            params: {
+                'machineId': { type: 'string', description: 'Full machine block ID (e.g., "create:mechanical_press").', domain: [] }
+            },
+            perform: runAsAction(async (agent, machineId) => {
+                await moddedSkills.useModdedMachine(agent.bot, machineId);
+            }, false, 5)
+        },
+        {
+            name: '!processModdedItem',
+            description: 'Process items using modded machines (millstone, grinder). Falls back to vanilla furnace.',
+            params: {
+                'inputItem': { type: 'string', description: 'Item to process (e.g., "create:zinc_ore").', domain: [] },
+                'count': { type: 'int', description: 'Number of items to process.', domain: [1, 64] }
+            },
+            perform: runAsAction(async (agent, inputItem, count) => {
+                await moddedSkills.processModdedItem(agent.bot, inputItem, count);
+            }, false, 10)
+        },
+        {
+            name: '!scanModdedBlocks',
+            description: 'Scan nearby area for modded blocks (ores, machines) and report findings.',
+            params: {
+                'range': { type: 'int', description: 'Search radius in blocks.', domain: [8, 128] }
+            },
+            perform: runAsAction(async (agent, range) => {
+                await moddedSkills.scanModdedBlocks(agent.bot, range);
+            }, false, 5)
+        },
+        {
+            name: '!listMods',
+            description: 'List all detected Fabric mods on the current server.',
+            perform: runAsAction(async (agent) => {
+                await moddedSkills.listInstalledMods(agent.bot);
+            })
+        },
+    );
+    console.log('[Modded] Registered modded commands: !mineModdedOre, !useModdedMachine, !processModdedItem, !scanModdedBlocks, !listMods');
+}

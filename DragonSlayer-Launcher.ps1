@@ -52,6 +52,11 @@ $PAPER_DIR        = ""                                      # Server working dir
 $PAPER_PORT       = 25565                                   # Server port
 $PAPER_RAM        = "4G"                                    # Max heap (-Xmx)
 
+# ── Fabric Modded Mode (optional — $false = vanilla Paper, $true = Fabric 1.21) ──
+$MODDED_MODE      = $false                                  # Enable Fabric mod support
+$FABRIC_MODS_DIR  = Join-Path $SCRIPT_DIR "mods"            # Directory containing Fabric mod JARs
+$FABRIC_COMPOSE   = "docker-compose.fabric.yml"             # Compose override for Fabric server
+
 # ── Auto-!beatMinecraft ──
 $AUTO_BEAT_MC     = $false                                  # $true = send without prompting
 $BEAT_MC_DELAY    = 15                                      # Seconds to wait after bot start
@@ -258,6 +263,23 @@ function Test-Prerequisites {
         Write-Ok "Profile: $PROFILE_PATH"
     }
 
+    # ── Modded mode check ──
+    if ($MODDED_MODE) {
+        Write-Ok "Modded Mode: ENABLED (Fabric 1.21)"
+        $modsDir = $FABRIC_MODS_DIR
+        if (Test-Path $modsDir) {
+            $modJars = @(Get-ChildItem -Path $modsDir -Filter "*.jar" -ErrorAction SilentlyContinue)
+            Write-Ok "Mods directory: $modsDir ($($modJars.Count) JARs)"
+            foreach ($jar in $modJars) {
+                Write-Info "  - $($jar.Name)"
+            }
+        } else {
+            Write-Warn "Mods directory not found: $modsDir (will be created at launch)"
+        }
+    } else {
+        Write-Ok "Modded Mode: DISABLED (vanilla Paper)"
+    }
+
     if ($pass) {
         Write-Host ""
         Write-Ok "All pre-flight checks passed!"
@@ -451,6 +473,26 @@ function Start-LocalPaperServer {
 # ═══════════════════════════════════════════════════════════════════════════════
 function Start-MindcraftBot {
     Write-Section "DragonSlayer Bot"
+
+    # ── Modded mode: inject SETTINGS_JSON override for modded_mode ──
+    if ($MODDED_MODE) {
+        Write-Step "[MODDED] Fabric modded mode enabled"
+        $modsDir = $FABRIC_MODS_DIR
+        if (-not (Test-Path $modsDir)) {
+            Write-Warn "Mods directory not found: $modsDir — creating it..."
+            New-Item -ItemType Directory -Path $modsDir -Force | Out-Null
+        }
+        $modCount = @(Get-ChildItem -Path $modsDir -Filter "*.jar" -ErrorAction SilentlyContinue).Count
+        if ($modCount -eq 0) {
+            Write-Warn "No .jar files found in $modsDir — bot will run with modded commands but no mods detected"
+        } else {
+            Write-Ok "$modCount Fabric mod JARs found in $modsDir"
+        }
+        # Set environment variable so settings.js picks up modded_mode via SETTINGS_JSON
+        $env:SETTINGS_JSON = "{`"modded_mode`": true, `"server_type`": `"fabric`", `"fabric_mods_dir`": `"$($modsDir -replace '\\','/')`"}"
+        Write-Ok "SETTINGS_JSON injected for modded mode"
+    }
+
     Write-Step "Launching: node main.js --profiles $PROFILE_PATH"
 
     Push-Location $MINDCRAFT_DIR
