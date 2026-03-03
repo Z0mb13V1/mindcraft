@@ -48,6 +48,7 @@ minecraft-data/
 
 # Binary assets (hosted on GitHub Releases)
 tasks/construction_tasks/*.pdf
+docs/notebook-llm/*.pdf
 
 # AWS runtime config
 aws/config.env

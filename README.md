@@ -150,6 +150,7 @@ See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft/wiki/Security
 
 | Doc | Description |
 | --- | ----------- |
+| [docs/](docs/index.md) | **Reference docs index** — Notebook LLM exports, mod pack research, architecture notes |
 | [CLAUDE.md](CLAUDE.md) | Architecture overview, commands, configuration notes |
 | [LAUNCHER_README.md](LAUNCHER_README.md) | DragonSlayer one-click launcher — config, PS2EXE, PR workflow, troubleshooting |
 | [Wiki](https://github.com/Z0mb13V1/mindcraft/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, deployment |

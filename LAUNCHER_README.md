@@ -227,6 +227,8 @@ mindcraft-0.1.3/
 ├── DragonSlayer-Launcher.ps1     ← The engine (PowerShell, v4.0)
 ├── DragonSlayer.exe              ← (after PS2EXE conversion)
 ├── LAUNCHER_README.md            ← This file
+├── docs/                         ← Research docs, Notebook LLM exports, mod pack notes
+│   └── index.md                  ← Docs table of contents
 ├── main.js
 ├── settings.js
 ├── profiles/
