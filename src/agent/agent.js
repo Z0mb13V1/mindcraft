@@ -17,6 +17,7 @@ import settings from './settings.js';
 import { Task } from './tasks/tasks.js';
 import { speak } from './speak.js';
 import { log, validateNameFormat, handleDisconnection } from './connection_handler.js';
+import { validateMinecraftMessage, validateUsername } from '../utils/message_validator.js';
 
 export class Agent {
     async start(load_mem=false, init_message=null, count_id=0) {
@@ -157,19 +158,34 @@ export class Agent {
         const respondFunc = async (username, message) => {
             if (message === "") return;
             if (username === this.name) return;
+
+            // Validate username and message before processing
+            const userValidation = validateUsername(username);
+            if (!userValidation.valid) {
+                console.warn(`[MessageValidator] Rejected message from invalid username: "${username}" (${userValidation.error})`);
+                return;
+            }
+
+            const msgValidation = validateMinecraftMessage(message);
+            if (!msgValidation.valid) {
+                console.warn(`[MessageValidator] Rejected message: ${msgValidation.error}`);
+                return;
+            }
+            const cleanMessage = msgValidation.sanitized;
+
             if (settings.only_chat_with.length > 0 && !settings.only_chat_with.includes(username)) return;
             try {
-                if (ignore_messages.some((m) => message.startsWith(m))) return;
+                if (ignore_messages.some((m) => cleanMessage.startsWith(m))) return;
 
                 this.shut_up = false;
 
-                console.log(this.name, 'received message from', username, ':', message);
+                console.log(this.name, 'received message from', username, ':', cleanMessage);
 
                 if (convoManager.isOtherAgent(username)) {
                     console.warn('received whisper from other bot??')
                 }
                 else {
-                    let translation = await handleEnglishTranslation(message);
+                    let translation = await handleEnglishTranslation(cleanMessage);
                     this.handleMessage(username, translation);
                 }
             } catch (error) {
