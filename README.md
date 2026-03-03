@@ -78,9 +78,33 @@ cd /app && bash aws/ec2-go.sh --secrets # Refresh API keys from SSM only
 **Local bot (DragonSlayer on Windows):**
 
 ```powershell
-# Kill any stale node process on port 8080, then launch
-node main.js   # settings.js host/port must point to your EC2 server
+# Option A: One-click launcher (recommended)
+.\DragonSlayer.bat              # Double-click or run from terminal
+
+# Option B: Direct PowerShell
+.\DragonSlayer-Launcher.ps1     # Or: powershell -ExecutionPolicy Bypass -File .\DragonSlayer-Launcher.ps1
+
+# Option C: Manual
+node main.js --profiles ./profiles/dragon-slayer.json   # settings.js host/port must point to your EC2 server
 ```
+
+### DragonSlayer Launcher (v4.0)
+
+A self-contained one-click launcher for the local DragonSlayer bot. Double-click `DragonSlayer.bat` and it handles everything:
+
+| Feature | Description |
+|---------|-------------|
+| **Pre-flight checks** | Validates Node 20, npm, Ollama, NVIDIA GPU, CUDA, profile, `.env` |
+| **Ollama management** | Starts daemon if needed, pulls all 3 models (`andy-4 q8_0`, `nomic-embed-text`, `llava`) |
+| **Optional Paper server** | Local Minecraft server with EULA prompt |
+| **Live colorized logs** | 7-tier keyword-matched coloring with timestamps |
+| **MindServer HUD** | Auto-opens browser to `http://localhost:8080` |
+| **!beatMinecraft** | Sends the dragon run command via Socket.IO (prompt or auto) |
+| **Crash detection** | Event loop with graceful shutdown + session duration |
+| **GitHub PR workflow** | Commit → push to fork → create/update PR to upstream (with feature branch support) |
+| **PS2EXE support** | Convert to `.exe` for taskbar pinning |
+
+See [LAUNCHER_README.md](LAUNCHER_README.md) for full configuration, PS2EXE instructions, and troubleshooting.
 
 **From Mac (remote deploy):**
 
@@ -127,7 +151,8 @@ See the [Security wiki page](https://github.com/Z0mb13V1/mindcraft/wiki/Security
 | Doc | Description |
 | --- | ----------- |
 | [CLAUDE.md](CLAUDE.md) | Architecture overview, commands, configuration notes |
-| [Wiki](https://github.com/Z0mb13V1/mindcraft/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, troubleshooting |
+| [LAUNCHER_README.md](LAUNCHER_README.md) | DragonSlayer one-click launcher — config, PS2EXE, PR workflow, troubleshooting |
+| [Wiki](https://github.com/Z0mb13V1/mindcraft/wiki) | Full documentation — architecture, bot commands, ensemble pipeline, deployment |
 
 ---
 
