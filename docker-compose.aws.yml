@@ -7,10 +7,10 @@ services:
     image: itzg/minecraft-server
     container_name: minecraft-server
     # ⚠️  SECURITY: ONLINE_MODE=FALSE (required for mineflayer) disables Mojang auth.
-    #    Anyone who knows the EC2 IP can join. Restrict port 19565 at the AWS
+    #    Anyone who knows the EC2 IP can join. Restrict the external port at the AWS
     #    Security Group level to trusted IPs only (your own IPs / player IPs).
     ports:
-      - "19565:25565"         # Java Edition (non-default external port for security)
+      - "${MINECRAFT_PORT:-42069}:25565"  # Java Edition (override via MINECRAFT_PORT in .env)
       - "19132:19132/udp"     # Bedrock Edition (Geyser)
     environment:
       EULA: "TRUE"

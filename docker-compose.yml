@@ -21,7 +21,7 @@ services:
     image: itzg/minecraft-server
     container_name: minecraft-server
     ports:
-      - "19565:25565"         # Java Edition (non-default external port for security)
+      - "${MINECRAFT_PORT:-42069}:25565"  # Java Edition (override via MINECRAFT_PORT in .env)
       - "19132:19132/udp"     # Bedrock Edition (Geyser)
     environment:
       EULA: "TRUE"

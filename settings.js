@@ -1,7 +1,7 @@
 const settings = {
     "minecraft_version": "auto", // or specific version like "1.21.6"
     "host": "localhost", // Set via MINECRAFT_HOST env var or SETTINGS_JSON override; for EC2 use your instance's public IP
-    "port": 25565, // set to -1 to automatically scan for open ports
+    "port": 42069, // set to -1 to automatically scan for open ports
     "auth": "offline", // or "microsoft"
 
     // the mindserver manages all agents and hosts the UI

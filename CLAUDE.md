@@ -52,7 +52,7 @@ bash aws/ec2-go.sh --secrets # Refresh API keys from AWS SSM only
 - **`coder.js`** — JavaScript code execution in an SES sandbox
 - **`modes.js`** — Behavioral modes: survival, cowardice, hunting, etc.
 - **`history.js`** / **`memory_bank.js`** / **`learnings.js`** — Persistent memory across sessions
-- **`library/skills.js`** — All in-game action implementations (~89k LOC)
+- **`library/skills.js`** — All in-game action implementations (~3.6k LOC)
 - **`library/world.js`** — World navigation and block/entity queries
 
 ### Ensemble Decision Pipeline (`src/ensemble/`)
@@ -67,7 +67,7 @@ Every ensemble decision is written to `bots/{BotName}/ensemble_log.json`.
 ### Model Abstraction (`src/models/`)
 - **`_model_map.js`** — Dynamically discovers all provider modules
 - **`prompter.js`** — Unified prompt builder: injects `$MEMORY`, `$INVENTORY`, `$STATS`, `$EXAMPLES` into system prompt
-- **`{provider}.js`** — 23 provider implementations (gpt, gemini, grok, claude, ollama, etc.)
+- **`{provider}.js`** — 19 provider implementations (gpt, gemini, grok, claude, ollama, etc.)
 
 Model routing: a string like `"gemini-2.5-pro"` is auto-matched to its provider; `"openrouter/google/gemini-2.5-pro"` uses explicit routing; profile can also pass an object `{ api, model, url, params }`.
 
@@ -92,7 +92,7 @@ Model routing: a string like `"gemini-2.5-pro"` is auto-matched to its provider;
 
 - **Node.js**: v18+ required; v20 LTS recommended; v24+ may cause issues
 - **Minecraft version**: Set `minecraft_version` in `settings.js` (default `"auto"` for up to v1.21.6)
-- **EC2 server**: set `host` in `settings.js` to your EC2 public IP; `port: 19565` (non-default external port, internal 25565)
+- **EC2 server**: set `host` in `settings.js` to your EC2 public IP; `port: 42069` (non-default external port, internal 25565)
 - **Docker host**: `"host": "minecraft-server"` is the Docker service name; change to `"localhost"` for non-Docker runs
 - **Vision**: Requires `LIBGL_ALWAYS_SOFTWARE=1` and Xvfb (only works in Docker); prismarine-viewer canvas bindings broken on Windows
 - **Active local profile**: `profiles/dragon-slayer.json` — DragonSlayer bot with `sweaterdog/andy-4:q8_0` via Ollama
@@ -105,7 +105,7 @@ Model routing: a string like `"gemini-2.5-pro"` is auto-matched to its provider;
 |------|-------------|-------|
 | Local dev | `docker-compose.yml` | Ollama on host via `host.docker.internal:11434` |
 | EC2 production | `docker-compose.aws.yml` | Includes LiteLLM proxy (:4000), ChromaDB, Tailscale sidecar |
-| Local bot → EC2 server | `settings.js` | set `host` to EC2 public IP, `port: 19565`; bot on Windows, server on EC2 |
+| Local bot → EC2 server | `settings.js` | set `host` to EC2 public IP, `port: <your-external-port>`; bot on Windows, server on EC2 |
 | EC2 production | `docker-compose.aws.yml` | Includes LiteLLM proxy (:4000), ChromaDB, Tailscale sidecar |
 
 AWS secrets managed via SSM Parameter Store; `aws/ec2-go.sh --secrets` pulls and writes them.

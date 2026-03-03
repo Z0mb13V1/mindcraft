@@ -52,3 +52,8 @@ tasks/construction_tasks/*.pdf
 # AWS runtime config
 aws/config.env
 docker-compose.override.yml
+
+# Local launcher (contains machine-specific paths)
+DragonSlayer-Launcher.ps1
+DragonSlayer.bat
+LAUNCHER_README.md

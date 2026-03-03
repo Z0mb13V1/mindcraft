@@ -13,6 +13,7 @@ INSTANCE_TYPE="t3.large"
 AMI_NAME_FILTER="ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
 KEY_NAME="mindcraft-ec2"
 KEY_FILE="$(dirname "$0")/mindcraft-ec2.pem"
+MINECRAFT_PORT="${MINECRAFT_PORT:-42069}"
 CONFIG_FILE="$(dirname "$0")/config.env"
 APP_DIR="/app"
 STACK_NAME="mindcraft"
@@ -55,7 +56,7 @@ info "Caller ARN:  ${CALLER_ARN}"
 info "Region:      ${REGION}"
 info "S3 bucket:   ${BUCKET_NAME}"
 
-# ── Tyler's IP for SSH/admin access ──────────────────────────────────────────
+# ── Admin IP for SSH/admin access ────────────────────────────────────────────
 DETECTED_IP=$(curl -s https://checkip.amazonaws.com 2>/dev/null || curl -s https://api.ipify.org 2>/dev/null || echo "")
 
 if [[ -n "$DETECTED_IP" ]]; then
@@ -161,20 +162,27 @@ SG_ID=$(aws ec2 create-security-group \
   --vpc-id "$VPC_ID" \
   --query 'GroupId' --output text)
 
-# Minecraft — open to world (players connect)
+# Minecraft — restrict to trusted IPs (set MINECRAFT_CIDR to allow wider access)
+MINECRAFT_CIDR="${MINECRAFT_CIDR:-${ADMIN_CIDR}}"
 aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$SG_ID" \
-  --ip-permissions "IpProtocol=tcp,FromPort=19565,ToPort=19565,IpRanges=[{CidrIp=0.0.0.0/0,Description='Minecraft'}]" >/dev/null
+  --ip-permissions "IpProtocol=tcp,FromPort=${MINECRAFT_PORT},ToPort=${MINECRAFT_PORT},IpRanges=[{CidrIp=${MINECRAFT_CIDR},Description='Minecraft'}]" >/dev/null
 
-# Admin ports — Tyler's IP only
+# Admin ports — restricted to admin IP only
 for PORT_DESC in "22:SSH" "3004:Grafana" "8080:MindServerUI" "9090:Prometheus"; do
   PORT="${PORT_DESC%%:*}"; DESC="${PORT_DESC##*:}"
   aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$SG_ID" \
-    --ip-permissions "IpProtocol=tcp,FromPort=${PORT},ToPort=${PORT},IpRanges=[{CidrIp=${ADMIN_CIDR},Description='${DESC} - Tyler only'}]" >/dev/null
+    --ip-permissions "IpProtocol=tcp,FromPort=${PORT},ToPort=${PORT},IpRanges=[{CidrIp=${ADMIN_CIDR},Description='${DESC} - admin only'}]" >/dev/null
 done
 
-# All outbound (for LLM API calls)
+# Outbound — HTTPS only (LLM APIs, Docker Hub, GitHub, SSM, S3)
 aws ec2 authorize-security-group-egress --region "$REGION" --group-id "$SG_ID" \
-  --ip-permissions "IpProtocol=-1,IpRanges=[{CidrIp=0.0.0.0/0}]" 2>/dev/null || true
+  --ip-permissions "IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=0.0.0.0/0,Description='HTTPS outbound (LLM APIs, Docker, S3)'}]" 2>/dev/null || true
+
+# Outbound — DNS (required for container name resolution)
+aws ec2 authorize-security-group-egress --region "$REGION" --group-id "$SG_ID" \
+  --ip-permissions "IpProtocol=udp,FromPort=53,ToPort=53,IpRanges=[{CidrIp=0.0.0.0/0,Description='DNS resolution'}]" 2>/dev/null || true
+aws ec2 authorize-security-group-egress --region "$REGION" --group-id "$SG_ID" \
+  --ip-permissions "IpProtocol=tcp,FromPort=53,ToPort=53,IpRanges=[{CidrIp=0.0.0.0/0,Description='DNS resolution (TCP)'}]" 2>/dev/null || true
 
 aws ec2 create-tags --region "$REGION" --resources "$SG_ID" \
   --tags "Key=Name,Value=${STACK_NAME}-sg"
@@ -289,7 +297,7 @@ info "Waiting for IAM role propagation (10s)..."
 sleep 10
 
 # =============================================================================
-# 5. S3 Bucket Policy (EC2 role + Tyler IAM only)
+# 5. S3 Bucket Policy (EC2 role + admin IAM only)
 # =============================================================================
 info "Applying S3 bucket policy..."
 aws s3api put-bucket-policy --bucket "$BUCKET_NAME" \
@@ -318,7 +326,7 @@ aws s3api put-bucket-policy --bucket "$BUCKET_NAME" \
         ]
       },
       {
-        \"Sid\": \"AllowTylerIAM\",
+        \"Sid\": \"AllowAdminIAM\",
         \"Effect\": \"Allow\",
         \"Principal\": {\"AWS\": \"${CALLER_ARN}\"},
         \"Action\": \"s3:*\",
@@ -458,7 +466,7 @@ echo "  1. Wait ~3 min for EC2 to finish booting (Docker install)"
 echo "  2. Run:  bash aws/deploy.sh"
 echo "  3. Test: ssh -i ${KEY_FILE} ubuntu@${EC2_IP}"
 echo ""
-echo "  Minecraft:  ${EC2_IP}:19565"
+echo "  Minecraft:  ${EC2_IP}:${MINECRAFT_PORT}"
 echo "  Grafana:    http://${EC2_IP}:3004"
 echo "  MindServer: http://${EC2_IP}:8080"
 echo ""

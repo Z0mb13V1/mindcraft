@@ -198,7 +198,7 @@ echo ""
 EC2_IP=$(curl -s -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
     "http://169.254.169.254/latest/meta-data/public-ipv4" 2>/dev/null \
     || echo "<ec2-ip>")
-echo "  Minecraft:  ${EC2_IP}:19565"
+echo "  Minecraft:  ${EC2_IP}:${MINECRAFT_PORT:-42069}"
 echo "  Grafana:    http://${EC2_IP}:3004"
 echo "  MindServer: http://${EC2_IP}:8080"
 echo ""

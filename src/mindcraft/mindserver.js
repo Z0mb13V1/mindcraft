@@ -65,7 +65,31 @@ export function logoutAgent(agentName) {
 export function createMindServer(host_public = false, port = 8080) {
     const app = express();
     server = http.createServer(app);
-    io = new Server(server);
+
+    // Determine allowed origins for CORS / Socket.IO
+    const allowedOrigins = host_public
+        ? undefined // allow any when explicitly public (Docker/EC2)
+        : [`http://localhost:${port}`, `http://127.0.0.1:${port}`];
+
+    io = new Server(server, {
+        cors: {
+            origin: allowedOrigins,
+            methods: ['GET', 'POST'],
+        },
+    });
+
+    // Security headers
+    app.use((_req, res, next) => {
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('X-XSS-Protection', '1; mode=block');
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        res.setHeader(
+            'Content-Security-Policy',
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:; font-src 'self';"
+        );
+        next();
+    });
 
     // Serve static files
     const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -54,12 +54,12 @@ This fork (`mindcraft-0.1.3`) extends the base Mindcraft framework with a **Hybr
 
 | Component | Location | Notes |
 | --------- | -------- | ----- |
-| Minecraft server | AWS EC2 (us-east-1) | Paper 1.21.11, external port **19565**, `ONLINE_MODE=FALSE` |
+| Minecraft server | AWS EC2 (us-east-1) | Paper 1.21.11, non-default external port, `ONLINE_MODE=FALSE` |
 | CloudGrok (ensemble bot) | AWS EC2 (us-east-1) | Cloud APIs (Gemini + xAI) |
 | DragonSlayer (local bot) | Local Windows PC (RTX 3090) | Connects to EC2 server; Ollama inference on-device |
 | LocalAndy (Ollama bot) | Local Windows PC (RTX 3090) | Available via Tailscale VPN; dormant while DragonSlayer active |
 | ChromaDB vector store | AWS EC2 (us-east-1) | Ensemble memory backend |
-| Discord bot | AWS EC2 (us-east-1) | MindcraftBot#9501 |
+| Discord bot | AWS EC2 (us-east-1) | Discord integration |
 | Ollama (inference) | Local Windows PC (RTX 3090) | `sweaterdog/andy-4:q8_0`, `nomic-embed-text`, `llava` |
 | S3 backup | Daily 3 AM UTC | 7-day retention |
 
@@ -109,7 +109,7 @@ bash aws/ec2-go.sh                      # SSH into EC2 + deploy (needs .pem)
 This fork includes several security hardening measures:
 
 - **Whitelist enforcement** — `ENFORCE_WHITELIST=TRUE` on the Minecraft server. `whitelist.json` is pre-generated with correct offline-mode UUIDs (`OfflinePlayer:<name>` MD5 algorithm) and mounted directly into the container. The `WHITELIST` env var is intentionally omitted — it queries Playerdb (Mojang API) which fails for offline-mode bot names, causing a crash-loop before Minecraft starts.
-- **Port obscurity** — External Minecraft port changed from default `25565` to `19565` to reduce automated scanner noise. AWS Security Group restricts access to trusted IPs only.
+- **Port obscurity** — External Minecraft port changed from default `25565` to a non-standard port to reduce automated scanner noise. AWS Security Group restricts access to trusted IPs only.
 - **Environment variable keys** — API keys loaded from `.env` / env vars (priority over `keys.json`).
 - **AWS SSM Parameter Store** — secrets stored encrypted at `/mindcraft/*`, pulled at deploy time via `ec2-go.sh --secrets`
 - **Recursive prototype pollution protection** — `SETTINGS_JSON` sanitized at all nesting depths

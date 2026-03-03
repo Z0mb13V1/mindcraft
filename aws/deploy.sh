@@ -203,7 +203,7 @@ echo -e "${GREEN}============================================================${N
 echo -e "${GREEN}  Deploy complete!${NC}"
 echo -e "${GREEN}============================================================${NC}"
 echo ""
-echo "  Minecraft:  ${EC2_IP}:19565"
+echo "  Minecraft:  ${EC2_IP}:${MINECRAFT_PORT:-42069}"
 echo "  Grafana:    http://${EC2_IP}:3004  (admin / admin — change on first login)"
 echo "  MindServer: http://${EC2_IP}:8080"
 echo ""

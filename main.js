@@ -56,7 +56,7 @@ if (args.task_path) {
 
 // these environment variables override certain settings
 if (process.env.MINECRAFT_PORT) {
-    settings.port = parseInt(process.env.MINECRAFT_PORT, 10) || 19565;
+    settings.port = parseInt(process.env.MINECRAFT_PORT, 10) || 42069;
 }
 if (process.env.MINDSERVER_PORT) {
     settings.mindserver_port = parseInt(process.env.MINDSERVER_PORT, 10) || 8080;

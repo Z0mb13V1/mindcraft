@@ -236,7 +236,7 @@ if $IS_EC2; then
         EC2_IP=$(curl -sf -m 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "this-host")
     fi
 fi
-echo "  Minecraft:  ${EC2_IP:-localhost}:19565"
+echo "  Minecraft:  ${EC2_IP:-localhost}:${MINECRAFT_PORT:-42069}"
 echo "  MindServer: http://${EC2_IP:-localhost}:8080"
 echo "  Grafana:    http://${EC2_IP:-localhost}:3004"
 echo ""

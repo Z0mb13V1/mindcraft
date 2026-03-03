@@ -97,7 +97,7 @@ show_status() {
     info "AWS EC2: ${state} (${INSTANCE_ID})"
     if [[ "$state" == "running" ]]; then
         echo "  IP: ${EC2_IP}"
-        echo "  Minecraft: ${EC2_IP}:19565"
+        echo "  Minecraft: ${EC2_IP}:${MINECRAFT_PORT:-42069}"
         echo "  Grafana:   http://${EC2_IP}:3004"
         echo "  MindServer: http://${EC2_IP}:8080"
     fi
