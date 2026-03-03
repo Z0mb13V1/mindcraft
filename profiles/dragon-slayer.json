@@ -2,7 +2,7 @@
     "_comment": "Dragon Slayer profile — optimized for autonomous fresh-world-to-Ender-Dragon runs (RC29 persistent). Works with any model. Use: node main.js --profiles ./profiles/dragon-slayer.json",
 
     "name": "DragonSlayer",
-    "model": "ollama/sweaterdog/andy-4:q8_0",
+    "model": "ollama/llama3.2:3b",
     "embedding": "ollama/nomic-embed-text",
     "vision_model": "ollama/llava",
     "cooldown": 3000,
