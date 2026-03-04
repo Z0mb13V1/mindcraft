@@ -93,7 +93,7 @@ node main.js --profiles ./profiles/dragon-slayer.json   # settings.js host/port 
 A self-contained one-click launcher for the local DragonSlayer bot. Double-click `DragonSlayer.bat` and it handles everything:
 
 | Feature | Description |
-|---------|-------------|
+| ------- | ----------- |
 | **Pre-flight checks** | Validates Node 20, npm, Ollama, NVIDIA GPU, CUDA, profile, `.env` |
 | **Ollama management** | Starts daemon if needed, pulls all 3 models (`andy-4 q8_0`, `nomic-embed-text`, `llava`) |
 | **Optional Paper server** | Local Minecraft server with EULA prompt |

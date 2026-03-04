@@ -5,7 +5,7 @@ One double-click to launch the entire DragonSlayer autonomous Ender Dragon speed
 ## What It Does (Automatically)
 
 | Step | Action |
-|------|--------|
+| ------ | -------- |
 | 0 | Pre-flight: validates Node 20, npm, Ollama, NVIDIA GPU, CUDA, profile, `.env` |
 | 1 | Starts Ollama server if not already running (with health-poll progress bar) |
 | 2 | Pulls `sweaterdog/andy-4:q8_0` + `nomic-embed-text` + `llava` if missing |
@@ -32,6 +32,7 @@ cd "C:\Users\Name\Mindcraft\mindcraft-0.1.3"
 ```
 
 If you get an execution policy error:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\DragonSlayer-Launcher.ps1
 ```
@@ -63,6 +64,7 @@ Invoke-PS2EXE -InputFile  .\DragonSlayer-Launcher.ps1 `
 ```
 
 The resulting `DragonSlayer.exe`:
+
 - **No external dependencies** — PowerShell is built into Windows 10/11
 - **No admin rights** required
 - Double-click from anywhere, pin to Start Menu or Taskbar
@@ -70,6 +72,7 @@ The resulting `DragonSlayer.exe`:
 
 > **Tray icon / minimize-to-tray**: PS2EXE does not support tray icons natively.
 > Options for tray-icon support:
+>
 > - [AutoHotkey](https://www.autohotkey.com/) — wrap the .exe in an AHK script with `Menu, Tray` commands
 > - WPF wrapper — create a lightweight C# WPF app that hosts the launcher process
 > - [Winsw](https://github.com/winsw/winsw) — run as a Windows Service (headless, no tray icon needed)
@@ -77,14 +80,14 @@ The resulting `DragonSlayer.exe`:
 ## Prerequisites
 
 | Requirement | Version | Link |
-|------------|---------|------|
+| ------------ | ------- | ------ |
 | Windows | 10 or 11 | — |
-| Node.js | v18+ (v20 LTS recommended; v24+ may cause issues) | https://nodejs.org/ |
-| Ollama | Latest (with CUDA support) | https://ollama.com/download/windows |
-| NVIDIA Driver | Latest Game Ready | https://www.nvidia.com/drivers |
+| Node.js | v18+ (v20 LTS recommended; v24+ may cause issues) | <https://nodejs.org/> |
+| Ollama | Latest (with CUDA support) | <https://ollama.com/download/windows> |
+| NVIDIA Driver | Latest Game Ready | <https://www.nvidia.com/drivers> |
 | RTX 3090 | With working CUDA | — |
 | Minecraft Server | Running on target host:port | Your EC2 or local server |
-| GitHub CLI (`gh`) | Latest (for PR workflow) | https://cli.github.com/ |
+| GitHub CLI (`gh`) | Latest (for PR workflow) | <https://cli.github.com/> |
 
 ## Configuration
 
@@ -130,10 +133,12 @@ The command is delivered via a temp `.mjs` file using the project's `socket.io-c
 After shutdown (only if the bot was actually launched), the launcher offers to commit your changes and create a Pull Request to upstream. Powered by the [`gh` CLI](https://cli.github.com/).
 
 **Prerequisites:**
+
 - `gh` CLI installed and authenticated (`gh auth login`)
 - Git remotes configured: `fork` → your public fork, `upstream` → `mindcraft-bots/mindcraft`
 
 **What it does (step by step):**
+
 1. Checks `gh auth status` and `git status`
 2. **Derives your GitHub username** from the `fork` remote URL (no hardcoded usernames)
 3. Shows changed files with color-coded status
@@ -157,6 +162,7 @@ $PR_PROTECTED      = @('main', 'master', 'develop')  # Branches safe from --dele
 **To disable:** Set `$ENABLE_PR_WORKFLOW = $false` in the config block.
 
 **v4.0 improvements over v3.1:**
+
 - Fork owner derived dynamically from git remote (no hardcoded GitHub username)
 - Feature branch creation when working on main/master/develop
 - Staging confirmation before `git add -A` (prevents accidental secret exposure)
@@ -168,16 +174,19 @@ $PR_PROTECTED      = @('main', 'master', 'develop')  # Branches safe from --dele
 
 ### Enable Local Paper Server
 
-1. Download Paper from https://papermc.io/downloads
+1. Download Paper from <https://papermc.io/downloads>
 2. Put the jar in a folder (e.g., `C:\MCServer\paper-1.21.11.jar`)
 3. Edit the launcher config:
+
    ```powershell
    $PAPER_JAR  = "C:\MCServer\paper-1.21.11.jar"
    $PAPER_DIR  = "C:\MCServer"
    $PAPER_RAM  = "4G"
    ```
+
 4. On first run, the launcher prompts you to accept the Minecraft EULA
 5. Update `settings.js` to point to your local server:
+
    ```js
    "host": "localhost",
    "port": 25565,
@@ -188,7 +197,7 @@ $PR_PROTECTED      = @('main', 'master', 'develop')  # Branches safe from --dele
 The live bot output is colorized by keyword for quick scanning:
 
 | Color | Keywords |
-|-------|----------|
+| ----- | -------- |
 | **Red** | error, exception, FATAL, ECONNREFUSED |
 | **Yellow** | warn, deprecated |
 | **Magenta** | dragon, ender, beat minecraft, victory, progression |
@@ -197,14 +206,14 @@ The live bot output is colorized by keyword for quick scanning:
 | **Teal** | diamond, iron, craft, smelt, enchant, bucket |
 | **Gray** | Everything else |
 
-Timestamps (when `$LOG_TIMESTAMP = $true`): `  14:32:07 BOT | Crafting iron pickaxe...`
+Timestamps (when `$LOG_TIMESTAMP = $true`): `14:32:07 BOT | Crafting iron pickaxe...`
 
 ## Troubleshooting
 
 | Problem | Solution |
-|---------|----------|
-| "Ollama not installed" | Install from https://ollama.com/download/windows |
-| "Node.js not found" | Install from https://nodejs.org/ (v20 LTS) |
+| ------- | -------- |
+| "Ollama not installed" | Install from <https://ollama.com/download/windows> |
+| "Node.js not found" | Install from <https://nodejs.org/> (v20 LTS) |
 | "Node.js v24+" warning | Downgrade to v20 LTS — v24+ may cause compatibility issues |
 | Model pull fails | Run manually: `ollama pull sweaterdog/andy-4:q8_0` |
 | Bot can't connect to MC | Ensure server is running on the configured host:port |
@@ -221,7 +230,7 @@ Timestamps (when `$LOG_TIMESTAMP = $true`): `  14:32:07 BOT | Crafting iron pick
 
 ## File Layout
 
-```
+```text
 mindcraft-0.1.3/
 ├── DragonSlayer.bat              ← Double-click this
 ├── DragonSlayer-Launcher.ps1     ← The engine (PowerShell, v4.0)
