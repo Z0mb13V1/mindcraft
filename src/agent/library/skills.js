@@ -1,8 +1,12 @@
 import * as mc from "../../utils/mcdata.js";
 import * as world from "./world.js";
-import pf from 'mineflayer-pathfinder';
+import baritoneModule from '@miner-org/mineflayer-baritone';
+import pf from 'mineflayer-pathfinder'; // RC25: retained ONLY for Movements.safeToBreak() in collectBlock
 import Vec3 from 'vec3';
 import settings from "../../../settings.js";
+
+// RC25: Baritone A* pathfinding goals (replaces mineflayer-pathfinder goals)
+const baritoneGoals = baritoneModule.goals;
 
 const blockPlaceDelay = settings.block_place_delay == null ? 0 : settings.block_place_delay;
 const useDelay = blockPlaceDelay > 0;
@@ -16,7 +20,7 @@ async function autoLight(bot) {
         try {
             const pos = world.getPosition(bot);
             return await placeBlock(bot, 'torch', pos.x, pos.y, pos.z, 'bottom', true);
-        } catch (err) {return false;}
+        } catch (_err) {return false;}
     }
     return false;
 }
@@ -65,6 +69,10 @@ export async function craftRecipe(bot, itemName, num=1) {
             let hasTable = world.getInventoryCounts(bot)['crafting_table'] > 0;
             if (hasTable) {
                 let pos = world.getNearestFreeSpace(bot, 1, 6);
+                if (!pos) {
+                    log(bot, `No free space to place crafting table.`);
+                    return false;
+                }
                 await placeBlock(bot, 'crafting_table', pos.x, pos.y, pos.z);
                 craftingTable = world.getNearestBlock(bot, 'crafting_table', craftingTableRange);
                 if (craftingTable) {
@@ -73,7 +81,7 @@ export async function craftRecipe(bot, itemName, num=1) {
                 }
             }
             else {
-                log(bot, `Crafting ${itemName} requires a crafting table.`)
+                log(bot, `Crafting ${itemName} requires a crafting table.`);
                 return false;
             }
         }
@@ -91,6 +99,21 @@ export async function craftRecipe(bot, itemName, num=1) {
     
     if (craftingTable && bot.entity.position.distanceTo(craftingTable.position) > 4) {
         await goToNearestBlock(bot, 'crafting_table', 4, craftingTableRange);
+        // If still can't reach (e.g., table is above/below in unreachable spot), place one from inventory
+        if (bot.entity.position.distanceTo(craftingTable.position) > 4) {
+            let hasTable = world.getInventoryCounts(bot)['crafting_table'] > 0;
+            if (hasTable) {
+                let pos = world.getNearestFreeSpace(bot, 1, 6);
+                if (pos) {
+                    await placeBlock(bot, 'crafting_table', pos.x, pos.y, pos.z);
+                    craftingTable = world.getNearestBlock(bot, 'crafting_table', craftingTableRange);
+                    if (craftingTable) {
+                        recipes = bot.recipesFor(mc.getItemId(itemName), null, 1, craftingTable);
+                        placedTable = true;
+                    }
+                }
+            }
+        }
     }
 
     const recipe = recipes[0];
@@ -100,7 +123,15 @@ export async function craftRecipe(bot, itemName, num=1) {
     const requiredIngredients = mc.ingredientsFromPrismarineRecipe(recipe); //Items required to use the recipe once.
     const craftLimit = mc.calculateLimitingResource(inventory, requiredIngredients);
     
-    await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    try {
+        await bot.craft(recipe, Math.min(craftLimit.num, num), craftingTable);
+    } catch (err) {
+        log(bot, `Failed to craft ${itemName}: ${err.message}`);
+        if (placedTable) {
+            await collectBlock(bot, 'crafting_table', 1);
+        }
+        return false;
+    }
     if(craftLimit.num<num) log(bot, `Not enough ${craftLimit.limitingResource} to craft ${num}, crafted ${craftLimit.num}. You now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     else log(bot, `Successfully crafted ${itemName}, you now have ${world.getInventoryCounts(bot)[itemName]} ${itemName}.`);
     if (placedTable) {
@@ -109,7 +140,7 @@ export async function craftRecipe(bot, itemName, num=1) {
 
     //Equip any armor the bot may have crafted.
     //There is probablly a more efficient method than checking the entire inventory but this is all mineflayer-armor-manager provides. :P
-    bot.armorManager.equipAll(); 
+    bot.armorManager.equipAll();
 
     return true;
 }
@@ -171,7 +202,7 @@ export async function smeltItem(bot, itemName, num=1) {
         }
     }
     if (!furnaceBlock){
-        log(bot, `There is no furnace nearby and you have no furnace.`)
+        log(bot, `There is no furnace nearby and you have no furnace.`);
         return false;
     }
     if (bot.entity.position.distanceTo(furnaceBlock.position) > 4) {
@@ -222,7 +253,7 @@ export async function smeltItem(bot, itemName, num=1) {
         }
         await furnace.putFuel(fuel.type, null, put_fuel);
         log(bot, `Added ${put_fuel} ${mc.getItemName(fuel.type)} to furnace fuel.`);
-        console.log(`Added ${put_fuel} ${mc.getItemName(fuel.type)} to furnace fuel.`)
+        console.log(`Added ${put_fuel} ${mc.getItemName(fuel.type)} to furnace fuel.`);
     }
     // put the items in the furnace
     await furnace.putInput(mc.getItemId(itemName), null, num);
@@ -291,7 +322,7 @@ export async function clearNearestFurnace(bot) {
 
     console.log('clearing furnace...');
     const furnace = await bot.openFurnace(furnaceBlock);
-    console.log('opened furnace...')
+    console.log('opened furnace...');
     // take the items out of the furnace
     let smelted_item, intput_item, fuel_item;
     if (furnace.outputItem())
@@ -300,7 +331,7 @@ export async function clearNearestFurnace(bot) {
         intput_item = await furnace.takeInput();
     if (furnace.fuelItem())
         fuel_item = await furnace.takeFuel();
-    console.log(smelted_item, intput_item, fuel_item)
+    console.log(smelted_item, intput_item, fuel_item);
     let smelted_name = smelted_item ? `${smelted_item.count} ${smelted_item.name}` : `0 smelted items`;
     let input_name = intput_item ? `${intput_item.count} ${intput_item.name}` : `0 input items`;
     let fuel_name = fuel_item ? `${fuel_item.count} ${fuel_item.name}` : `0 fuel items`;
@@ -341,18 +372,31 @@ export async function attackEntity(bot, entity, kill=true) {
      * await skills.attackEntity(bot, entity);
      **/
 
+    if (!entity || !bot.entities[entity.id]) {
+        log(bot, 'Entity no longer exists, skipping attack.');
+        return false;
+    }
+
     let pos = entity.position;
-    await equipHighestAttack(bot)
+    await equipHighestAttack(bot);
 
     if (!kill) {
         if (bot.entity.position.distanceTo(pos) > 5) {
-            console.log('moving to mob...')
+            console.log('moving to mob...');
             await goToPosition(bot, pos.x, pos.y, pos.z);
         }
-        console.log('attacking mob...')
+        if (!bot.entities[entity.id]) {
+            log(bot, 'Entity despawned during approach, skipping attack.');
+            return false;
+        }
+        console.log('attacking mob...');
         await bot.attack(entity);
     }
     else {
+        if (!bot.entities[entity.id]) {
+            log(bot, 'Entity despawned before pvp start, skipping attack.');
+            return false;
+        }
         bot.pvp.attack(entity);
         while (world.getNearbyEntities(bot, 24).includes(entity)) {
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -384,16 +428,17 @@ export async function defendSelf(bot, range=9) {
         await equipHighestAttack(bot);
         if (bot.entity.position.distanceTo(enemy.position) >= 4 && enemy.name !== 'creeper' && enemy.name !== 'phantom') {
             try {
-                bot.pathfinder.setMovements(new pf.Movements(bot));
-                await bot.pathfinder.goto(new pf.goals.GoalFollow(enemy, 3.5), true);
-            } catch (err) {/* might error if entity dies, ignore */}
+                // RC25: Baritone chase to melee range
+                if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+                await bot.ashfinder.gotoSmart(new baritoneGoals.GoalNear(enemy.position, 3.5));
+            } catch (_err) {/* might error if entity dies, ignore */}
         }
         if (bot.entity.position.distanceTo(enemy.position) <= 2) {
             try {
-                bot.pathfinder.setMovements(new pf.Movements(bot));
-                let inverted_goal = new pf.goals.GoalInvert(new pf.goals.GoalFollow(enemy, 2));
-                await bot.pathfinder.goto(inverted_goal, true);
-            } catch (err) {/* might error if entity dies, ignore */}
+                // RC25: Baritone retreat from too-close enemy
+                if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+                await bot.ashfinder.gotoSmart(new baritoneGoals.GoalAvoid(enemy.position, 4, bot));
+            } catch (_err) {/* might error if entity dies, ignore */}
         }
         bot.pvp.attack(enemy);
         attacked = true;
@@ -412,7 +457,22 @@ export async function defendSelf(bot, range=9) {
     return attacked;
 }
 
-
+// RC24: Timeout helper for Paper server compatibility.
+// bot.ashfinder.gotoSmart() and bot.dig() can hang indefinitely on Paper due
+// to event handling differences. This races the operation against a timer and
+// calls onTimeout (e.g. ashfinder.stop()) to cancel if it exceeds the limit.
+function withTimeout(promise, ms, onTimeout) {
+    let timer;
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            timer = setTimeout(() => {
+                if (onTimeout) onTimeout();
+                reject(new Error(`Timed out after ${ms}ms`));
+            }, ms);
+        })
+    ]).finally(() => clearTimeout(timer));
+}
 
 export async function collectBlock(bot, blockType, num=1, exclude=null) {
     /**
@@ -429,6 +489,12 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         log(bot, `Invalid number of blocks to collect: ${num}.`);
         return false;
     }
+    
+    // RC18b: Pause unstuck mode during collection. Mining/navigating to blocks
+    // causes the bot to appear "stuck" (moving slowly or pausing while digging),
+    // triggering false unstuck interruptions that abort the collection.
+    bot.modes.pause('unstuck');
+    
     let blocktypes = [blockType];
     if (blockType === 'coal' || blockType === 'diamond' || blockType === 'emerald' || blockType === 'iron' || blockType === 'gold' || blockType === 'lapis_lazuli' || blockType === 'redstone')
         blocktypes.push(blockType+'_ore');
@@ -438,9 +504,20 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         blocktypes.push('grass_block');
     if (blockType === 'cobblestone')
         blocktypes.push('stone');
+    // RC13: If requesting any log type, also accept other log variants as fallback
+    // This prevents bots from starving for wood when oak isn't available but birch/spruce is
+    // RC27: Don't eagerly add all log types — only expand AFTER the primary type yields 0 results.
+    // Eager expansion causes the bot to target wrong biome logs (e.g., acacia underground)
+    // when the requested type (oak) exists on the surface nearby.
+    const isLogFallbackEligible = blockType.endsWith('_log');
+    let logFallbackExpanded = false;
     const isLiquid = blockType === 'lava' || blockType === 'water';
 
     let collected = 0;
+    let consecutiveFails = 0;
+    let interruptRetries = 0;  // RC20: track retries from mode interruptions (e.g., self_defense)
+    const MAX_CONSECUTIVE_FAILS = 3; // break out after 3 consecutive failed attempts
+    const MAX_INTERRUPT_RETRIES = 8; // RC20: max total retries from combat/mode interruptions
 
     const movements = new pf.Movements(bot);
     movements.dontMineUnderFallingBlock = false;
@@ -449,14 +526,31 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
     // Blocks to ignore safety for, usually next to lava/water
     const unsafeBlocks = ['obsidian'];
 
+    // RC13 fix: Log/wood blocks have no gravity and are always safe to break.
+    // mineflayer-pathfinder's safeToBreak() is overly conservative for tree logs,
+    // causing searchForBlock to find logs that collectBlock then filters out.
+    const isNoGravityNaturalBlock = blockType.endsWith('_log') || blockType.endsWith('_wood') ||
+        blockType.endsWith('_stem') || blockType === 'mushroom_stem' ||
+        blockType.endsWith('leaves') || blockType.endsWith('_planks');
+
     for (let i=0; i<num; i++) {
         let blocks = world.getNearestBlocksWhere(bot, block => {
+            // RC18 FIX: mineflayer's findBlocks has a section palette pre-filter
+            // (isBlockInSection) that creates blocks via Block.fromStateId() which
+            // sets position=null. We MUST check block name first and return true
+            // for palette pre-filter (position=null) to avoid skipping entire sections.
+            // Previously: `if (!block.position || !blocktypes.includes(block.name)) return false`
+            // caused ALL sections to be skipped because position is always null during palette check.
             if (!blocktypes.includes(block.name)) {
                 return false;
             }
+            // If position is null, we're in the palette pre-filter — name matched,
+            // so tell mineflayer this section might contain our target block.
+            if (!block.position) return true;
+            
             if (exclude) {
                 for (let position of exclude) {
-                    if (block.position.x === position.x && block.position.y === position.y && block.position.z === position.z) {
+                    if (position && block.position.x === position.x && block.position.y === position.y && block.position.z === position.z) {
                         return false;
                     }
                 }
@@ -466,17 +560,29 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
                 return block.metadata === 0;
             }
             
-            return movements.safeToBreak(block) || unsafeBlocks.includes(block.name);
-        }, 64, 1);
+            return movements.safeToBreak(block) || unsafeBlocks.includes(block.name) || isNoGravityNaturalBlock;
+        }, 128, 1);  // RC17: Increased from 64 to 128 to match searchForBlock range
 
         if (blocks.length === 0) {
+            // RC27: If no primary log type found, expand to all log variants as fallback
+            if (isLogFallbackEligible && !logFallbackExpanded) {
+                logFallbackExpanded = true;
+                const allLogs = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+                for (const logType of allLogs) {
+                    if (!blocktypes.includes(logType)) blocktypes.push(logType);
+                }
+                console.log(`[RC27] No ${blockType} found, expanding search to all log types`);
+                i--;  // retry this iteration with expanded types
+                continue;
+            }
             if (collected === 0)
-                log(bot, `No ${blockType} nearby to collect.`);
+                log(bot, `No ${blockType} found within 128 blocks. Gathering system is working fine — this area simply has none. Use !explore(200) to travel far enough to find new resources, then retry. Do NOT use !searchForBlock — explore first to load fresh chunks.`);
             else
-                log(bot, `No more ${blockType} nearby to collect.`);
+                log(bot, `No more ${blockType} nearby to collect. Successfully collected ${collected} so far.`);
             break;
         }
         const block = blocks[0];
+
         await bot.tool.equipForBlock(block);
         if (isLiquid) {
             const bucket = bot.inventory.items().find(item => item.name === 'bucket');
@@ -486,37 +592,161 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
             }
             await bot.equip(bucket, 'hand');
         }
-        const itemId = bot.heldItem ? bot.heldItem.type : null
+        const itemId = bot.heldItem ? bot.heldItem.type : null;
         if (!block.canHarvest(itemId)) {
             log(bot, `Don't have right tools to harvest ${blockType}.`);
             return false;
         }
         try {
             let success = false;
+            const invBefore = world.getInventoryCounts(bot);
             if (isLiquid) {
                 success = await useToolOnBlock(bot, 'bucket', block);
             }
             else if (mc.mustCollectManually(blockType)) {
-                await goToPosition(bot, block.position.x, block.position.y, block.position.z, 2);
-                await bot.dig(block);
-                await pickupNearbyItems(bot);
-                success = true;
+                // RC24c: Distance-adaptive timeout for manual collection
+                const dist = bot.entity.position.distanceTo(block.position);
+                const navTimeout = Math.max(20000, Math.round(dist * 1000) + 10000);
+                console.log(`[RC24] Manual-collect ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z}) dist=${Math.round(dist)} timeout=${navTimeout}ms`);
+                await withTimeout(
+                    goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
+                    navTimeout,
+                    () => { try { bot.ashfinder.stop(); } catch(_e) {} }
+                );
+                // RC26: Re-fetch block after navigation (see RC26 comment above)
+                const freshBlockManual = bot.blockAt(block.position);
+                if (!freshBlockManual || !blocktypes.includes(freshBlockManual.name)) {
+                    console.log(`[RC26] Manual block at (${block.position.x}, ${block.position.y}, ${block.position.z}) changed to ${freshBlockManual?.name ?? 'null'}, skipping`);
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                    i--;  // retry this slot with a different block
+                    continue;
+                }
+                console.log(`[RC24] Digging ${freshBlockManual.name} (manual)`);
+                await withTimeout(
+                    bot.dig(freshBlockManual),
+                    10000,
+                    () => { try { bot.stopDigging(); } catch(_e) {} }
+                );
+                await new Promise(r => setTimeout(r, 300));
+                await withTimeout(
+                    pickupNearbyItems(bot),
+                    8000,
+                    () => { try { bot.ashfinder.stop(); } catch(_e) {} }
+                );
+                // Verify items actually entered inventory
+                const invAfter = world.getInventoryCounts(bot);
+                const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
+                const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
+                success = totalAfter > totalBefore;
+                console.log(`[RC24] Manual-collect result: success=${success}`);
             }
             else {
-                await bot.collectBlock.collect(block);
-                success = true;
+                // RC24: Manual dig with timeout protection for Paper servers.
+                // bot.collectBlock.collect() hangs indefinitely on Paper due to event
+                // handling differences. Manual dig also needs timeouts since
+                // pathfinder.goto() has no built-in timeout.
+                try {
+                    // RC24c: Scale nav timeout by distance — bot walks ~4 blocks/sec,
+                    // plus overhead for path computation and terrain navigation.
+                    const dist = bot.entity.position.distanceTo(block.position);
+                    const navTimeout = Math.max(20000, Math.round(dist * 1000) + 10000);
+                    console.log(`[RC24] Navigating to ${blockType} at (${block.position.x}, ${block.position.y}, ${block.position.z}) dist=${Math.round(dist)} timeout=${navTimeout}ms`);
+                    await withTimeout(
+                        goToPosition(bot, block.position.x, block.position.y, block.position.z, 2),
+                        navTimeout,
+                        () => { try { bot.ashfinder.stop(); } catch(_e) {} }
+                    );
+                    // RC26: Re-fetch block at position after navigation.
+                    // The original block reference can go stale if chunks
+                    // unloaded/reloaded during pathfinding, causing bot.dig()
+                    // to silently no-op (items 0→0).
+                    const freshBlock = bot.blockAt(block.position);
+                    if (!freshBlock || !blocktypes.includes(freshBlock.name)) {
+                        console.log(`[RC26] Block at (${block.position.x}, ${block.position.y}, ${block.position.z}) changed to ${freshBlock?.name ?? 'null'}, skipping`);
+                        if (!exclude) exclude = [];
+                        exclude.push(block.position);
+                        i--;  // retry this slot with a different block
+                        continue;
+                    }
+                    console.log(`[RC24] Digging ${freshBlock.name}`);
+                    await withTimeout(
+                        bot.dig(freshBlock),
+                        10000,
+                        () => { try { bot.stopDigging(); } catch(_e) {} }
+                    );
+                    console.log(`[RC24] Picking up items`);
+                    await new Promise(r => setTimeout(r, 300));
+                    await withTimeout(
+                        pickupNearbyItems(bot),
+                        8000,
+                        () => { try { bot.ashfinder.stop(); } catch(_e) {} }
+                    );
+                    const invAfter = world.getInventoryCounts(bot);
+                    const totalBefore = Object.values(invBefore).reduce((a, b) => a + b, 0);
+                    const totalAfter = Object.values(invAfter).reduce((a, b) => a + b, 0);
+                    success = totalAfter > totalBefore;
+                    console.log(`[RC24] Result: success=${success}, items ${totalBefore}→${totalAfter}`);
+                } catch (_digErr) {
+                    // RC24b: Re-throw "aborted" errors so the outer RC20 handler
+                    // can retry them (self_defense/combat interruption recovery)
+                    if (_digErr.message && _digErr.message.includes('aborted')) {
+                        throw _digErr;
+                    }
+                    console.log(`[RC24] Failed for ${blockType}: ${_digErr.message}`);
+                    try { bot.ashfinder.stop(); } catch(_e) {}
+                }
+                if (!success) {
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                }
             }
-            if (success)
+            if (success) {
+
                 collected++;
+                consecutiveFails = 0;
+            } else {
+
+                // Exclude this position so we don't keep retrying the same unreachable block
+                if (block && block.position) {
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                }
+                consecutiveFails++;
+                if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+                    log(bot, `Failed to collect ${blockType} ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Use !explore(200) to travel to a completely new area, then retry.`);
+                    break;
+                }
+            }
             await autoLight(bot);
         }
         catch (err) {
+
             if (err.name === 'NoChests') {
                 log(bot, `Failed to collect ${blockType}: Inventory full, no place to deposit.`);
                 break;
             }
+            // RC20: "Digging aborted" comes from self_defense/self_preservation interrupting the dig.
+            // Don't count this as a real failure — wait for the mode to finish, then retry the same block.
+            else if (err.message && err.message.includes('aborted') && interruptRetries < MAX_INTERRUPT_RETRIES) {
+                interruptRetries++;
+                console.log(`[RC20] Dig interrupted (retry ${interruptRetries}/${MAX_INTERRUPT_RETRIES}), waiting for mode to finish...`);
+                await new Promise(r => setTimeout(r, 2000));  // Wait 2s for combat/mode to finish
+                i--;  // Retry the same block on next loop iteration
+                continue;
+            }
             else {
                 log(bot, `Failed to collect ${blockType}: ${err}.`);
+                // Exclude this block position so we don't retry it
+                if (block && block.position) {
+                    if (!exclude) exclude = [];
+                    exclude.push(block.position);
+                }
+                consecutiveFails++;
+                if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+                    log(bot, `Failed ${MAX_CONSECUTIVE_FAILS} times in a row. Blocks may be unreachable. Call !getDiamondPickaxe — it handles relocation and tool progression automatically.`);
+                    break;
+                }
                 continue;
             }
         }
@@ -524,7 +754,14 @@ export async function collectBlock(bot, blockType, num=1, exclude=null) {
         if (bot.interrupt_code)
             break;  
     }
-    log(bot, `Collected ${collected} ${blockType}.`);
+    // RC18b: Resume unstuck mode after collection is done
+    bot.modes.unpause('unstuck');
+    
+    if (collected === 0 && num > 0) {
+        log(bot, `Collected 0 ${blockType}. No ${blockType} found in this area. Call !getDiamondPickaxe — it handles wood collection and tool progression automatically with built-in relocation. Do NOT call !explore or !collectBlocks manually.`);
+    } else {
+        log(bot, `Collected ${collected} ${blockType}.`);
+    }
     return collected > 0;
 }
 
@@ -536,25 +773,36 @@ export async function pickupNearbyItems(bot) {
      * @example
      * await skills.pickupNearbyItems(bot);
      **/
-    const distance = 8;
+    const distance = 10;
     const getNearestItem = bot => bot.nearestEntity(entity => entity.name === 'item' && bot.entity.position.distanceTo(entity.position) < distance);
     let nearestItem = getNearestItem(bot);
     let pickedUp = 0;
-    while (nearestItem) {
-        let movements = new pf.Movements(bot);
-        movements.canDig = false;
-        bot.pathfinder.setMovements(movements);
-        await goToGoal(bot, new pf.goals.GoalFollow(nearestItem, 1));
-        await new Promise(resolve => setTimeout(resolve, 200));
-        let prev = nearestItem;
-        nearestItem = getNearestItem(bot);
-        if (prev === nearestItem) {
-            break;
+    const maxAttempts = 10;
+    let attempts = 0;
+    while (nearestItem && attempts < maxAttempts) {
+        attempts++;
+        const invBefore = bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
+        // RC25: Navigate to item without breaking blocks
+        const prevBreak = bot.ashfinder.config.breakBlocks;
+        bot.ashfinder.config.breakBlocks = false;
+        try {
+            await goToGoal(bot, new baritoneGoals.GoalNear(nearestItem.position, 1));
+        } finally {
+            bot.ashfinder.config.breakBlocks = prevBreak;
         }
-        pickedUp++;
+        // Wait for item pickup with increasing delays
+        for (let wait = 0; wait < 5; wait++) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const invAfter = bot.inventory.items().reduce((sum, item) => sum + item.count, 0);
+            if (invAfter > invBefore) {
+                pickedUp += (invAfter - invBefore);
+                break;
+            }
+        }
+        nearestItem = getNearestItem(bot);
     }
     log(bot, `Picked up ${pickedUp} items.`);
-    return true;
+    return pickedUp > 0;
 }
 
 
@@ -582,16 +830,18 @@ export async function breakBlockAt(bot, x, y, z) {
         }
 
         if (bot.entity.position.distanceTo(block.position) > 4.5) {
-            let pos = block.position;
-            let movements = new pf.Movements(bot);
-            movements.canPlaceOn = false;
-            movements.allow1by1towers = false;
-            bot.pathfinder.setMovements(movements);
-            await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+            // RC25: Navigate to block with baritone (no placing for breakBlockAt)
+            const prevPlace = bot.ashfinder.config.placeBlocks;
+            bot.ashfinder.config.placeBlocks = false;
+            try {
+                await goToGoal(bot, new baritoneGoals.GoalNear(block.position, 4));
+            } finally {
+                bot.ashfinder.config.placeBlocks = prevPlace;
+            }
         }
         if (bot.game.gameMode !== 'creative') {
             await bot.tool.equipForBlock(block);
-            const itemId = bot.heldItem ? bot.heldItem.type : null
+            const itemId = bot.heldItem ? bot.heldItem.type : null;
             if (!block.canHarvest(itemId)) {
                 log(bot, `Don't have right tools to break ${block.name}.`);
                 return false;
@@ -723,7 +973,7 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
         'south': Vec3(0, 0, 1),
         'east': Vec3(1, 0, 0),
         'west': Vec3(-1, 0, 0),
-    }
+    };
     let dirs = [];
     if (placeOn === 'side') {
         dirs.push(dir_map['north'], dir_map['south'], dir_map['east'], dir_map['west']);
@@ -755,18 +1005,13 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
     const dont_move_for = ['torch', 'redstone_torch', 'redstone', 'lever', 'button', 'rail', 'detector_rail', 
         'powered_rail', 'activator_rail', 'tripwire_hook', 'tripwire', 'water_bucket', 'string'];
     if (!dont_move_for.includes(item_name) && (pos.distanceTo(targetBlock.position) < 1.1 || pos_above.distanceTo(targetBlock.position) < 1.1)) {
-        // too close
-        let goal = new pf.goals.GoalNear(targetBlock.position.x, targetBlock.position.y, targetBlock.position.z, 2);
-        let inverted_goal = new pf.goals.GoalInvert(goal);
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        await bot.pathfinder.goto(inverted_goal);
+        // RC25: Too close — move away using baritone GoalAvoid
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        await bot.ashfinder.gotoSmart(new baritoneGoals.GoalAvoid(targetBlock.position, 2, bot));
     }
     if (bot.entity.position.distanceTo(targetBlock.position) > 4.5) {
-        // too far
-        let pos = targetBlock.position;
-        let movements = new pf.Movements(bot);
-        bot.pathfinder.setMovements(movements);
-        await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+        // RC25: Too far — navigate closer with baritone
+        await goToGoal(bot, new baritoneGoals.GoalNear(targetBlock.position, 4));
     }
 
     // will throw error if an entity is in the way, and sometimes even if the block was placed
@@ -782,7 +1027,7 @@ export async function placeBlock(bot, blockType, x, y, z, placeOn='bottom', dont
             await new Promise(resolve => setTimeout(resolve, 200));
             return true;
         }
-    } catch (err) {
+    } catch (_err) {
         log(bot, `Failed to place ${blockType} at ${target_dest}.`);
         return false;
     }
@@ -1010,7 +1255,7 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
         log(bot, `You cannot give items to yourself.`);
         return false;
     }
-    let player = bot.players[username].entity
+    let player = bot.players[username].entity;
     if (!player) {
         log(bot, `Could not find ${username}.`);
         return false;
@@ -1069,45 +1314,109 @@ export async function giveToPlayer(bot, itemType, username, num=1) {
 
 export async function goToGoal(bot, goal) {
     /**
-     * Navigate to the given goal. Use doors and attempt minimally destructive movements.
+     * RC25b: Navigate to the given goal using Baritone A* pathfinding.
+     * Uses bot.ashfinder.gotoSmart() which auto-chooses between direct A*
+     * and waypoint navigation based on distance.
+     *
+     * CRITICAL: gotoSmart() awaits the PathExecutor's completionPromise, but
+     * executor.stop() only rejects currentPromise — NOT completionPromise.
+     * This means gotoSmart() hangs forever if stopped externally. We MUST wrap
+     * it with Promise.race + timeout. After timeout, we check proximity to goal
+     * since Paper server position corrections prevent the executor's tight reach
+     * check (0.35 blocks) from passing even when the bot is very close.
+     *
      * @param {MinecraftBot} bot, reference to the minecraft bot.
-     * @param {pf.goals.Goal} goal, the goal to navigate to.
+     * @param {Goal} goal, a baritone goal to navigate to.
      **/
 
-    const nonDestructiveMovements = new pf.Movements(bot);
-    const dontBreakBlocks = ['glass', 'glass_pane'];
-    for (let block of dontBreakBlocks) {
-        nonDestructiveMovements.blocksCantBreak.add(mc.getBlockId(block));
-    }
-    nonDestructiveMovements.placeCost = 2;
-    nonDestructiveMovements.digCost = 10;
+    // Ensure any previous navigation is stopped before starting new one
+    if (!bot.ashfinder.stopped) bot.ashfinder.stop();
 
-    const destructiveMovements = new pf.Movements(bot);
+    // Add glass types to blocksToAvoid so baritone prefers non-destructive paths
+    const blocksToAvoid = bot.ashfinder.config.blocksToAvoid || [];
+    const glassList = ['glass', 'glass_pane'];
+    const addedBlocks = [];
+    for (const name of glassList) {
+        if (!blocksToAvoid.includes(name)) {
+            blocksToAvoid.push(name);
+            addedBlocks.push(name);
+        }
+    }
 
-    let final_movements = destructiveMovements;
-
-    const pathfind_timeout = 1000;
-    if (await bot.pathfinder.getPathTo(nonDestructiveMovements, goal, pathfind_timeout).status === 'success') {
-        final_movements = nonDestructiveMovements;
-        log(bot, `Found non-destructive path.`);
-    }
-    else if (await bot.pathfinder.getPathTo(destructiveMovements, goal, pathfind_timeout).status === 'success') {
-        log(bot, `Found destructive path.`);
-    }
-    else {
-        log(bot, `Path not found, but attempting to navigate anyway using destructive movements.`);
-    }
+    // RC25b: Calculate timeout based on distance to goal
+    // Paper server's movement corrections make executor reach checks unreliable,
+    // so we need our own timeout to prevent infinite hangs.
+    let navTimeout = 30000; // default 30s
+    try {
+        const goalPos = goal.pos || (goal.getPosition ? goal.getPosition() : null);
+        if (goalPos) {
+            const dist = bot.entity.position.distanceTo(goalPos);
+            navTimeout = Math.max(12000, Math.round(dist * 1200) + 5000);
+        }
+    } catch (_) {}
 
     const doorCheckInterval = startDoorInterval(bot);
+    let timeoutId = null;
 
-    bot.pathfinder.setMovements(final_movements);
+    const restoreConfig = () => {
+        clearInterval(doorCheckInterval);
+        if (timeoutId) clearTimeout(timeoutId);
+        for (const name of addedBlocks) {
+            const idx = blocksToAvoid.indexOf(name);
+            if (idx !== -1) blocksToAvoid.splice(idx, 1);
+        }
+    };
+
+    // RC25b: Helper — check if bot is close enough to goal to count as success.
+    // Paper's position corrections prevent the executor from passing its tight
+    // reach threshold (0.35 blocks), but the bot is often within 2-4 blocks.
+    // Use generous threshold: goal.distance + 2 (or 5 as fallback).
+    const isCloseEnough = () => {
+        try {
+            const goalPos = goal.pos || (goal.getPosition ? goal.getPosition() : null);
+            if (!goalPos) return false;
+            const dist = bot.entity.position.distanceTo(goalPos);
+            const threshold = (goal.distance || 4) + 2;
+            return dist <= threshold;
+        } catch (_e) { return false; }
+    };
+
     try {
-        await bot.pathfinder.goto(goal);
-        clearInterval(doorCheckInterval);
-        return true;
+        // RC25b: Wrap gotoSmart with Promise.race because the PathExecutor's
+        // stop() doesn't reject completionPromise, causing gotoSmart to hang forever.
+        const result = await Promise.race([
+            bot.ashfinder.gotoSmart(goal).catch(err => {
+                // RC27: Baritone executor.js:185 can crash with "Cannot read properties
+                // of undefined (reading 'length')" when this.path becomes null mid-execution.
+                // Catch this here so it doesn't crash the entire process.
+                if (err?.message?.includes('Cannot read properties of undefined')) {
+                    console.warn(`[RC27] Baritone internal error (non-fatal): ${err.message}`);
+                    return { status: 'error', error: err };
+                }
+                throw err;
+            }),
+            new Promise((resolve) => {
+                timeoutId = setTimeout(() => {
+                    try { bot.ashfinder.stop(); } catch (_) {}
+                    resolve({ status: 'timeout' });
+                }, navTimeout);
+            })
+        ]);
+
+        restoreConfig();
+
+        // Check proximity first — if close enough, it's success regardless of executor status
+        if (isCloseEnough()) return true;
+
+        if (result && result.status === 'success') return true;
+        if (result && result.status === 'timeout') {
+            throw new Error(`Navigation timed out after ${Math.round(navTimeout/1000)}s`);
+        }
+        throw new Error(result?.error?.message || 'Navigation failed');
     } catch (err) {
-        clearInterval(doorCheckInterval);
-        // we need to catch so we can clean up the door check interval, then rethrow the error
+        restoreConfig();
+        // Even on error, if we're close enough, consider it success
+        if (isCloseEnough()) return true;
         throw err;
     }
 }
@@ -1116,6 +1425,9 @@ let _doorInterval = null;
 function startDoorInterval(bot) {
     /**
      * Start helper interval that opens nearby doors if the bot is stuck.
+     * Phase 1 (1.2s stuck): Try opening doors, fence gates, trapdoors.
+     * Phase 2 (8s stuck):   Last resort — temporarily enable breakBlocks so
+     *                       Baritone can dig through the obstacle, then disable again.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @returns {number} the interval id.
      **/
@@ -1125,17 +1437,27 @@ function startDoorInterval(bot) {
     let prev_pos = bot.entity.position.clone();
     let prev_check = Date.now();
     let stuck_time = 0;
+    let doorAttempted = false; // track whether we already tried doors this stuck episode
 
+    const DOOR_THRESHOLD  = 1200;  // ms — try doors first
+    const BREAK_THRESHOLD = 8000;  // ms — last resort: enable block breaking
 
     const doorCheckInterval = setInterval(() => {
         const now = Date.now();
         if (bot.entity.position.distanceTo(prev_pos) >= 0.1) {
             stuck_time = 0;
+            doorAttempted = false;
+            // RC26: If we previously enabled breakBlocks as last resort, disable it again
+            if (bot.ashfinder && bot.ashfinder.config.breakBlocks) {
+                bot.ashfinder.config.breakBlocks = false;
+            }
         } else {
             stuck_time += now - prev_check;
         }
-        
-        if (stuck_time > 1200) {
+
+        // Phase 1: Open doors / fence gates / trapdoors
+        if (stuck_time > DOOR_THRESHOLD && !doorAttempted) {
+            doorAttempted = true;
             // shuffle positions so we're not always opening the same door
             const positions = [
                 bot.entity.position.clone(),
@@ -1143,7 +1465,7 @@ function startDoorInterval(bot) {
                 bot.entity.position.offset(0, 0, -1), 
                 bot.entity.position.offset(1, 0, 0),
                 bot.entity.position.offset(-1, 0, 0),
-            ]
+            ];
             let elevated_positions = positions.map(position => position.offset(0, 1, 0));
             positions.push(...elevated_positions);
             positions.push(bot.entity.position.offset(0, 2, 0)); // above head
@@ -1169,8 +1491,18 @@ function startDoorInterval(bot) {
                     break;
                 }
             }
-            stuck_time = 0;
         }
+
+        // Phase 2: Last resort — enable block breaking temporarily
+        if (stuck_time > BREAK_THRESHOLD) {
+            if (bot.ashfinder && !bot.ashfinder.config.breakBlocks) {
+                console.log('[RC26] Stuck >8s after door attempts — enabling breakBlocks as last resort');
+                bot.ashfinder.config.breakBlocks = true;
+            }
+            stuck_time = 0;
+            doorAttempted = false;
+        }
+
         prev_pos = bot.entity.position.clone();
         prev_check = now;
     }, 200);
@@ -1201,22 +1533,43 @@ export async function goToPosition(bot, x, y, z, min_distance=2) {
         return true;
     }
     
+    let lastDigTarget = null;
+    let unharvestableTicks = 0;
     const checkDigProgress = () => {
         if (bot.targetDigBlock) {
             const targetBlock = bot.targetDigBlock;
             const itemId = bot.heldItem ? bot.heldItem.type : null;
             if (!targetBlock.canHarvest(itemId)) {
-                log(bot, `Pathfinding stopped: Cannot break ${targetBlock.name} with current tools.`);
-                bot.pathfinder.stop();
-                bot.stopDigging();
+                // RC27: Only abort after 2 consecutive checks on the same unharvstable block.
+                // Single transient ticks happen when the pathfinder equips tools mid-dig.
+                if (lastDigTarget && lastDigTarget.x === targetBlock.position.x &&
+                    lastDigTarget.y === targetBlock.position.y &&
+                    lastDigTarget.z === targetBlock.position.z) {
+                    unharvestableTicks++;
+                } else {
+                    lastDigTarget = targetBlock.position.clone();
+                    unharvestableTicks = 1;
+                }
+                if (unharvestableTicks >= 2) {
+                    log(bot, `Pathfinding stopped: Cannot break ${targetBlock.name} with current tools.`);
+                    bot.ashfinder.stop();
+                    bot.stopDigging();
+                    unharvestableTicks = 0;
+                }
+            } else {
+                unharvestableTicks = 0;
+                lastDigTarget = null;
             }
+        } else {
+            unharvestableTicks = 0;
+            lastDigTarget = null;
         }
     };
     
     const progressInterval = setInterval(checkDigProgress, 1000);
     
     try {
-        await goToGoal(bot, new pf.goals.GoalNear(x, y, z, min_distance));
+        await goToGoal(bot, new baritoneGoals.GoalNear(new Vec3(x, y, z), min_distance));
         clearInterval(progressInterval);
         const distance = bot.entity.position.distanceTo(new Vec3(x, y, z));
         if (distance <= min_distance+1) {
@@ -1261,13 +1614,32 @@ export async function goToNearestBlock(bot, blockType,  min_distance=2, range=64
     }
     else {
         block = world.getNearestBlock(bot, blockType, range);
+        // RC13: If searching for a log type and none found, try any log type as fallback
+        if (!block && blockType.endsWith('_log')) {
+            const allLogs = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+            for (const logType of allLogs) {
+                if (logType !== blockType) {
+                    block = world.getNearestBlock(bot, logType, range);
+                    if (block) {
+                        log(bot, `No ${blockType} found, but found ${logType} instead.`);
+                        break;
+                    }
+                }
+            }
+        }
     }
     if (!block) {
         log(bot, `Could not find any ${blockType} in ${range} blocks.`);
         return false;
     }
     log(bot, `Found ${blockType} at ${block.position}. Navigating...`);
-    await goToPosition(bot, block.position.x, block.position.y, block.position.z, min_distance);
+    // RC17: Pause unstuck during navigation to prevent false stuck detection
+    bot.modes.pause('unstuck');
+    try {
+        await goToPosition(bot, block.position.x, block.position.y, block.position.z, min_distance);
+    } finally {
+        bot.modes.unpause('unstuck');
+    }
     return true;
 }
 
@@ -1313,16 +1685,17 @@ export async function goToPlayer(bot, username, distance=3) {
 
     bot.modes.pause('self_defense');
     bot.modes.pause('cowardice');
-    let player = bot.players[username].entity
+    let player = bot.players[username].entity;
     if (!player) {
         log(bot, `Could not find ${username}.`);
         return false;
     }
 
     distance = Math.max(distance, 0.5);
-    const goal = new pf.goals.GoalFollow(player, distance);
+    // RC25: Baritone — use GoalNear with player's current position instead of GoalFollow
+    const goal = new baritoneGoals.GoalNear(player.position, distance);
 
-    await goToGoal(bot, goal, true);
+    await goToGoal(bot, goal);
 
     log(bot, `You have reached ${username}.`);
 }
@@ -1337,16 +1710,14 @@ export async function followPlayer(bot, username, distance=4) {
      * @example
      * await skills.followPlayer(bot, "player");
      **/
-    let player = bot.players[username].entity
+    let player = bot.players[username].entity;
     if (!player)
         return false;
 
-    const move = new pf.Movements(bot);
-    move.digCost = 10;
-    bot.pathfinder.setMovements(move);
+    // RC25: Baritone followEntity for continuous following
+    if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+    bot.ashfinder.followEntity(player, { distance: distance, updateInterval: 500 });
     let doorCheckInterval = startDoorInterval(bot);
-
-    bot.pathfinder.setGoal(new pf.goals.GoalFollow(player, distance), true);
     log(bot, `You are now actively following player ${username}.`);
 
 
@@ -1389,6 +1760,7 @@ export async function followPlayer(bot, username, distance=4) {
             bot.modes.unpause('elbow_room');
         }
     }
+    bot.ashfinder.stopFollowing(); // RC25: stop baritone entity following
     clearInterval(doorCheckInterval);
     return true;
 }
@@ -1404,15 +1776,14 @@ export async function moveAway(bot, distance) {
      * await skills.moveAway(bot, 8);
      **/
     const pos = bot.entity.position;
-    let goal = new pf.goals.GoalNear(pos.x, pos.y, pos.z, distance);
-    let inverted_goal = new pf.goals.GoalInvert(goal);
-    bot.pathfinder.setMovements(new pf.Movements(bot));
+    // RC25: Baritone GoalAvoid moves away from a position
+    let avoidGoal = new baritoneGoals.GoalAvoid(pos, distance, bot);
 
     if (bot.modes.isOn('cheat')) {
-        const move = new pf.Movements(bot);
-        const path = await bot.pathfinder.getPathTo(move, inverted_goal, 10000);
-        let last_move = path.path[path.path.length-1];
-        if (last_move) {
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        const pathResult = await bot.ashfinder.generatePath(avoidGoal);
+        if (pathResult && pathResult.path && pathResult.path.length > 0) {
+            let last_move = pathResult.path[pathResult.path.length-1];
             let x = Math.floor(last_move.x);
             let y = Math.floor(last_move.y);
             let z = Math.floor(last_move.z);
@@ -1421,7 +1792,7 @@ export async function moveAway(bot, distance) {
         }
     }
 
-    await goToGoal(bot, inverted_goal);
+    await goToGoal(bot, avoidGoal);
     let new_pos = bot.entity.position;
     log(bot, `Moved away from ${pos.floored()} to ${new_pos.floored()}.`);
     return true;
@@ -1435,11 +1806,168 @@ export async function moveAwayFromEntity(bot, entity, distance=16) {
      * @param {number} distance, the distance to move away.
      * @returns {Promise<boolean>} true if the bot moved away, false otherwise.
      **/
-    let goal = new pf.goals.GoalFollow(entity, distance);
-    let inverted_goal = new pf.goals.GoalInvert(goal);
-    bot.pathfinder.setMovements(new pf.Movements(bot));
-    await bot.pathfinder.goto(inverted_goal);
-    return true;
+    // RC25: Baritone GoalAvoid to move away from entity
+    let avoidGoal = new baritoneGoals.GoalAvoid(entity.position, distance, bot);
+    await goToGoal(bot, avoidGoal);
+}
+
+
+export async function explore(bot, distance=40) {
+    /**
+     * Move to a random position to explore new terrain and find fresh resources.
+     * Uses multi-hop navigation for distances > 60 blocks to avoid pathfinder timeouts.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} distance, the approximate distance to explore. Defaults to 40.
+     * @returns {Promise<boolean>} true if exploration succeeded, false otherwise.
+     * @example
+     * await skills.explore(bot, 200);
+     **/
+    const startPos = bot.entity.position.clone();
+    let angle = Math.random() * 2 * Math.PI;  // RC17b: let (mutable) — water avoidance changes direction
+    const HOP_SIZE = 50; // max distance per pathfinding hop
+    const numHops = Math.max(1, Math.ceil(distance / HOP_SIZE));
+    
+    // Pause unstuck mode during multi-hop — pathfinding between hops can trigger false stuck detection
+    if (numHops > 1) bot.modes.pause('unstuck');
+    
+    log(bot, `Exploring ${distance} blocks (${numHops} hops)...`);
+    
+    let totalMoved = 0;
+    let consecutiveFails = 0;
+    
+    for (let hop = 0; hop < numHops; hop++) {
+        if (bot.interrupt_code) break;
+        
+        const currentPos = bot.entity.position;
+        const hopDist = Math.min(HOP_SIZE, distance - totalMoved);
+        
+        // Add slight random angle variation per hop to avoid obstacles
+        const hopAngle = angle + (Math.random() - 0.5) * 0.4;
+        const tx = Math.floor(currentPos.x + hopDist * Math.cos(hopAngle));
+        const tz = Math.floor(currentPos.z + hopDist * Math.sin(hopAngle));
+        
+        try {
+            await goToPosition(bot, tx, currentPos.y, tz, 3);
+            const moved = currentPos.distanceTo(bot.entity.position);
+            totalMoved += moved;
+            consecutiveFails = 0;
+            
+            // RC17b: Water/ocean detection — if we dropped below sea level (y<=62)
+            // or are standing on water, the path is heading toward ocean. Change direction.
+            // Note: y=63 is sea level and many valid forest areas exist there, so only trigger at y<=62.
+            const postHopY = bot.entity.position.y;
+            const feetBlock = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
+            const isNearWater = (feetBlock && (feetBlock.name === 'water' || feetBlock.name === 'kelp' || feetBlock.name === 'seagrass')) || postHopY <= 62;
+            
+            if (isNearWater && hop < numHops - 1) {
+                log(bot, `Heading toward water (y=${Math.round(postHopY)}), changing direction...`);
+                // Reverse + perpendicular to move away from water
+                angle = angle + Math.PI * 0.75 + (Math.random() - 0.5) * 0.5;
+            }
+            
+            if (moved < 5 && hop > 0) {
+                // Barely moved — try a perpendicular direction
+                const perpAngle = angle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+                const px = Math.floor(bot.entity.position.x + hopDist * Math.cos(perpAngle));
+                const pz = Math.floor(bot.entity.position.z + hopDist * Math.sin(perpAngle));
+                log(bot, `Path blocked, trying perpendicular direction...`);
+                try {
+                    await goToPosition(bot, px, bot.entity.position.y, pz, 3);
+                    totalMoved += bot.entity.position.distanceTo(currentPos);
+                } catch (_e) { /* continue with next hop */ }
+            }
+        } catch (_err) {
+            consecutiveFails++;
+            if (consecutiveFails >= 2) {
+                // RC29b: Terrain escape — when consecutive hops fail (ocean/cliff blocking),
+                // try going to the surface first then attempt an uphill path before giving up.
+                log(bot, `Exploration stuck after ${Math.round(totalMoved)} blocks. Trying terrain escape (surface + uphill)...`);
+                try {
+                    // Step 1: Climb to surface to clear water/cliff terrain
+                    await goToSurface(bot);
+                    // Step 2: Try a new completely random direction from surface
+                    const escapeAngle = Math.random() * 2 * Math.PI;
+                    const ex = Math.floor(bot.entity.position.x + hopDist * Math.cos(escapeAngle));
+                    const ez = Math.floor(bot.entity.position.z + hopDist * Math.sin(escapeAngle));
+                    const surfY2 = Math.floor(bot.entity.position.y);
+                    await goToPosition(bot, ex, surfY2, ez, 3);
+                    totalMoved += currentPos.distanceTo(bot.entity.position);
+                    consecutiveFails = 0;
+                    angle = escapeAngle; // continue in the escape direction
+                } catch (_escape) {
+                    log(bot, `Terrain escape failed. Explored ${Math.round(totalMoved)} blocks total.`);
+                    break;
+                }
+                continue;
+            }
+            // Try perpendicular direction on first failure
+            const perpAngle = angle + (Math.random() > 0.5 ? Math.PI/2 : -Math.PI/2);
+            const px = Math.floor(currentPos.x + hopDist * Math.cos(perpAngle));
+            const pz = Math.floor(currentPos.z + hopDist * Math.sin(perpAngle));
+            try {
+                await goToPosition(bot, px, currentPos.y, pz, 3);
+                totalMoved += currentPos.distanceTo(bot.entity.position);
+                consecutiveFails = 0;
+            } catch (_e2) { /* will try next hop */ }
+        }
+    }
+    
+    let finalPos = bot.entity.position;
+    let directDistance = startPos.distanceTo(finalPos);
+    
+    // RC17: Smart explore — check if we landed near resources (any log type).
+    // If not, auto-retry in different directions before returning to the LLM.
+    const LOG_TYPES = ['oak_log', 'birch_log', 'spruce_log', 'jungle_log', 'acacia_log', 'dark_oak_log', 'mangrove_log', 'cherry_log'];
+    const MAX_DIRECTION_RETRIES = 2;
+    
+    for (let retry = 0; retry < MAX_DIRECTION_RETRIES; retry++) {
+        if (bot.interrupt_code) break;
+        
+        // Check for any log blocks within 128 blocks
+        let hasLogs = false;
+        for (const logType of LOG_TYPES) {
+            const logBlock = world.getNearestBlock(bot, logType, 128);
+            if (logBlock) {
+                hasLogs = true;
+                break;
+            }
+        }
+        
+        if (hasLogs) break; // Found logs nearby, good landing spot
+        
+        // Also check if we're in water (bad landing)
+        const feetBlock = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+        const isInWater = feetBlock && (feetBlock.name === 'water' || feetBlock.name === 'ice' || feetBlock.name === 'blue_ice');
+        
+        if (!hasLogs) {
+            log(bot, `No trees in this area${isInWater ? ' (landed in water)' : ''}. Trying a different direction (attempt ${retry + 1}/${MAX_DIRECTION_RETRIES})...`);
+            
+            // Pick a direction roughly perpendicular to our original angle
+            const retryAngle = angle + Math.PI / 2 + (retry * Math.PI / 3) + (Math.random() - 0.5) * 0.5;
+            const retryDist = Math.min(100, distance);
+            const retryHops = Math.max(1, Math.ceil(retryDist / HOP_SIZE));
+            
+            for (let hop = 0; hop < retryHops; hop++) {
+                if (bot.interrupt_code) break;
+                const cp = bot.entity.position;
+                const hd = Math.min(HOP_SIZE, retryDist - (hop * HOP_SIZE));
+                const tx = Math.floor(cp.x + hd * Math.cos(retryAngle));
+                const tz = Math.floor(cp.z + hd * Math.sin(retryAngle));
+                try {
+                    await goToPosition(bot, tx, cp.y, tz, 3);
+                } catch (_e) { break; }
+            }
+            
+            finalPos = bot.entity.position;
+            directDistance = startPos.distanceTo(finalPos);
+        }
+    }
+    
+    // Resume unstuck mode
+    if (numHops > 1) bot.modes.unpause('unstuck');
+    
+    log(bot, `Explored ${Math.round(directDistance)} blocks to (${Math.floor(finalPos.x)}, ${Math.floor(finalPos.y)}, ${Math.floor(finalPos.z)}). New chunks loaded — try gathering here.`);
+    return directDistance > 10;
 }
 
 export async function avoidEnemies(bot, distance=16) {
@@ -1454,10 +1982,12 @@ export async function avoidEnemies(bot, distance=16) {
     bot.modes.pause('self_preservation'); // prevents damage-on-low-health from interrupting the bot
     let enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), distance);
     while (enemy) {
-        const follow = new pf.goals.GoalFollow(enemy, distance+1); // move a little further away
-        const inverted_goal = new pf.goals.GoalInvert(follow);
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        bot.pathfinder.setGoal(inverted_goal, true);
+        // RC25: Baritone GoalAvoid to flee from enemy
+        const avoidGoal = new baritoneGoals.GoalAvoid(enemy.position, distance + 1, bot);
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        try {
+            await bot.ashfinder.gotoSmart(avoidGoal);
+        } catch (_e) { /* best-effort flee */ }
         await new Promise(resolve => setTimeout(resolve, 500));
         enemy = world.getNearestEntityWhere(bot, entity => mc.isHostile(entity), distance);
         if (bot.interrupt_code) {
@@ -1467,7 +1997,7 @@ export async function avoidEnemies(bot, distance=16) {
             await attackEntity(bot, enemy, false);
         }
     }
-    bot.pathfinder.stop();
+    bot.ashfinder.stop();
     log(bot, `Moved ${distance} away from enemies.`);
     return true;
 }
@@ -1520,24 +2050,43 @@ export async function useDoor(bot, door_pos=null) {
         return false;
     }
 
-    bot.pathfinder.setGoal(new pf.goals.GoalNear(door_pos.x, door_pos.y, door_pos.z, 1));
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    while (bot.pathfinder.isMoving()) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    
-    let door_block = bot.blockAt(door_pos);
-    await bot.lookAt(door_pos);
-    if (!door_block._properties.open)
-        await bot.activateBlock(door_block);
-    
-    bot.setControlState("forward", true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    bot.setControlState("forward", false);
-    await bot.activateBlock(door_block);
+    try {
+        // RC25: Baritone gotoSmart replaces pathfinder.setGoal + isMoving poll
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        await bot.ashfinder.gotoSmart(new baritoneGoals.GoalNear(door_pos, 1));
+        
+        let door_block = bot.blockAt(door_pos);
+        if (!door_block) {
+            log(bot, `Door block disappeared at ${door_pos}.`);
+            return false;
+        }
+        
+        await bot.lookAt(door_pos.offset(0.5, 0.5, 0.5));
+        
+        // Toggle door state if it exists
+        if (door_block._properties && !door_block._properties.open)
+            await bot.activateBlock(door_block);
+        else if (!door_block._properties)
+            await bot.activateBlock(door_block);
+        
+        // Wait and move through
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        bot.setControlState("forward", true);
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        bot.setControlState("forward", false);
+        
+        // Close door if it's still open
+        door_block = bot.blockAt(door_pos);
+        if (door_block && door_block._properties && door_block._properties.open) {
+            await bot.activateBlock(door_block);
+        }
 
-    log(bot, `Used door at ${door_pos}.`);
-    return true;
+        log(bot, `Used door at ${door_pos}.`);
+        return true;
+    } catch (err) {
+        log(bot, `Error using door: ${err.message}.`);
+        return false;
+    }
 }
 
 export async function goToBed(bot) {
@@ -1562,7 +2111,40 @@ export async function goToBed(bot) {
     let loc = beds[0];
     await goToPosition(bot, loc.x, loc.y, loc.z);
     const bed = bot.blockAt(loc);
-    await bot.sleep(bed);
+    if (!bed) {
+        log(bot, `Could not find a bed block at location.`);
+        return false;
+    }
+    let slept = false;
+    try {
+        await bot.sleep(bed);
+        slept = true;
+    } catch (err) {
+        // Sometimes the located bed is the wrong half. Try adjacent blocks.
+        const offsets = [
+            { x: 1, y: 0, z: 0 },
+            { x: -1, y: 0, z: 0 },
+            { x: 0, y: 0, z: 1 },
+            { x: 0, y: 0, z: -1 }
+        ];
+        for (const offset of offsets) {
+            const otherPos = bed.position.offset(offset.x, offset.y, offset.z);
+            const otherBed = bot.blockAt(otherPos);
+            if (otherBed && otherBed.name === bed.name) {
+                try {
+                    await bot.sleep(otherBed);
+                    slept = true;
+                    break;
+                } catch (_e) {
+                    // continue trying other halves
+                }
+            }
+        }
+        if (!slept) {
+            log(bot, `Could not sleep in bed: ${err?.message ?? 'unknown error'}`);
+            return false;
+        }
+    }
     log(bot, `You are in bed.`);
     bot.modes.pause('unstuck');
     while (bot.isSleeping) {
@@ -1596,8 +2178,8 @@ export async function tillAndSow(bot, x, y, z, seedType=null) {
                 seedType = seedType.replace(remove, '');
             }
         }
-        placeBlock(bot, 'farmland', x, y, z);
-        placeBlock(bot, seedType, x, y+1, z);
+        await placeBlock(bot, 'farmland', x, y, z);
+        await placeBlock(bot, seedType, x, y+1, z);
         return true;
     }
 
@@ -1620,8 +2202,8 @@ export async function tillAndSow(bot, x, y, z, seedType=null) {
     // if distance is too far, move to the block
     if (bot.entity.position.distanceTo(block.position) > 4.5) {
         let pos = block.position;
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+        // RC25: Baritone GoalNear
+        await goToGoal(bot, new baritoneGoals.GoalNear(pos, 4));
     }
     if (block.name !== 'farmland') {
         let hoe = bot.inventory.items().find(item => item.name.includes('hoe'));
@@ -1665,8 +2247,8 @@ export async function activateNearestBlock(bot, type) {
     }
     if (bot.entity.position.distanceTo(block.position) > 4.5) {
         let pos = block.position;
-        bot.pathfinder.setMovements(new pf.Movements(bot));
-        await goToGoal(bot, new pf.goals.GoalNear(pos.x, pos.y, pos.z, 4));
+        // RC25: Baritone GoalNear
+        await goToGoal(bot, new baritoneGoals.GoalNear(pos, 4));
     }
     await bot.activateBlock(block);
     log(bot, `Activated ${type} at x:${block.position.x.toFixed(1)}, y:${block.position.y.toFixed(1)}, z:${block.position.z.toFixed(1)}.`);
@@ -1720,7 +2302,8 @@ async function findAndGoToVillager(bot, id) {
         log(bot, `Villager is ${distance.toFixed(1)} blocks away, moving closer...`);
         try {
             bot.modes.pause('unstuck');
-            const goal = new pf.goals.GoalFollow(entity, 2);
+            // RC25: Baritone GoalNear replaces GoalFollow for villager approach
+            const goal = new baritoneGoals.GoalNear(entity.position, 2);
             await goToGoal(bot, goal);
             
             
@@ -1903,9 +2486,182 @@ function stringifyItem(bot, item) {
     return text;
 }
 
+// RC30: Pillar up out of a shaft by placing blocks below the bot
+export async function pillarUp(bot, distance = 10) {
+    /**
+     * Pillar up by placing blocks below the bot. Uses cobblestone, dirt, or netherrack.
+     * Breaks blocks above the bot's head before jumping.
+     * @param {MinecraftBot} bot
+     * @param {number} distance - number of blocks to go up
+     * @returns {Promise<boolean>} true if successfully pillared all the way up
+     */
+    const placeableBlocks = ['cobblestone', 'dirt', 'netherrack', 'stone', 'granite', 'diorite', 'andesite', 'deepslate', 'cobbled_deepslate'];
+    
+    for (let i = 0; i < distance; i++) {
+        // Find a suitable block in inventory to place
+        const inv = world.getInventoryCounts(bot);
+        const blockToPlace = placeableBlocks.find(b => (inv[b] ?? 0) > 0);
+        if (!blockToPlace) {
+            log(bot, `Ran out of blocks to place after pillaring up ${i} blocks.`);
+            return i > 0;
+        }
+
+        // Break blocks above the bot's head (need 2 blocks of air above to jump)
+        const headPos = bot.entity.position.offset(0, 2, 0);
+        const headBlock = bot.blockAt(new Vec3(Math.floor(headPos.x), Math.floor(headPos.y), Math.floor(headPos.z)));
+        if (headBlock && headBlock.name !== 'air' && headBlock.name !== 'cave_air') {
+            const dug = await breakBlockAt(bot, headBlock.position.x, headBlock.position.y, headBlock.position.z);
+            if (!dug) {
+                log(bot, `Cannot break block above head at y=${headBlock.position.y}. Stopped after ${i} blocks.`);
+                return i > 0;
+            }
+        }
+        // Also check one more above for safety
+        const aboveHead = bot.blockAt(new Vec3(Math.floor(headPos.x), Math.floor(headPos.y) + 1, Math.floor(headPos.z)));
+        if (aboveHead && aboveHead.name !== 'air' && aboveHead.name !== 'cave_air') {
+            await breakBlockAt(bot, aboveHead.position.x, aboveHead.position.y, aboveHead.position.z);
+        }
+
+        // Jump and place block below
+        await bot.equip(bot.registry.itemsByName[blockToPlace].id, 'hand');
+        bot.setControlState('jump', true);
+        await new Promise(r => setTimeout(r, 350)); // wait to be at top of jump
+        bot.setControlState('jump', false);
+
+        // Place block at the position below the bot's feet
+        const feetPos = bot.entity.position;
+        const belowBlock = bot.blockAt(new Vec3(Math.floor(feetPos.x), Math.floor(feetPos.y) - 1, Math.floor(feetPos.z)));
+        if (belowBlock && (belowBlock.name === 'air' || belowBlock.name === 'cave_air')) {
+            try {
+                // Find an adjacent solid face to place against
+                const neighbors = [
+                    belowBlock.position.offset(0, -1, 0),
+                    belowBlock.position.offset(1, 0, 0),
+                    belowBlock.position.offset(-1, 0, 0),
+                    belowBlock.position.offset(0, 0, 1),
+                    belowBlock.position.offset(0, 0, -1),
+                ];
+                let placed = false;
+                for (const nPos of neighbors) {
+                    const nBlock = bot.blockAt(nPos);
+                    if (nBlock && nBlock.name !== 'air' && nBlock.name !== 'cave_air' && nBlock.name !== 'water' && nBlock.name !== 'lava') {
+                        const face = belowBlock.position.minus(nPos);
+                        await bot.placeBlock(nBlock, face);
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) {
+                    log(bot, `Could not find adjacent block to place against at y=${belowBlock.position.y}. Stopped after ${i} blocks.`);
+                    return i > 0;
+                }
+            } catch (placeErr) {
+                log(bot, `Failed to place block: ${placeErr.message}. Stopped after ${i} blocks.`);
+                return i > 0;
+            }
+        }
+        await new Promise(r => setTimeout(r, 250)); // small delay between pillars
+    }
+    log(bot, `Pillared up ${distance} blocks.`);
+    return true;
+}
+
+// RC30: Strip-mine horizontally to find ore when pathfinder can't reach any
+export async function stripMineForOre(bot, oreNames, length = 32) {
+    /**
+     * Dig a 1x2 horizontal tunnel to find ore. Mines in the direction the bot is facing.
+     * @param {MinecraftBot} bot
+     * @param {string[]} oreNames - ore block names to look for (e.g. ['iron_ore', 'deepslate_iron_ore'])
+     * @param {number} length - how far to dig (blocks)
+     * @returns {Promise<boolean>} true if ore was found and collected
+     */
+    // Determine direction from bot's yaw
+    const yaw = bot.entity.yaw;
+    let dx = 0, dz = 0;
+    // Normalize yaw to cardinal direction
+    const facing = ((yaw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    if (facing >= 5.5 || facing < 0.785) { dz = 1; }       // south
+    else if (facing >= 0.785 && facing < 2.356) { dx = -1; }  // west  
+    else if (facing >= 2.356 && facing < 3.927) { dz = -1; }  // north
+    else { dx = 1; }                                          // east
+
+    log(bot, `Strip-mining ${length} blocks (dx=${dx}, dz=${dz}) looking for ${oreNames.join('/')}`);
+    
+    const startPos = bot.entity.position.clone();
+    let oresCollected = 0;
+
+    for (let i = 1; i <= length; i++) {
+        if (bot.interrupt_code) break;
+        
+        const x = Math.floor(startPos.x) + dx * i;
+        const y = Math.floor(startPos.y);
+        const z = Math.floor(startPos.z) + dz * i;
+
+        // Break the two blocks in front (feet level and head level)
+        for (const yOff of [0, 1]) {
+            const block = bot.blockAt(new Vec3(x, y + yOff, z));
+            if (!block || block.name === 'air' || block.name === 'cave_air') continue;
+            
+            // Check for lava
+            if (block.name === 'lava' || block.name === 'water') {
+                log(bot, `Hit ${block.name} while strip-mining. Stopping.`);
+                return oresCollected > 0;
+            }
+            
+            // Check if this IS an ore we want
+            if (oreNames.includes(block.name)) {
+                oresCollected++;
+                log(bot, `Found ${block.name} while strip-mining at (${x}, ${y + yOff}, ${z})!`);
+            }
+            
+            await breakBlockAt(bot, x, y + yOff, z);
+        }
+
+        // Also check blocks to the sides and above/below for ore
+        const sideOffsets = [
+            [0, 2, 0],   // above head
+            [0, -1, 0],  // below feet
+            [-dz, 0, dx], // left wall (feet)
+            [-dz, 1, dx], // left wall (head)
+            [dz, 0, -dx], // right wall (feet)
+            [dz, 1, -dx], // right wall (head)
+        ];
+        for (const [ox, oy, oz] of sideOffsets) {
+            const sideBlock = bot.blockAt(new Vec3(x + ox, y + oy, z + oz));
+            if (sideBlock && oreNames.includes(sideBlock.name)) {
+                oresCollected++;
+                log(bot, `Found ${sideBlock.name} adjacent to tunnel at (${x + ox}, ${y + oy}, ${z + oz})!`);
+                await breakBlockAt(bot, x + ox, y + oy, z + oz);
+            }
+        }
+
+        // Move into the newly cleared space
+        try {
+            await bot.waitForTicks(2);
+            // Simple movement: walk forward into the cleared space
+            await goToPosition(bot, x + 0.5, y, z + 0.5, 0);
+        } catch (_moveErr) {
+            // If pathfinder fails, try teleporting via simple walk
+            bot.setControlState('forward', true);
+            await new Promise(r => setTimeout(r, 500));
+            bot.setControlState('forward', false);
+        }
+
+        // Pick up dropped items every few blocks
+        if (i % 4 === 0) {
+            await pickupNearbyItems(bot);
+        }
+    }
+
+    await pickupNearbyItems(bot);
+    log(bot, `Strip-mine complete. Found ${oresCollected} ore blocks in ${length}-block tunnel.`);
+    return oresCollected > 0;
+}
+
 export async function digDown(bot, distance = 10) {
     /**
-     * Digs down a specified distance. Will stop if it reaches lava, water, or a fall of >=4 blocks below the bot.
+     * Digs down a specified distance. Will stop if it reaches lava, water, or a fall of >=6 blocks below the bot.
+     * For drops of 3-5 blocks, places blocks to create a safe staircase down.
      * @param {MinecraftBot} bot, reference to the minecraft bot.
      * @param {int} distance, distance to dig down.
      * @returns {Promise<boolean>} true if successfully dug all the way down.
@@ -1926,21 +2682,23 @@ export async function digDown(bot, distance = 10) {
         // Check for lava, water
         if (targetBlock.name === 'lava' || targetBlock.name === 'water' || 
             belowBlock.name === 'lava' || belowBlock.name === 'water') {
-            log(bot, `Dug down ${i-1} blocks, but reached ${belowBlock ? belowBlock.name : '(lava/water)'}`)
+            log(bot, `Dug down ${i-1} blocks, but reached ${belowBlock ? belowBlock.name : '(lava/water)'}`);
             return false;
         }
 
-        const MAX_FALL_BLOCKS = 2;
+        // RC30: Increased from 2 to 5. Count air blocks below.
+        const MAX_FALL_BLOCKS = 5;
         let num_fall_blocks = 0;
+        let checkBlock = belowBlock;
         for (let j = 0; j <= MAX_FALL_BLOCKS; j++) {
-            if (!belowBlock || (belowBlock.name !== 'air' && belowBlock.name !== 'cave_air')) {
+            if (!checkBlock || (checkBlock.name !== 'air' && checkBlock.name !== 'cave_air')) {
                 break;
             }
             num_fall_blocks++;
-            belowBlock = bot.blockAt(belowBlock.position.offset(0, -1, 0));
+            checkBlock = bot.blockAt(start_block_pos.offset(0, -i-1-j-1, 0));
         }
         if (num_fall_blocks > MAX_FALL_BLOCKS) {
-            log(bot, `Dug down ${i-1} blocks, but reached a drop below the next block.`);
+            log(bot, `Dug down ${i-1} blocks, but reached a large drop (${num_fall_blocks} blocks) below.`);
             return false;
         }
 
@@ -1973,7 +2731,7 @@ export async function goToSurface(bot) {
             continue;
         }
         await goToPosition(bot, block.position.x, block.position.y + 1, block.position.z, 0); // this will probably work most of the time but a custom mining and towering up implementation could be added if needed
-        log(bot, `Going to the surface at y=${y+1}.`);``
+        log(bot, `Going to the surface at y=${y+1}.`);
         return true;
     }
     return false;
@@ -2061,7 +2819,7 @@ export async function useToolOn(bot, toolName, targetName) {
         return blockInView && 
             !blockInView.position.equals(block.position) && 
             blockInView.position.distanceTo(headPos) < block.position.distanceTo(headPos);
-    }
+    };
     const blockInView = bot.blockAtCursor(5);
     if (viewBlocked()) {
         log(bot, `Block ${blockInView.name} is in the way, moving closer...`);
@@ -2090,4 +2848,933 @@ export async function useToolOn(bot, toolName, targetName) {
     }
     log(bot, `Used ${toolName} on ${block.name}.`);
     return true;
- }
+}
+
+export async function enterMinecart(bot, minecart_pos=null) {
+    /**
+     * Enter a minecart at the given position.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {Vec3} minecart_pos, the position of the minecart. If null, the nearest minecart will be used.
+     * @returns {Promise<boolean>} true if the minecart was entered, false otherwise.
+     * @example
+     * await skills.enterMinecart(bot);
+     **/
+    try {
+        if (!minecart_pos) {
+            const minecarts = bot.entities
+                .filter(e => e.type === 'minecart' || e.type === 'object')
+                .sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position));
+            
+            if (minecarts.length === 0) {
+                log(bot, `No minecart found nearby.`);
+                return false;
+            }
+            minecart_pos = minecarts[0].position;
+        }
+        
+        // Go to the minecart
+        // RC25: Baritone gotoSmart replaces pathfinder.setGoal + isMoving poll
+        if (!bot.ashfinder.stopped) bot.ashfinder.stop();
+        await bot.ashfinder.gotoSmart(new baritoneGoals.GoalNear(minecart_pos, 1));
+        
+        // Right-click to enter
+        await bot.lookAt(minecart_pos.offset(0.5, 0.5, 0.5));
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        
+        // Use interaction (activate the minecart)
+        const minecartEntity = bot.nearestEntity(entity => 
+            (entity.type === 'minecart' || entity.type === 'object') && 
+            entity.position.distanceTo(minecart_pos) < 2
+        );
+        
+        if (minecartEntity) {
+            await bot.activateEntity(minecartEntity);
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            log(bot, `Entered minecart at ${minecart_pos}.`);
+            return true;
+        }
+        
+        log(bot, `Could not find minecart entity to enter.`);
+        return false;
+    } catch (err) {
+        log(bot, `Error entering minecart: ${err.message}`);
+        return false;
+    }
+}
+
+export async function exitMinecart(bot) {
+    /**
+     * Exit the current minecart.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if exited minecart, false otherwise.
+     * @example
+     * await skills.exitMinecart(bot);
+     **/
+    try {
+        if (!bot.vehicle) {
+            log(bot, `Not currently in a minecart.`);
+            return false;
+        }
+        
+        // Jump to exit
+        bot.setControlState("jump", true);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        bot.setControlState("jump", false);
+        
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        log(bot, `Exited minecart.`);
+        return true;
+    } catch (err) {
+        log(bot, `Error exiting minecart: ${err.message}`);
+        return false;
+    }
+}
+
+export async function getDiamondPickaxe(bot) {
+    /**
+     * Automatically obtain a diamond pickaxe by progressing through tool tiers.
+     * Detects any existing pickaxe and starts from the appropriate tier,
+     * so calling it twice is safe (idempotent).
+     * Tiers: wooden → stone → iron → diamond.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if diamond pickaxe obtained, false otherwise.
+     **/
+    console.log('[RC30] getDiamondPickaxe: starting');
+
+    // Clear near-full inventory first so items can be picked up during collection
+    const invSize = Object.values(world.getInventoryCounts(bot)).reduce((a, b) => a + b, 0);
+    console.log(`[RC30] getDiamondPickaxe: invSize=${invSize}`);
+    if (invSize >= 30) {
+        log(bot, `Inventory near-full (${invSize} stacks). Clearing junk before collecting resources...`);
+        await autoManageInventory(bot);
+    }
+
+    let inv;
+
+    // Already done
+    inv = world.getInventoryCounts(bot);
+    if (inv['diamond_pickaxe'] > 0) {
+        log(bot, 'Already have a diamond pickaxe!');
+        return true;
+    }
+
+    // ── TIER 1: wooden pickaxe ───────────────────────────────────────────────
+    inv = world.getInventoryCounts(bot);
+    if (!inv['wooden_pickaxe'] && !inv['stone_pickaxe'] && !inv['iron_pickaxe']) {
+        // Skip wooden pickaxe entirely if we already have materials for stone pickaxe
+        if ((inv['cobblestone'] ?? 0) >= 3 && (inv['stick'] ?? 0) >= 2) {
+            log(bot, 'Already have cobblestone and sticks — skipping wooden pickaxe, going straight to stone.');
+            // Fall through to tier 2
+        } else {
+        log(bot, 'Starting tool progression: collecting logs...');
+        const logTypes = ['oak_log', 'birch_log', 'spruce_log', 'dark_oak_log',
+                          'acacia_log', 'jungle_log', 'mangrove_log'];
+        // Use logs already in inventory, or collect some
+        let logType = logTypes.find(l => (inv[l] ?? 0) >= 3);
+        if (!logType) {
+            for (const lt of logTypes) {
+                if (await collectBlock(bot, lt, 3)) { logType = lt; break; }
+            }
+        }
+        if (!logType) {
+            log(bot, 'No logs nearby. Exploring 200 blocks to find trees...');
+            await explore(bot, 200);
+            for (const lt of logTypes) {
+                if (await collectBlock(bot, lt, 3)) { logType = lt; break; }
+            }
+        }
+        if (!logType) {
+            log(bot, 'Cannot find any logs even after exploring. Run !getDiamondPickaxe again from a different area.');
+            return false;
+        }
+        // Re-read inventory — collectBlock may have picked up a different log type
+        // (e.g., RC27 expanded search returns oak while hunting birch).
+        inv = world.getInventoryCounts(bot);
+        const actualLog = logTypes.find(l => (inv[l] ?? 0) >= 1);
+        if (actualLog && actualLog !== logType) {
+            log(bot, `Collected ${actualLog} (was hunting ${logType}), adjusting.`);
+            logType = actualLog;
+        }
+        const plankType = logType.replace('_log', '_planks');
+
+        // Craft ALL logs into planks (need ≥9: 4 crafting_table + 2 sticks + 3 pickaxe)
+        const logsAvail = inv[logType] ?? 0;
+        if (!await craftRecipe(bot, plankType, Math.max(logsAvail, 3))) {
+            log(bot, `Failed to craft ${plankType}.`);
+            return false;
+        }
+
+        // Craft a crafting table — required for all pickaxe recipes
+        inv = world.getInventoryCounts(bot);
+        const nearTable = world.getNearestBlock(bot, 'crafting_table', 16);
+        const isReachable = nearTable && bot.entity.position.distanceTo(nearTable.position) <= 4;
+        if (!(inv['crafting_table'] > 0) && !isReachable) {
+            if (!await craftRecipe(bot, 'crafting_table', 1)) {
+                log(bot, 'Failed to craft crafting table.');
+                return false;
+            }
+        }
+
+        if (!await craftRecipe(bot, 'stick', 1)) {
+            log(bot, 'Failed to craft sticks.');
+            return false;
+        }
+        if (!await craftRecipe(bot, 'wooden_pickaxe', 1)) {
+            log(bot, 'Failed to craft wooden pickaxe.');
+            return false;
+        }
+        log(bot, 'Wooden pickaxe crafted.');
+        } // end else (wooden pickaxe craft)
+    }
+
+    // Helper: ensure we have enough sticks & a crafting table for upcoming pickaxe
+    async function ensureSticksAndTable() {
+        const inv2 = world.getInventoryCounts(bot);
+        // Need at least 2 sticks
+        if ((inv2['stick'] ?? 0) < 2) {
+            // Need planks for sticks — check if we have some
+            const anyPlanks = ['oak_planks','birch_planks','spruce_planks','dark_oak_planks',
+                               'acacia_planks','jungle_planks','mangrove_planks'].find(p => (inv2[p] ?? 0) >= 2);
+            if (anyPlanks) {
+                await craftRecipe(bot, 'stick', 1);
+            } else {
+                // Collect 1 log and make planks + sticks
+                const logTypes2 = ['oak_log','birch_log','spruce_log','dark_oak_log',
+                                   'acacia_log','jungle_log','mangrove_log'];
+                for (const lt of logTypes2) {
+                    if (await collectBlock(bot, lt, 1)) {
+                        const pt = lt.replace('_log', '_planks');
+                        await craftRecipe(bot, pt, 1);
+                        await craftRecipe(bot, 'stick', 1);
+                        break;
+                    }
+                }
+            }
+        }
+        // Ensure crafting table available (in inventory, not just "nearby" which might be unreachable)
+        const inv3 = world.getInventoryCounts(bot);
+        const nearbyTable = world.getNearestBlock(bot, 'crafting_table', 16);
+        const tableReachable = nearbyTable && bot.entity.position.distanceTo(nearbyTable.position) <= 4;
+        if (!(inv3['crafting_table'] > 0) && !tableReachable) {
+            let anyPlanks = ['oak_planks','birch_planks','spruce_planks','dark_oak_planks',
+                               'acacia_planks','jungle_planks','mangrove_planks'].find(p => (inv3[p] ?? 0) >= 4);
+            if (!anyPlanks) {
+                // Convert logs to planks if we have any
+                const logTypes3 = ['oak_log','birch_log','spruce_log','dark_oak_log',
+                                   'acacia_log','jungle_log','mangrove_log'];
+                const logType3 = logTypes3.find(l => (inv3[l] ?? 0) >= 1);
+                if (logType3) {
+                    const pt3 = logType3.replace('_log', '_planks');
+                    await craftRecipe(bot, pt3, 1);  // 1 log → 4 planks
+                    anyPlanks = pt3;
+                } else {
+                    // Collect a log if none in inventory
+                    for (const lt of logTypes3) {
+                        if (await collectBlock(bot, lt, 1)) {
+                            const pt3 = lt.replace('_log', '_planks');
+                            await craftRecipe(bot, pt3, 1);
+                            anyPlanks = pt3;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (anyPlanks) {
+                await craftRecipe(bot, 'crafting_table', 1);
+            }
+        }
+    }
+
+    // ── TIER 2: stone pickaxe ────────────────────────────────────────────────
+    inv = world.getInventoryCounts(bot);
+    if (!inv['stone_pickaxe'] && !inv['iron_pickaxe']) {
+        if ((inv['cobblestone'] ?? 0) < 3) {
+            log(bot, 'Collecting cobblestone for stone pickaxe...');
+            if (!await collectBlock(bot, 'stone', 3)) {
+                log(bot, 'Could not find stone. Try moving to a rocky area.');
+                return false;
+            }
+        } else {
+            log(bot, 'Already have enough cobblestone for stone pickaxe.');
+        }
+        await ensureSticksAndTable();
+        if (!await craftRecipe(bot, 'stone_pickaxe', 1)) {
+            log(bot, 'Failed to craft stone pickaxe.');
+            return false;
+        }
+        log(bot, 'Stone pickaxe crafted.');
+    }
+
+    // ── TIER 3: iron pickaxe ─────────────────────────────────────────────────
+    inv = world.getInventoryCounts(bot);
+    console.log(`[RC30] Tier 3 check: iron_pickaxe=${inv['iron_pickaxe'] ?? 0}`);
+    if (!inv['iron_pickaxe']) {
+      try {
+        log(bot, 'Collecting iron ore for iron pickaxe...');
+        const ironOres = ['iron_ore', 'deepslate_iron_ore'];
+        
+        // Check if we already have raw_iron or iron_ingot in inventory
+        inv = world.getInventoryCounts(bot);
+        const rawIronHave = (inv['raw_iron'] ?? 0);
+        const ironIngotHave = (inv['iron_ingot'] ?? 0);
+        const ironNeeded = 3 - ironIngotHave;  // need 3 total iron ingots
+        const oreNeeded = Math.max(0, ironNeeded - rawIronHave);
+        
+        let gotIron = oreNeeded <= 0;
+        
+        if (!gotIron) {
+            // Attempt 1: regular collectBlock
+            gotIron = await collectBlock(bot, 'iron_ore', oreNeeded);
+            if (!gotIron) gotIron = await collectBlock(bot, 'deepslate_iron_ore', oreNeeded);
+        }
+        
+        if (!gotIron) {
+            // Attempt 2: strip-mine at current level (works even in shafts)
+            log(bot, 'Cannot reach iron ore via pathfinding. Strip-mining to find iron...');
+            const currentY = Math.floor(bot.entity.position.y);
+            
+            // If we're deep underground in a shaft, try to escape upward first
+            if (currentY < 50) {
+                log(bot, 'Underground — trying to pillar up to better terrain...');
+                const pillarDist = Math.min(20, 60 - currentY); // aim for ~y=60 (surface-ish)
+                if (pillarDist > 0) {
+                    await pillarUp(bot, pillarDist);
+                }
+            }
+            
+            // Now try strip-mining at current position (any y-level from 0-64 has iron)
+            gotIron = await stripMineForOre(bot, ironOres, 40);
+        }
+        
+        if (!gotIron) {
+            // Attempt 3: explore on surface, then dig fresh shaft
+            log(bot, 'Strip-mine did not find iron. Exploring to find a new area...');
+            try { await goToSurface(bot); } catch (_e) {
+                // goToSurface may fail in enclosed spaces — pillar up instead
+                await pillarUp(bot, 30);
+            }
+            await explore(bot, 200);
+            const newY = Math.floor(bot.entity.position.y);
+            if (newY > 16) {
+                await digDown(bot, Math.min(newY - 16, 40));
+            }
+            gotIron = await collectBlock(bot, 'iron_ore', oreNeeded);
+            if (!gotIron) gotIron = await collectBlock(bot, 'deepslate_iron_ore', oreNeeded);
+            if (!gotIron) gotIron = await stripMineForOre(bot, ironOres, 40);
+        }
+        
+        if (!gotIron) {
+            log(bot, 'Could not find iron ore after multiple attempts. Try !getDiamondPickaxe again later.');
+            return false;
+        }
+        
+        // Check how much raw iron we have now
+        inv = world.getInventoryCounts(bot);
+        const totalRaw = (inv['raw_iron'] ?? 0);
+        const totalIngots = (inv['iron_ingot'] ?? 0);
+        
+        if (totalIngots < 3 && totalRaw > 0) {
+            // RC30: Ensure we have a furnace before smelting
+            const furnaceInv = (inv['furnace'] ?? 0);
+            const furnaceNearby = world.getNearestBlock(bot, 'furnace', 16);
+            if (!furnaceInv && !furnaceNearby) {
+                log(bot, 'Crafting furnace for smelting (8 cobblestone)...');
+                await ensureSticksAndTable();  // need crafting table
+                if (!await craftRecipe(bot, 'furnace', 1)) {
+                    log(bot, 'Failed to craft furnace. Need 8 cobblestone.');
+                    return false;
+                }
+            }
+            
+            // RC30: Ensure we have fuel — collect coal if no fuel in inventory
+            const fuelItems = ['coal', 'charcoal', 'oak_planks', 'birch_planks', 'spruce_planks',
+                              'dark_oak_planks', 'acacia_planks', 'jungle_planks', 'mangrove_planks',
+                              'oak_log', 'birch_log', 'spruce_log'];
+            const hasFuel = fuelItems.some(f => (inv[f] ?? 0) > 0);
+            if (!hasFuel) {
+                log(bot, 'No fuel for furnace. Collecting coal...');
+                let gotFuel = await collectBlock(bot, 'coal_ore', 2);
+                if (!gotFuel) {
+                    // Use wood as backup fuel — collect a log
+                    const logTypes4 = ['oak_log','birch_log','spruce_log','dark_oak_log','acacia_log','jungle_log'];
+                    for (const lt of logTypes4) {
+                        if (await collectBlock(bot, lt, 2)) { gotFuel = true; break; }
+                    }
+                }
+                if (!gotFuel) {
+                    log(bot, 'Cannot find fuel for smelting. Try again from a different area.');
+                    return false;
+                }
+            }
+            
+            const smeltCount = Math.min(totalRaw, 3 - totalIngots);
+            if (!await smeltItem(bot, 'raw_iron', smeltCount)) {
+                log(bot, 'Failed to smelt raw iron into iron ingots.');
+                return false;
+            }
+        } else if (totalIngots < 3 && totalRaw === 0) {
+            log(bot, 'Collected ore blocks but no raw_iron in inventory. May need a better pickaxe or retry.');
+            return false;
+        }
+        
+        await ensureSticksAndTable();
+        if (!await craftRecipe(bot, 'iron_pickaxe', 1)) {
+            log(bot, 'Failed to craft iron pickaxe.');
+            return false;
+        }
+        log(bot, 'Iron pickaxe crafted.');
+      } catch (tier3Err) {
+        log(bot, `[RC30] Iron tier error: ${tier3Err.message}. Will retry on next !getDiamondPickaxe call.`);
+        console.error('[RC30] Tier 3 error:', tier3Err);
+        return false;
+      }
+    }
+
+    // ── TIER 4: diamond pickaxe ──────────────────────────────────────────────
+    // RC31: Quick-check — if we already have a diamond pickaxe, return immediately
+    if (world.getInventoryCounts(bot)['diamond_pickaxe']) {
+        log(bot, 'Already have a diamond pickaxe! Skipping tier 4.');
+        return true;
+    }
+    console.log('[RC30] Entering tier 4: diamond pickaxe');
+  try {
+    const targetY = -11;
+    const MAX_DIG_ATTEMPTS = 4;
+    let reachedDiamondLevel = false;
+    
+    for (let attempt = 0; attempt < MAX_DIG_ATTEMPTS && !reachedDiamondLevel; attempt++) {
+        const currentY = Math.floor(bot.entity.position.y);
+        log(bot, `Digging to diamond level (y=${targetY}), attempt ${attempt + 1}/${MAX_DIG_ATTEMPTS} from y=${currentY}...`);
+        
+        if (currentY <= targetY + 5) {
+            reachedDiamondLevel = true;
+            break;
+        }
+        
+        const dist = currentY - targetY;
+        const digSuccess = await digDown(bot, dist);
+        const afterY = Math.floor(bot.entity.position.y);
+        console.log(`[RC30] Tier4 dig attempt ${attempt + 1}: digSuccess=${digSuccess}, afterY=${afterY}`);
+        
+        if (digSuccess || afterY <= targetY + 10) {
+            reachedDiamondLevel = true;
+        } else {
+            // Failed — move horizontally and try a new shaft (NO goToSurface — it times out)
+            log(bot, `Dig attempt ${attempt + 1} stopped at y=${afterY}. Moving sideways to try new shaft...`);
+            try {
+                // Pick a random cardinal direction and walk 15 blocks
+                const dirs = [{x:15,z:0},{x:-15,z:0},{x:0,z:15},{x:0,z:-15}];
+                const dir = dirs[attempt % dirs.length];
+                const pos = bot.entity.position;
+                await goToPosition(bot, pos.x + dir.x, afterY, pos.z + dir.z, 2);
+            } catch (moveErr) {
+                console.log(`[RC30] Tier4 sideways move failed: ${moveErr.message}. Trying pillarUp...`);
+                try { await pillarUp(bot, 5); } catch (_pe) { /* ignore */ }
+                // Fall through and try dig from new position anyway
+            }
+        }
+    }
+    
+    if (!reachedDiamondLevel) {
+        const finalY = Math.floor(bot.entity.position.y);
+        if (finalY > targetY + 15) {
+            log(bot, `Could not reach diamond level after ${MAX_DIG_ATTEMPTS} attempts (y=${finalY}). Call !getDiamondPickaxe again.`);
+            return false;
+        }
+        log(bot, `Not at target but y=${finalY} is close enough. Trying anyway...`);
+    }
+
+    log(bot, 'Searching for diamond ore...');
+    const diamondOres = ['deepslate_diamond_ore', 'diamond_ore'];
+    let gotDiamonds = false;
+    try { gotDiamonds = await collectBlock(bot, 'deepslate_diamond_ore', 3); } catch (_ce) { /* timeout safe */ }
+    if (!gotDiamonds) {
+        try { gotDiamonds = await collectBlock(bot, 'diamond_ore', 3); } catch (_ce) { /* timeout safe */ }
+    }
+    
+    if (!gotDiamonds) {
+        log(bot, 'No diamond ore found via pathfinding. Strip-mining at diamond level...');
+        try { gotDiamonds = await stripMineForOre(bot, diamondOres, 50); } catch (_se) { /* timeout safe */ }
+    }
+    
+    if (!gotDiamonds) {
+        // Try a second strip-mine in perpendicular direction
+        log(bot, 'First strip-mine found nothing. Trying perpendicular branch...');
+        try {
+            // Rotate bot ~90 degrees by nudging sideways
+            const p = bot.entity.position;
+            try { await goToPosition(bot, p.x + 3, p.y, p.z, 1); } catch (_) { /* ok */ }
+            gotDiamonds = await stripMineForOre(bot, diamondOres, 50);
+        } catch (_se2) { /* timeout safe */ }
+    }
+    
+    if (!gotDiamonds) {
+        log(bot, 'No diamond ore found after mining. Explore and try !getDiamondPickaxe again.');
+        return false;
+    }
+
+    await ensureSticksAndTable();
+    if (!await craftRecipe(bot, 'diamond_pickaxe', 1)) {
+        log(bot, 'Failed to craft diamond pickaxe. Need 3 diamonds + 2 sticks on a crafting table.');
+        return false;
+    }
+
+    try { await pillarUp(bot, 30); } catch (_e) { /* best effort */ }
+    log(bot, 'Diamond pickaxe obtained!');
+    return true;
+  } catch (tier4Err) {
+    log(bot, `[RC30] Diamond tier error: ${tier4Err.message}. Will retry on next call.`);
+    console.error('[RC30] Tier 4 error:', tier4Err);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERAL IMPROVEMENTS — Safe Movement, Combat, Inventory, Food
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function safeMoveTo(bot, x, y, z, options = {}) {
+    /**
+     * Navigate to a position with safety checks: avoids lava, deep water,
+     * and large falls. Places torches underground every ~10 blocks.
+     * If the bot is falling >2 blocks, attempts water bucket clutch.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} x, the x coordinate to navigate to.
+     * @param {number} y, the y coordinate to navigate to.
+     * @param {number} z, the z coordinate to navigate to.
+     * @param {boolean} options.avoidLava, avoid lava paths (default true).
+     * @param {boolean} options.lightPath, place torches underground (default true).
+     * @param {number} options.timeout, navigation timeout in seconds (default 60).
+     * @returns {Promise<boolean>} true if destination reached.
+     * @example
+     * await skills.safeMoveTo(bot, 100, 64, 200);
+     * await skills.safeMoveTo(bot, 100, 64, 200, {avoidLava: true, lightPath: true});
+     **/
+    const avoidLava = options.avoidLava !== false;
+    const lightPath = options.lightPath !== false;
+
+    // Pre-flight: check destination is not in lava/void
+    if (avoidLava && y < -64) {
+        log(bot, 'Destination is below the void. Aborting.');
+        return false;
+    }
+
+    const startPos = bot.entity.position.clone();
+    let lastTorchPos = startPos.clone();
+    let torchInterval = null;
+
+    // Auto-torch placer for underground travel
+    if (lightPath) {
+        torchInterval = setInterval(async () => {
+            try {
+                const pos = bot.entity.position;
+                if (pos.y < 50 && pos.distanceTo(lastTorchPos) >= 10) {
+                    const inv = world.getInventoryCounts(bot);
+                    if ((inv['torch'] || 0) > 0 && world.shouldPlaceTorch(bot)) {
+                        await placeBlock(bot, 'torch', pos.x, pos.y, pos.z, 'bottom', true);
+                        lastTorchPos = pos.clone();
+                    }
+                }
+            } catch (_e) { /* non-critical */ }
+        }, 3000);
+    }
+
+    // Fall detection: water bucket clutch
+    let fallWatcher = null;
+    const startFallWatch = () => {
+        let lastY = bot.entity.position.y;
+        let fallStart = -1;
+        fallWatcher = setInterval(async () => {
+            const curY = bot.entity.position.y;
+            const vel = bot.entity.velocity;
+            if (vel && vel.y < -0.5) {
+                if (fallStart < 0) fallStart = lastY;
+                const fallDist = fallStart - curY;
+                if (fallDist > 4) {
+                    // Attempt water bucket clutch
+                    const waterBucket = bot.inventory.items().find(i => i.name === 'water_bucket');
+                    if (waterBucket) {
+                        try {
+                            await bot.equip(waterBucket, 'hand');
+                            const below = bot.blockAt(bot.entity.position.offset(0, -1, 0));
+                            if (below) await bot.placeBlock(below, new Vec3(0, 1, 0));
+                        } catch (_e) { /* best effort */ }
+                    }
+                }
+            } else {
+                fallStart = -1;
+            }
+            lastY = curY;
+        }, 200);
+    };
+    startFallWatch();
+
+    let success = false;
+    try {
+        success = await goToPosition(bot, x, y, z, 2);
+    } catch (err) {
+        log(bot, `safeMoveTo failed: ${err.message}`);
+        success = false;
+    } finally {
+        if (torchInterval) clearInterval(torchInterval);
+        if (fallWatcher) clearInterval(fallWatcher);
+    }
+
+    if (!success) {
+        log(bot, `Could not safely reach (${x}, ${y}, ${z}).`);
+    }
+    return success;
+}
+
+export async function rangedAttack(bot, entityType, preferredWeapon = 'bow') {
+    /**
+     * Attack the nearest entity of a given type using a bow if available,
+     * falling back to melee. Predicts target position for better aim.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {string} entityType, the type of entity to attack (e.g. 'blaze', 'skeleton').
+     * @param {string} preferredWeapon, preferred ranged weapon: 'bow' or 'crossbow'. Default 'bow'.
+     * @returns {Promise<boolean>} true if entity killed or driven off.
+     * @example
+     * await skills.rangedAttack(bot, "blaze");
+     * await skills.rangedAttack(bot, "skeleton", "bow");
+     **/
+    const entity = world.getNearestEntityWhere(bot, e => e.name === entityType, 48);
+    if (!entity) {
+        log(bot, `No ${entityType} found nearby.`);
+        return false;
+    }
+
+    const inv = world.getInventoryCounts(bot);
+    const hasBow = (inv['bow'] || 0) > 0;
+    const hasCrossbow = (inv['crossbow'] || 0) > 0;
+    const hasArrows = (inv['arrow'] || 0) > 0;
+
+    // If we have ranged weapon + arrows, use ranged attack
+    if ((hasBow || hasCrossbow) && hasArrows) {
+        const weaponName = (preferredWeapon === 'crossbow' && hasCrossbow) ? 'crossbow' : (hasBow ? 'bow' : 'crossbow');
+        const weapon = bot.inventory.items().find(i => i.name === weaponName);
+        if (weapon) await bot.equip(weapon, 'hand');
+
+        log(bot, `Attacking ${entityType} with ${weaponName}...`);
+        let attempts = 0;
+        const maxAttempts = 20;
+        while (entity.isValid && attempts < maxAttempts) {
+            if (bot.interrupt_code) return false;
+            attempts++;
+
+            const dist = bot.entity.position.distanceTo(entity.position);
+            if (dist > 40) {
+                // Too far, close distance
+                await goToPosition(bot, entity.position.x, entity.position.y, entity.position.z, 20);
+                continue;
+            }
+            if (dist < 6) {
+                // Too close for bow, use melee fallback
+                await attackEntity(bot, entity, true);
+                return true;
+            }
+
+            // Predict target position (lead the shot)
+            const vel = entity.velocity || new Vec3(0, 0, 0);
+            const flightTime = dist / 30; // approximate arrow speed
+            const predictedPos = entity.position.offset(
+                vel.x * flightTime,
+                vel.y * flightTime + entity.height * 0.7,
+                vel.z * flightTime
+            );
+
+            await bot.lookAt(predictedPos);
+
+            // Activate bow (hold right click)
+            bot.activateItem();
+            await new Promise(r => setTimeout(r, 1200)); // charge bow
+            bot.deactivateItem();
+            await new Promise(r => setTimeout(r, 500));
+
+            // Check if entity is dead
+            if (!entity.isValid) {
+                log(bot, `${entityType} defeated with ${weaponName}!`);
+                return true;
+            }
+        }
+
+        if (!entity.isValid) {
+            log(bot, `${entityType} defeated!`);
+            return true;
+        }
+    }
+
+    // Fallback: melee attack
+    log(bot, `No ranged weapon available, using melee against ${entityType}.`);
+    return await attackNearest(bot, entityType, true);
+}
+
+export async function buildPanicRoom(bot) {
+    /**
+     * Emergency shelter: builds a 3x3x3 hollow cobblestone box around the bot.
+     * Used when health is critically low. Eats available food inside.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if shelter built.
+     * @example
+     * await skills.buildPanicRoom(bot);
+     **/
+    const inv = world.getInventoryCounts(bot);
+    const cobble = (inv['cobblestone'] || 0) + (inv['stone'] || 0) + (inv['deepslate'] || 0);
+    const material = cobble >= 20 ?
+        (inv['cobblestone'] >= 20 ? 'cobblestone' : (inv['stone'] >= 20 ? 'stone' : 'deepslate')) :
+        null;
+
+    if (!material || cobble < 20) {
+        log(bot, 'Not enough blocks to build panic room (need 20+ cobblestone/stone).');
+        // Just eat and heal in place
+        await ensureFed(bot);
+        return false;
+    }
+
+    log(bot, 'Building emergency shelter!');
+    const pos = bot.entity.position;
+    const bx = Math.floor(pos.x);
+    const by = Math.floor(pos.y);
+    const bz = Math.floor(pos.z);
+
+    // Build floor, walls, and ceiling (3x3x3 hollow box)
+    const offsets = [];
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            offsets.push([dx, -1, dz]); // floor
+            offsets.push([dx, 2, dz]);  // ceiling
+        }
+    }
+    // walls
+    for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            if (dx === -1 || dx === 1) {
+                offsets.push([dx, dy, -1]);
+                offsets.push([dx, dy, 0]);
+                offsets.push([dx, dy, 1]);
+            }
+        }
+        offsets.push([0, dy, -1]);
+        offsets.push([0, dy, 1]);
+    }
+
+    let placed = 0;
+    for (const [dx, dy, dz] of offsets) {
+        if (bot.interrupt_code) return false;
+        const block = bot.blockAt(new Vec3(bx + dx, by + dy, bz + dz));
+        if (block && block.name === 'air') {
+            try {
+                await placeBlock(bot, material, bx + dx, by + dy, bz + dz, 'bottom', true);
+                placed++;
+            } catch (_e) { /* best effort */ }
+        }
+    }
+
+    log(bot, `Panic room built with ${placed} blocks. Eating food...`);
+    await ensureFed(bot);
+
+    // Wait until health recovers
+    let waitTime = 0;
+    while (bot.health < 18 && waitTime < 30000) {
+        if (bot.interrupt_code) return true;
+        await new Promise(r => setTimeout(r, 2000));
+        waitTime += 2000;
+        if (bot.food < 18) await ensureFed(bot);
+    }
+
+    log(bot, `Health recovered to ${bot.health}. Breaking out...`);
+    // Break front wall to exit
+    try {
+        await breakBlockAt(bot, bx, by, bz - 1);
+        await breakBlockAt(bot, bx, by + 1, bz - 1);
+    } catch (_e) { /* exit best effort */ }
+
+    return true;
+}
+
+export async function ensureFed(bot) {
+    /**
+     * Eat the best available food item if hunger is below 18.
+     * Prioritizes cooked food, then raw food.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if food was consumed.
+     * @example
+     * await skills.ensureFed(bot);
+     **/
+    if (bot.food >= 18) return true;
+
+    // Food priority list (best to worst)
+    const foodPriority = [
+        'golden_apple', 'enchanted_golden_apple',
+        'cooked_beef', 'cooked_porkchop', 'cooked_mutton',
+        'cooked_salmon', 'cooked_cod', 'cooked_chicken', 'cooked_rabbit',
+        'bread', 'baked_potato', 'beetroot_soup', 'mushroom_stew',
+        'pumpkin_pie', 'cookie', 'melon_slice', 'sweet_berries',
+        'apple', 'carrot', 'potato',
+        'beef', 'porkchop', 'mutton', 'chicken', 'rabbit', 'cod', 'salmon',
+        'dried_kelp', 'beetroot', 'rotten_flesh'
+    ];
+
+    const inv = world.getInventoryCounts(bot);
+    for (const food of foodPriority) {
+        if ((inv[food] || 0) > 0) {
+            log(bot, `Eating ${food}...`);
+            return await consume(bot, food);
+        }
+    }
+
+    log(bot, 'No food available!');
+    return false;
+}
+
+export async function autoManageInventory(bot) {
+    /**
+     * Clean up inventory: drop junk items, keep important items,
+     * ensure at least 8 empty slots. Stores excess in a nearby chest if available.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @returns {Promise<boolean>} true if inventory was managed.
+     * @example
+     * await skills.autoManageInventory(bot);
+     **/
+    const junkItems = [
+        'dirt', 'gravel', 'sand', 'andesite', 'diorite', 'granite',
+        'cobbled_deepslate', 'tuff', 'netherrack', 'cobblestone',
+        'rotten_flesh', 'poisonous_potato', 'spider_eye',
+        'pufferfish', 'tropical_fish'
+    ];
+
+    // Keep threshold: always keep some cobblestone for crafting
+    const keepAmounts = {
+        'cobblestone': 64,
+        'dirt': 0,
+        'gravel': 0,
+        'sand': 0,
+        'andesite': 0,
+        'diorite': 0,
+        'granite': 0,
+        'cobbled_deepslate': 0,
+        'tuff': 0,
+        'netherrack': 0,
+        'rotten_flesh': 0,
+        'poisonous_potato': 0,
+        'spider_eye': 0,
+        'pufferfish': 0,
+        'tropical_fish': 0
+    };
+
+    const inv = world.getInventoryCounts(bot);
+    let emptySlots = bot.inventory.emptySlotCount();
+    let discarded = 0;
+
+    if (emptySlots >= 8) {
+        log(bot, `Inventory is fine (${emptySlots} empty slots).`);
+        return true;
+    }
+
+    // Try to store in nearby chest first
+    const chest = world.getNearestBlock(bot, 'chest', 32);
+    if (chest) {
+        log(bot, 'Storing excess items in nearby chest...');
+        for (const item of junkItems) {
+            if (bot.interrupt_code) return false;
+            const count = inv[item] || 0;
+            const keep = keepAmounts[item] || 0;
+            const toStore = count - keep;
+            if (toStore > 0) {
+                await putInChest(bot, item, toStore);
+                discarded += toStore;
+            }
+        }
+    } else {
+        // No chest — discard junk
+        log(bot, 'No chest nearby. Discarding junk items...');
+        for (const item of junkItems) {
+            if (bot.interrupt_code) return false;
+            const count = inv[item] || 0;
+            const keep = keepAmounts[item] || 0;
+            const toDrop = count - keep;
+            if (toDrop > 0) {
+                await discard(bot, item, toDrop);
+                discarded += toDrop;
+            }
+            emptySlots = bot.inventory.emptySlotCount();
+            if (emptySlots >= 8) break;
+        }
+    }
+
+    emptySlots = bot.inventory.emptySlotCount();
+    log(bot, `Inventory managed. Discarded/stored ${discarded} items. ${emptySlots} slots free.`);
+    return emptySlots >= 8;
+}
+
+export async function stockpileFood(bot, quantity = 32) {
+    /**
+     * Gather food by hunting passive animals nearby. Cooks meat in a furnace
+     * if fuel and furnace materials are available.
+     * @param {MinecraftBot} bot, reference to the minecraft bot.
+     * @param {number} quantity, target number of food items. Default 32.
+     * @returns {Promise<boolean>} true if enough food collected.
+     * @example
+     * await skills.stockpileFood(bot, 32);
+     **/
+    const meatAnimals = ['cow', 'pig', 'sheep', 'chicken', 'rabbit'];
+
+    // Count current food
+    const foodItems = [
+        'cooked_beef', 'cooked_porkchop', 'cooked_mutton', 'cooked_chicken', 'cooked_rabbit',
+        'bread', 'apple', 'carrot', 'baked_potato', 'melon_slice', 'sweet_berries',
+        'beef', 'porkchop', 'mutton', 'chicken', 'rabbit'
+    ];
+
+    let inv = world.getInventoryCounts(bot);
+    let totalFood = 0;
+    for (const f of foodItems) totalFood += (inv[f] || 0);
+
+    log(bot, `Current food supply: ${totalFood}/${quantity}`);
+
+    // Hunt animals until we have enough
+    let huntAttempts = 0;
+    while (totalFood < quantity && huntAttempts < 20) {
+        if (bot.interrupt_code) return false;
+        huntAttempts++;
+
+        let hunted = false;
+        for (const animal of meatAnimals) {
+            const entity = world.getNearestEntityWhere(bot, e => e.name === animal, 32);
+            if (entity) {
+                await attackEntity(bot, entity, true);
+                await pickupNearbyItems(bot);
+                hunted = true;
+                break;
+            }
+        }
+
+        if (!hunted) {
+            log(bot, 'No animals nearby. Exploring to find more...');
+            await explore(bot, 60);
+        }
+
+        inv = world.getInventoryCounts(bot);
+        totalFood = 0;
+        for (const f of foodItems) totalFood += (inv[f] || 0);
+    }
+
+    // Cook raw meat if we have a furnace and fuel
+    const rawMeats = ['beef', 'porkchop', 'mutton', 'chicken', 'rabbit'];
+    inv = world.getInventoryCounts(bot);
+    for (const meat of rawMeats) {
+        if (bot.interrupt_code) return false;
+        const rawCount = inv[meat] || 0;
+        if (rawCount > 0) {
+            const cooked = await smeltItem(bot, meat, rawCount);
+            if (cooked) log(bot, `Cooked ${rawCount} ${meat}.`);
+        }
+    }
+
+    inv = world.getInventoryCounts(bot);
+    totalFood = 0;
+    for (const f of foodItems) totalFood += (inv[f] || 0);
+    log(bot, `Food stockpile complete: ${totalFood} food items.`);
+    return totalFood >= quantity;
+}
+
