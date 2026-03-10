@@ -58,7 +58,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^9.13.0",
-        "eslint": "^9.13.0",
+        "eslint": "^10.0.3",
         "eslint-plugin-no-floating-promise": "^2.0.0",
         "globals": "^15.9.0",
         "husky": "^9.0.11",
